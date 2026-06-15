@@ -1,0 +1,7 @@
+venv/
+.venv/
+*.odt#
+.~lock.*
+__pycache__/
+*.pyc
+output_campanha/

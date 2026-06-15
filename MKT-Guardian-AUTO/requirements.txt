@@ -1,0 +1,13 @@
+﻿# SDK Oficial e Atualizada do Google Gemini (Motores Flash e Imagen 3)
+google-genai>=0.1.1
+
+# Manipulação, tratamento e design comercial de imagens (Substituto do Canva)
+Pillow>=10.2.0
+
+# Protocolos HTTP para chamadas das APIs externas (ElevenLabs, Runway, Meta)
+requests>=2.31.0
+
+# Biblioteca oficial da Meta para futura integração direta de tráfego (Opcional para Dry-Run)
+facebook-business>=19.0.0
+python-dotenv>=1.0.1
+

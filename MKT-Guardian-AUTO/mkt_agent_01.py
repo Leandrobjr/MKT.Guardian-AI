@@ -13,164 +13,220 @@ from dotenv import load_dotenv
 class MediaFactory:
     def __init__(self):
         load_dotenv()
-        self.client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
-        self.model_name = "gemini-3.1-flash-lite"
+        self.gemini_key = os.getenv("GEMINI_API_KEY")
+        self.elevenlabs_key = os.getenv("ELEVENLABS_API_KEY")
+        self.kling_key = os.getenv("KLING_API_KEY")
         
-        self.elevenlabs_key = os.environ.get("ELEVENLABS_API_KEY")
+        self.client = genai.Client(api_key=self.gemini_key)
+        self.model_name = "gemini-3.1-flash-lite"
         self.voice_id = "21m00Tcm4TlvDq8ikWAM"
         
-        # Definição dos caminhos absolutos do seu estoque de áudios
+        self.kling_base_url = "https://api-singapore.klingai.com"
+        
         self.base_audio_dir = os.path.abspath("trilhas_sonoras")
         self.dir_suspense = os.path.join(self.base_audio_dir, "musicas_suspense")
         self.dir_corporativo = os.path.join(self.base_audio_dir, "musicas_corporativo")
-        self.dir_efeitos = os.path.join(self.base_audio_dir, "efeitos_sonoros")
 
     def generate_campaign_assets(self, creative_data: dict) -> dict:
-        print("\n🏭 [Fábrica de Mídia v11.0] Iniciando Geração Multimodal Avançada...")
+        print("\n🏭 [Fábrica de Mídia v15.0] Motor de Composição por Frames Ativo...")
         os.makedirs("output_campanha", exist_ok=True)
+        os.makedirs("output_campanha/frames_brutos", exist_ok=True)
+        os.makedirs("output_campanha/frames_finais", exist_ok=True)
         
-        # Captura as escolhas dinâmicas do menu interativo
-        formato_midia = creative_data.get("tipo_midia_selecionada", "Imagem Estática Square (1080x1080)")
+        formato_midia = creative_data.get("tipo_midia_selecionada", "Vídeo Vertical Reels (1080x1920)")
         canal_veiculacao = creative_data.get("canal_veiculacao_selecionado", "Meta Ads (Instagram/Facebook)")
         
-        texto_audio = f"{creative_data['gancho_atencao_inicial']}. {creative_data['desenvolvimento_copy']}"
-        
-        # Gerar a locução de voz pura via ElevenLabs
+        texto_audio = (
+            f"{creative_data['gancho_atencao_inicial']}. ATENÇÃO: Detectamos uma ameaça de nível CRÍTICO "
+            f"no celular de MARIANA. Alerta de aliciamento e grooming ativo. "
+            f"{creative_data['desenvolvimento_copy']}. Acesse o portal guardian-ai.app imediatamente para garantir a segurança da sua família."
+        )
         voz_pura_path = self._generate_audio(texto_audio)
-        
-        # Selecionar e misturar a trilha de fundo ideal com base no canal
         audio_final_path = self._mix_background_track(voz_pura_path, canal_veiculacao)
         
-        print("🎨 [Direção de Arte] Construindo prompt de imagem com diretrizes demográficas brasileiras...")
-        image_prompt = self._create_image_prompt(texto_audio, creative_data['chamada_para_acao_cta'])
+        alerta_texto = "🚨 ALERTA DE SEGURANÇA: Detectamos uma ameaça de nível CRÍTICO no celular de 'MARIANA'. Verifique seu Dashboard imediatamente para detalhes: https://guardian-ai.app"
+        cta_texto = "Quer segurança para seus filhos? Assine agora!"
+        
         base_image_path = os.path.abspath("output_campanha/anuncio_base.jpg")
-        
-        self._generate_gemini_image(image_prompt, base_image_path)
-        
         final_design_path = os.path.abspath("output_campanha/anuncio_final_design.jpg")
         video_output_path = os.path.abspath("output_campanha/anuncio_video_final.mp4")
-        
-        nova_cta_usuario = "PROTEJA SEU WHATSAPP AGORA!!! CLIQUE AQUI!"
 
-        # Renderização condicional baseada na escolha de mídia
+        publicidade_prompt = (
+            "High-end studio advertising photography, professional commercial lighting, cinematic scale. "
+            "A serious and highly focused Brazilian mother looking at her phone inside a luxury house, showing determined protective intent. "
+            "In the same wide composition, her teenage daughter Mariana is safely visible next to her using a tablet. "
+            "Both subjects are fully visible, framed perfectly without any crop. Crisp details, clean textless environment."
+        )
+
+        # FLUXO DE VÍDEO REAL CORRIGIDO
         if "Vídeo" in formato_midia:
-            print("📐 [HTML & FFmpeg Engine] Renderizando e compilando Vídeo Comercial Animado...")
-            asyncio.run(self._apply_html_css_layout(base_image_path, final_design_path, creative_data['gancho_atencao_inicial'], nova_cta_usuario, animar=True))
-            self._compile_video_with_ffmpeg(final_design_path, audio_final_path, video_output_path)
+            print("🎬 [Fluxo de Vídeo Ativo] Solicitando clipe dinâmico para a Kling AI...")
+            video_bruto_path = ""
+            if self.kling_key:
+                video_bruto_path = self._generate_kling_video(publicidade_prompt)
+                
+            if video_bruto_path and os.path.exists(video_bruto_path):
+                print("🎞️ [Frame Processing Engine] Extraindo frames sequenciais do vídeo da IA...")
+                self._extract_frames(video_bruto_path)
+                
+                print("📐 [HTML Headless Compositor] Queimando marcas e textos em português frame por frame...")
+                asyncio.run(self._compose_all_frames(creative_data['gancho_atencao_inicial'], alerta_texto, cta_texto))
+                
+                print("🎬 [FFmpeg Multiplexer] Compilando vídeo comercial em movimento com áudio de suspense...")
+                self._compile_processed_video(audio_final_path, video_output_path)
+            else:
+                print("⚠️ Fallback: Usando renderizador estático por indisponibilidade do servidor Kling...")
+                self._generate_gemini_image(publicidade_prompt, base_image_path)
+                asyncio.run(self._apply_html_css_layout(base_image_path, final_design_path, creative_data['gancho_atencao_inicial'], alerta_texto, cta_texto))
+                self._compile_still_video(final_design_path, audio_final_path, video_output_path)
+                
+            return {"audio_file": audio_final_path, "commercial_video_file": video_output_path, "static_image_file": "Não solicitada"}
+            
         else:
-            print("📐 [HTML Headless Render] Renderizando Arte Estática Premium para Redes Sociais...")
-            asyncio.run(self._apply_html_css_layout(base_image_path, final_design_path, creative_data['gancho_atencao_inicial'], nova_cta_usuario, animar=False))
+            print("🖼️ [Fluxo de Imagem Ativo] Gerando anúncio estático premium...")
+            self._generate_gemini_image(publicidade_prompt, base_image_path)
+            asyncio.run(self._apply_html_css_layout(base_image_path, final_design_path, creative_data['gancho_atencao_inicial'], alerta_texto, cta_texto))
+            return {"audio_file": audio_final_path, "static_image_file": final_design_path, "commercial_video_file": "Não solicitado"}
 
-        return {
-            "audio_file": audio_final_path,
-            "static_image_file": final_design_path,
-            "commercial_video_file": video_output_path if "Vídeo" in formato_midia else "Não solicitado",
-            "designer_prompt": image_prompt
+    def _generate_kling_video(self, prompt: str) -> str:
+        headers = {"Authorization": f"Bearer {self.kling_key}", "Content-Type": "application/json"}
+        payload = {
+            "prompt": prompt,
+            "settings": {"duration": 5, "resolution": "720p", "aspect_ratio": "9:16"}
         }
+        try:
+            res = requests.post(f"{self.kling_base_url}/text-to-video/kling-3.0-turbo", headers=headers, json=payload)
+            task_id = res.json().get("data", {}).get("id")
+            if not task_id: return ""
+            
+            print("⏳ Renderizando movimento na nuvem da Kling AI...")
+            for _ in range(40):
+                time.sleep(10)
+                status_res = requests.get(f"{self.kling_base_url}/tasks?task_ids={task_id}", headers=headers)
+                task = status_res.json().get("data", [])[0]
+                if task.get("status") == "succeeded":
+                    video_url = task.get("outputs", [{}])[0].get("url")
+                    if video_url:
+                        raw_path = "output_campanha/kling_raw.mp4"
+                        with open(raw_path, "wb") as f:
+                            f.write(requests.get(video_url).content)
+                        return raw_path
+                elif task.get("status") in ["failed", "cancelled"]: break
+        except: pass
+        return ""
+
+    def _extract_frames(self, video_path: str):
+        subprocess.run([
+            "ffmpeg", "-y", "-i", video_path, 
+            "-q:v", "2", "output_campanha/frames_brutos/frame_%04d.jpg"
+        ], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+    async def _compose_all_frames(self, headline: str, alerta: str, cta: str):
+        frames = sorted([f for f in os.listdir("output_campanha/frames_brutos") if f.endswith(".jpg")])
+        async with async_playwright() as p:
+            browser = await p.chromium.launch(headless=True)
+            page = await browser.new_page()
+            await page.set_viewport_size({"width": 1080, "height": 1920})
+            
+            for frame in frames:
+                frame_path = os.path.abspath(f"output_campanha/frames_brutos/{frame}")
+                with open(frame_path, "rb") as f:
+                    encoded_frame = base64.b64encode(f.read()).decode('utf-8')
+                
+                html_content = f"""
+                <!DOCTYPE html>
+                <html>
+                <head>
+                    <meta charset="utf-8">
+                    <script src="https://cdn.tailwindcss.com"></script>
+                    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@700;900&display=swap" rel="stylesheet">
+                </head>
+                <body class="m-0 p-0 overflow-hidden select-none" style="font-family: 'Montserrat', sans-serif; width: 1080px; height: 1920px;">
+                    <div class="relative w-full h-full bg-cover bg-center flex flex-col justify-between p-12" style="background-image: url('data:image/jpeg;base64,{encoded_frame}');">
+                        <div class="w-full text-center mt-12">
+                            <h1 class="text-[52px] leading-[1.1] font-[900] text-white tracking-tight uppercase" style="text-shadow: -3px -3px 0 #000, 3px -3px 0 #000, -3px 3px 0 #000, 3px 3px 0 #000, 0px 8px 16px rgba(0,0,0,0.95);">{headline.upper()}</h1>
+                        </div>
+                        <div class="w-full px-6 mb-16 flex flex-col items-center gap-8">
+                            <div class="w-full bg-slate-950/95 border-l-8 border-red-500 rounded-2xl p-6 shadow-2xl">
+                                <div class="flex items-center gap-3 mb-3">
+                                    <div class="bg-gradient-to-tr from-blue-600 to-emerald-500 px-2 py-1 rounded text-white font-[900] text-xs">Guardian-AI</div>
+                                    <span class="text-emerald-400 font-[900] text-lg uppercase tracking-wider">Guardian-AI</span>
+                                </div>
+                                <p class="text-white text-[22px] font-[700] leading-[1.4]">{alerta}</p>
+                            </div>
+                            <div class="w-full text-center">
+                                <div class="bg-red-600 text-white text-[26px] font-[900] tracking-wide uppercase px-6 py-5 rounded-2xl border-b-[6px] border-red-900 w-full shadow-2xl">{cta.upper()}</div>
+                            </div>
+                        </div>
+                    </div>
+                </body>
+                </html>
+                """
+                await page.set_content(html_content)
+                out_path = os.path.abspath(f"output_campanha/frames_finais/{frame}")
+                await page.screenshot(path=out_path, type="jpeg", quality=95)
+                
+            await browser.close()
+
+    def _compile_processed_video(self, audio_path: str, output_path: str):
+        subprocess.run([
+            "ffmpeg", "-y", "-framerate", "25", 
+            "-i", "output_campanha/frames_finais/frame_%04d.jpg",
+            "-i", audio_path,
+            "-c:v", "libx264", "-pix_fmt", "yuv420p",
+            "-c:a", "aac", "-b:a", "192k", "-shortest",
+            output_path
+        ], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        
+        # Limpeza técnica de cache de frames do sistema
+        subprocess.run("rm -rf output_campanha/frames_brutos/* output_campanha/frames_finais/*", shell=True)
 
     def _generate_audio(self, text: str) -> str:
         path = "output_campanha/voz_pura.mp3"
-        if not self.elevenlabs_key:
-            print("⚠️ Sem chave ElevenLabs. Gerando arquivo de salvaguarda...")
-            with open(path, "wb") as f: f.write(b"\x00" * 1000)
-            return path
-            
+        if not self.elevenlabs_key: return path
         url = f"https://api.elevenlabs.io/v1/text-to-speech/{self.voice_id}"
         headers = {"Accept": "audio/mpeg", "Content-Type": "application/json", "xi-api-key": self.elevenlabs_key}
-        data = {"text": text, "model_id": "eleven_multilingual_v2", "voice_settings": {"stability": 0.5, "similarity_boost": 0.75}}
+        data = {"text": text, "model_id": "eleven_multilingual_v2", "voice_settings": {"stability": 0.5, "similarity_boost": 0.8}}
         try:
             response = requests.post(url, json=data, headers=headers)
             if response.status_code == 200:
                 with open(path, "wb") as f: f.write(response.content)
-                return path
         except: pass
         return path
 
     def _mix_background_track(self, voz_path: str, canal: str) -> str:
-        """Sorteia uma trilha do estoque e faz a mixagem inteligente usando FFmpeg."""
         mixed_path = "output_campanha/anuncio_audio_final.mp3"
-        
-        # Decide qual pasta olhar baseado no canal de veiculação
-        pasta_alvo = self.dir_suspense if "TikTok" in canal else self.dir_corporativo
-        
-        # Tenta listar os arquivos mp3 dentro da pasta escolhida
+        pasta_alvo = self.dir_suspense
         trilhas = []
         if os.path.exists(pasta_alvo):
             trilhas = [f for f in os.listdir(pasta_alvo) if f.lower().endswith('.mp3')]
-            
-        if not trilhas:
-            print(f"ℹ️ Nenhuma trilha encontrada em '{os.basename(pasta_alvo)}'. Usando apenas a voz limpa.")
-            return voz_path
-
-        # Sorteia um arquivo de áudio aleatório do seu estoque de 10 a 20 músicas
-        trilha_sorteada = random.choice(trilhas)
-        trilha_path = os.path.join(pasta_alvo, trilha_sorteada)
-        print(f"🎵 [Mixer Automatizado] Trilha sorteada para {canal}: {trilha_sorteada}")
-
-        # Executa a mixagem de áudio nativa via FFmpeg aplicando redução de volume na trilha (-22dB)
-        # Isso garante que a trilha de fundo não cubra a voz principal da ElevenLabs
+        if not trilhas: return voz_path
+        
+        trilha_path = os.path.join(pasta_alvo, random.choice(trilhas))
         cmd = [
-            "ffmpeg", "-y",
-            "-i", voz_path,
-            "-stream_loop", "-1", "-i", trilha_path,
-            "-filter_complex", "[1:a]volume=-22dB[bg];[0:a][bg]amix=inputs=2:duration=first:dropout_transition=2[a]",
-            "-map", "[a]",
-            "-c:a", "libmp3lame", "-b:a", "192k",
-            mixed_path
+            "ffmpeg", "-y", "-i", voz_path, "-stream_loop", "-1", "-i", trilha_path,
+            "-filter_complex", "[1:a]volume=-24dB[bg];[0:a][bg]amix=inputs=2:duration=first:dropout_transition=2[a]",
+            "-map", "[a]", "-c:a", "libmp3lame", "-b:a", "192k", mixed_path
         ]
         try:
             subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True)
             return mixed_path
-        except Exception as e:
-            print(f"⚠️ Falha na mixagem do FFmpeg: {e}. Usando voz pura.")
-            return voz_path
-
-    def _create_image_prompt(self, copy_text: str, cta_text: str) -> str:
-        instruction = (
-            "You are a Premium Advertising Art Director. Convert this marketing concept into a photorealistic campaign asset.\n"
-            "CRITICAL DEMOGRAPHIC DIRECTIVES:\n"
-            "- Subject Profile: Must be an attractive, well-presented Brazilian person (male or female) with warm, friendly, and trustworthy facial features.\n"
-            "- Ethnicity & Look: Authentic Brazilian diversity, natural healthy look, well-groomed, professional advertising model quality.\n"
-            "- Environment: High-end, clean, and modern Brazilian household, cozy living room, flooded with soft, high-quality cinematic light.\n"
-            "- Style & Lens: Commercial lifestyle photography, shot on 85mm f/1.4 lens, cinematic color grading, rich natural textures, soft background blur.\n"
-            "- STRICT NEGATIVE CONSTRAINT: NO digital matrix background, NO neon shields or glowing graphics. Just a premium, beautiful real-life photograph."
-        )
-        try:
-            response = self.client.models.generate_content(model=self.model_name, contents=f"{instruction}\n\nContext: {copy_text}")
-            return response.text.strip()
-        except:
-            return "A premium commercial lifestyle photograph of an attractive Brazilian person looking at a smartphone screen with a smile of complete relief. High-end lighting, detailed skin textures, shot on 85mm camera lens."
+        except: return voz_path
 
     def _generate_gemini_image(self, prompt: str, output_path: str):
-        print(f"🤖 [Gemini Multimodal] Renderizando fotografia publicitária real...")
         try:
-            response = self.client.models.generate_content(
-                model="gemini-3.1-flash-image",
-                contents=f"A professional, raw, authentic real-life documentary photograph, detailed textures, natural look. {prompt}"
-            )
+            response = self.client.models.generate_content(model="gemini-3.1-flash-image", contents=prompt)
             for part in response.candidates[0].content.parts:
                 if part.inline_data and part.inline_data.data:
                     with open(output_path, "wb") as f: f.write(part.inline_data.data)
                     return
-        except Exception as e:
-            print(f"⚠️ Erro ao gerar imagem: {e}")
+        except: pass
 
-    async def _apply_html_css_layout(self, input_image_path: str, output_path: str, headline: str, cta: str, animar: bool):
+    async def _apply_html_css_layout(self, input_image_path: str, output_path: str, headline: str, alerta: str, cta: str):
         headline_upper = headline.upper().strip()
         cta_upper = cta.upper().strip()
-
         with open(input_image_path, "rb") as image_file:
             encoded_string = base64.b64encode(image_file.read()).decode('utf-8')
-
-        # Animação sutil de zoom contínuo para reter a atenção em formatos de vídeo
-        animation_css = """
-        @keyframes pulseScale {
-            0% { transform: scale(1); }
-            50% { transform: scale(1.04); }
-            100% { transform: scale(1); }
-        }
-        .animate-criativo { animation: pulseScale 4s ease-in-out infinite; }
-        """ if animar else ""
 
         html_content = f"""
         <!DOCTYPE html>
@@ -178,59 +234,43 @@ class MediaFactory:
         <head>
             <meta charset="utf-8">
             <script src="https://cdn.tailwindcss.com"></script>
-            <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@900&display=swap" rel="stylesheet">
-            <style>{animation_css}</style>
+            <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@700;900&display=swap" rel="stylesheet">
         </head>
-        <body class="m-0 p-0 overflow-hidden select-none bg-slate-900" style="font-family: 'Montserrat', sans-serif; width: 1080px; height: 1080px;">
-            <div class="relative w-full h-full bg-cover bg-center flex flex-col justify-between p-12 {'animate-criativo' if animar else ''}" style="background-image: url('data:image/jpeg;base64,{encoded_string}');">
-                
-                <div class="w-full text-center mt-4">
-                    <h1 class="text-[56px] leading-[1.1] font-[900] text-white tracking-tight uppercase" style="text-shadow: -3px -3px 0 #000, 3px -3px 0 #000, -3px 3px 0 #000, 3px 3px 0 #000, 0px 8px 16px rgba(0,0,0,0.95);">
-                        {headline_upper}
-                    </h1>
+        <body class="m-0 p-0 overflow-hidden select-none bg-slate-900" style="font-family: 'Montserrat', sans-serif; width: 1080px; height: 1920px;">
+            <div class="relative w-full h-full bg-cover bg-center flex flex-col justify-between p-12" style="background-image: url('data:image/jpeg;base64,{encoded_string}');">
+                <div class="w-full text-center mt-12">
+                    <h1 class="text-[52px] leading-[1.1] font-[900] text-white tracking-tight uppercase" style="text-shadow: -3px -3px 0 #000, 3px -3px 0 #000, -3px 3px 0 #000, 3px 3px 0 #000, 0px 8px 16px rgba(0,0,0,0.95);">{headline_upper}</h1>
                 </div>
-
-                <div class="w-full flex justify-center mb-6">
-                    <div class="bg-amber-500 text-slate-950 text-[30px] font-[900] tracking-wide uppercase px-12 py-6 rounded-2xl border-b-[6px] border-amber-700 inline-block text-center max-w-[95%]" style="box-shadow: 0 12px 28px rgba(0,0,0,0.6), 0 4px 10px rgba(245,158,11,0.35);">
-                        {cta_upper}
+                <div class="w-full px-6 mb-16 flex flex-col items-center gap-8">
+                    <div class="w-full bg-slate-950/95 border-l-8 border-red-500 rounded-2xl p-6 shadow-2xl">
+                        <div class="flex items-center gap-3 mb-3">
+                            <div class="bg-gradient-to-tr from-blue-600 to-emerald-500 px-2 py-1 rounded text-white font-[900] text-xs">Guardian-AI</div>
+                            <span class="text-emerald-400 font-[900] text-lg uppercase tracking-wider">Guardian-AI</span>
+                        </div>
+                        <p class="text-white text-[22px] font-[700] leading-[1.4]">{alerta}</p>
+                    </div>
+                    <div class="w-full text-center">
+                        <div class="bg-red-600 text-white text-[26px] font-[900] tracking-wide uppercase px-6 py-5 rounded-2xl border-b-[6px] border-red-900 w-full shadow-2xl">{cta_upper}</div>
                     </div>
                 </div>
-
             </div>
         </body>
         </html>
         """
-
         async with async_playwright() as p:
             browser = await p.chromium.launch(headless=True)
             page = await browser.new_page()
-            await page.set_viewport_size({"width": 1080, "height": 1080})
+            await page.set_viewport_size({"width": 1080, "height": 1920})
             await page.set_content(html_content)
             await asyncio.sleep(0.8)
             await page.screenshot(path=output_path, type="jpeg", quality=98)
             await browser.close()
 
-    def _compile_video_with_ffmpeg(self, image_path: str, audio_path: str, output_video_path: str):
-        """Compila o vídeo final sincronizando perfeitamente a imagem animada com a trilha mixada."""
-        print("🎬 [FFmpeg Multiplexer] Montando contêiner MP4 de alto desempenho...")
-        if os.path.exists(output_video_path):
-            os.remove(output_video_path)
-            
+    def _compile_still_video(self, image_path: str, audio_path: str, output_video_path: str):
         cmd = [
-            "ffmpeg", "-y",
-            "-loop", "1",
-            "-i", image_path,
-            "-i", audio_path,
-            "-c:v", "libx264",
-            "-tune", "stillimage",
-            "-c:a", "aac",
-            "-b:a", "192k",
-            "-pix_fmt", "yuv420p",
-            "-shortest",
-            output_video_path
+            "ffmpeg", "-y", "-loop", "1", "-i", image_path, "-i", audio_path,
+            "-c:v", "libx264", "-tune", "stillimage", "-c:a", "aac", "-b:a", "192k",
+            "-pix_fmt", "yuv420p", "-shortest", output_video_path
         ]
-        try:
-            subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True)
-            print(f"✅ [FFmpeg] Vídeo final integrado com sucesso.")
-        except Exception as e:
-            print(f"❌ Erro na compilação do MP4 via FFmpeg: {e}")
+        try: subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True)
+        except: pass

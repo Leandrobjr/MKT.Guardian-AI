@@ -50,8 +50,10 @@ class CampaignOrchestrator:
             "3": "Empresários e donos de comércios expostos a golpes de boletos e clonagem de contas jurídicas.",
             "4": "Dirigentes, diretores e professores focados na segurança de dados escolares e ataques de phishing."
         }
+        mapa_publico_id = {"1": "idosos", "2": "pais", "3": "profissionais", "4": "profissionais"}
         p_escolhido = input("Digite o número da opção desejada: ").strip()
         publico_final = opcoes_publico.get(p_escolhido, "Idosos e aposentados vulneráveis.")
+        publico_id = mapa_publico_id.get(p_escolhido, "massa")
 
         # 2. SELEÇÃO DO TIPO DE GOLPE
         print("\n⚠️ ETAPA 2: Selecione o TIPO DE GOLPE a ser abordado:")
@@ -67,8 +69,10 @@ class CampaignOrchestrator:
             "4": "Grooming / Aliciamento digital de menores e exposição de crianças em redes e jogos online.",
             "5": "Links maliciosos de Phishing e páginas clonadas projetadas para roubo de senhas."
         }
+        mapa_golpe_id = {"1": "falso_parente", "2": "pix_fantasma", "3": "falsa_central", "4": "grooming", "5": "phishing"}
         g_escolhido = input("Digite o número da opção desejada: ").strip()
         golpe_final = opcoes_golpe.get(g_escolhido, "Fraudes gerais no WhatsApp.")
+        golpe_id = mapa_golpe_id.get(g_escolhido, "pix_fantasma")
 
         # 3. SELEÇÃO DA MÍDIA
         print("\n🖼️ ETAPA 3: Selecione o TIPO DE MÍDIA visual:")
@@ -93,7 +97,9 @@ class CampaignOrchestrator:
 
         return {
             "publico": publico_final,
+            "publico_id": publico_id,
             "golpe": golpe_final,
+            "golpe_id": golpe_id,
             "midia": midia_final,
             "canal": canal_final,
             "objetivo": objetivo_final
@@ -107,11 +113,22 @@ class CampaignOrchestrator:
         print("🚀 [MKT GUARDIAN AI - ENGINE ORQUESTRAÇÃO v3.7] Iniciando Esteira...")
         print("======================================================================")
         
+        # Busca os ganchos virais, a frase real do golpista e a direção de arte do guardian_base.json
+        golpe_obj = next(
+            (g for g in self.context_data.get("TIPOS_DE_GOLPE", []) if g.get("id") == config.get("golpe_id")),
+            {}
+        )
+        framework = self.context_data.get("COPYWRITING_FRAMEWORK", {})
+        ganchos_ref = golpe_obj.get("ganchos", [golpe_obj.get("gancho_modelo", "")])
+        frase_golpista = golpe_obj.get("frase_golpista", "")
+
         # Consolida as respostas estruturadas para blindar os prompts dos agentes
         contexto_injetado = (
             f"DIRETRIZES DE CAMPANHA SELECIONADAS:\n"
             f"- Público-Alvo: {config['publico']}\n"
             f"- Ameaça/Golpe Abordado: {config['golpe']}\n"
+            f"- Frase real que o golpista enviaria (base para o card): {frase_golpista}\n"
+            f"- Ganchos de referência (inspire-se, não copie literalmente): {' | '.join(ganchos_ref)}\n"
             f"- Canal de Distribuição: {config['canal']}\n"
             f"- Tipo de Mídia: {config['midia']}\n"
             f"- Objetivo de Conversão: {config['objetivo']}\n\n"
@@ -120,20 +137,33 @@ class CampaignOrchestrator:
             f"- Restrições Linguísticas: {'; '.join(self.context_data.get('PRODUTO_E_POSICIONAMENTO', {}).get('tom_de_voz_obrigatorio', {}).get('regras_linguisticas', []))}"
         )
 
-        print("\n🧠 [Agente Redator Sênior] Escrevendo copies comerciais com base no briefing...")
-        
+        print("\n🧠 [Agente Redator Sênior] Escrevendo copies de alta conversão (resposta direta)...")
+
+        roteiro = framework.get("roteiro_narracao_modelo", {})
+        roteiro_txt = "\n".join(f"   - {k}: {v}" for k, v in roteiro.items())
+
         system_instruction = (
-            "Você é o Redator Publicitário Master focado em criar criativos de alta conversão para o app Guardian AI.\n"
-            "REGRAS OBRIGATÓRIAS DE OUTPUT:\n"
-            "1. gancho_atencao_inicial: Deve ser uma MANCHETE curta, forte, em LETRAS MAIÚSCULAS, focada exatamente no golpe escolhido para chocar e reter o público selecionado. Máximo 10 palavras.\n"
-            "2. chamada_para_acao_cta: Retorne um texto simples de comando de clique em caixa alta.\n"
-            "3. desenvolvimento_copy: Roteiro argumentativo completo e empático adaptado às dores do público.\n"
+            "Você é o Maior Copywriter de Resposta Direta do Brasil, especialista em anúncios de alta "
+            "conversão para apps de segurança digital. Seu objetivo é SENSIBILIZAR a dor do público e "
+            "levá-lo a baixar o app IMEDIATAMENTE. Nunca use tom calmo ou institucional.\n\n"
+            f"FRAMEWORK OBRIGATÓRIO: {framework.get('estrutura_obrigatoria', 'PAS — Problema, Agitação, Solução, Urgência')}\n"
+            + ("PRINCÍPIOS:\n" + "\n".join(f"   - {p}" for p in framework.get("principios", [])) + "\n\n" if framework.get("principios") else "")
+            + (f"ESTRUTURA DO ROTEIRO DE NARRAÇÃO (siga os tempos):\n{roteiro_txt}\n\n" if roteiro_txt else "")
+            + "REGRAS OBRIGATÓRIAS DE OUTPUT (JSON estrito):\n"
+            "1. gancho_atencao_inicial: MANCHETE visceral em MAIÚSCULAS, máx 10 palavras, com números, "
+            "frases reais de golpistas ou consequências chocantes. Nada genérico.\n"
+            "2. desenvolvimento_copy: Roteiro de narração de 20-27s seguindo Problema→Agitação→Solução→Urgência. "
+            "Deve DOER e terminar empurrando para baixar grátis.\n"
+            "3. chamada_para_acao_cta: Comando curto em MAIÚSCULAS com benefício + gratuidade.\n"
+            "4. texto_card_notificacao: Simule a MENSAGEM REAL que o golpista enviaria à vítima, "
+            "seguida de 'Guardian AI bloqueou e te avisou.' Torna a ameaça visível e assustadora.\n"
+            "5. publico_alvo_icp: Descrição resumida do público para segmentação.\n"
             "Retorne os dados estritamente em formato JSON."
         )
 
         config_creative = types.GenerateContentConfig(
             system_instruction=system_instruction,
-            temperature=0.35,
+            temperature=0.45,
             response_mime_type="application/json",
             response_schema={
                 "type": "OBJECT",
@@ -141,9 +171,10 @@ class CampaignOrchestrator:
                     "gancho_atencao_inicial": {"type": "STRING"},
                     "desenvolvimento_copy": {"type": "STRING"},
                     "chamada_para_acao_cta": {"type": "STRING"},
+                    "texto_card_notificacao": {"type": "STRING"},
                     "publico_alvo_icp": {"type": "STRING"}
                 },
-                "required": ["gancho_atencao_inicial", "desenvolvimento_copy", "chamada_para_acao_cta", "publico_alvo_icp"]
+                "required": ["gancho_atencao_inicial", "desenvolvimento_copy", "chamada_para_acao_cta", "texto_card_notificacao", "publico_alvo_icp"]
             }
         )
 
@@ -175,6 +206,8 @@ class CampaignOrchestrator:
         # INJEÇÃO TÉCNICA DE COMPATIBILIDADE: Mapeia as escolhas do menu para a Fábrica de Mídia
         creative_data["tipo_midia_selecionada"] = config["midia"]
         creative_data["canal_veiculacao_selecionado"] = config["canal"]
+        # Direção de arte emocional (tensão/medo) para o prompt do Kling/Nano Banana
+        creative_data["direcao_arte_emocional"] = golpe_obj.get("direcao_arte_emocional", "")
         
         # Envia os dados higienizados para a fábrica de mídia baseada em HTML/CSS e FFmpeg
         assets_resultado = self.media_factory.generate_campaign_assets(creative_data)

@@ -36,26 +36,32 @@ class MediaFactory:
         formato_midia = creative_data.get("tipo_midia_selecionada", "Vídeo Vertical Reels (1080x1920)")
         canal_veiculacao = creative_data.get("canal_veiculacao_selecionado", "Meta Ads (Instagram/Facebook)")
         
+        # Narração 100% dinâmica (gancho + roteiro de conversão gerado pelo orquestrador).
+        # Sem injeção fixa de "MARIANA/grooming" — o conteúdo agora acompanha o golpe escolhido.
         texto_audio = (
-            f"{creative_data['gancho_atencao_inicial']}. ATENÇÃO: Detectamos uma ameaça de nível CRÍTICO "
-            f"no celular de MARIANA. Alerta de aliciamento e grooming ativo. "
-            f"{creative_data['desenvolvimento_copy']}. Acesse o portal guardian-ai.app imediatamente para garantir a segurança da sua família."
+            f"{creative_data['gancho_atencao_inicial']}. "
+            f"{creative_data['desenvolvimento_copy']}"
         )
         voz_pura_path = self._generate_audio(texto_audio)
         audio_final_path = self._mix_background_track(voz_pura_path, canal_veiculacao)
         
-        alerta_texto = "🚨 ALERTA DE SEGURANÇA: Detectamos uma ameaça de nível CRÍTICO no celular de 'MARIANA'. Verifique seu Dashboard imediatamente para detalhes: https://guardian-ai.app"
-        cta_texto = "Quer segurança para seus filhos? Assine agora!"
+        # Card de notificação: usa a mensagem real do golpista gerada pelo motor de copy.
+        alerta_texto = creative_data.get(
+            "texto_card_notificacao",
+            creative_data.get("desenvolvimento_copy", "")
+        )
+        cta_texto = creative_data.get("chamada_para_acao_cta", "Baixe grátis agora")
         
         base_image_path = os.path.abspath("output_campanha/anuncio_base.jpg")
         final_design_path = os.path.abspath("output_campanha/anuncio_final_design.jpg")
         video_output_path = os.path.abspath("output_campanha/anuncio_video_final.mp4")
 
-        publicidade_prompt = (
-            "High-end studio advertising photography, professional commercial lighting, cinematic scale. "
-            "A serious and highly focused Brazilian mother looking at her phone inside a luxury house, showing determined protective intent. "
-            "In the same wide composition, her teenage daughter Mariana is safely visible next to her using a tablet. "
-            "Both subjects are fully visible, framed perfectly without any crop. Crisp details, clean textless environment."
+        # Direção de arte emocional dinâmica (tensão/medo, pessoas comuns) vinda do guardian_base.json.
+        # Fallback mantém clima de ameaça, nunca o "tom calmo de casa de luxo".
+        publicidade_prompt = creative_data.get("direcao_arte_emocional") or (
+            "Cinematic fear-based advertising photograph, an ordinary worried Brazilian person reacting "
+            "with alarm to a threatening message on a smartphone, dramatic tense lighting, deep shadows, "
+            "photorealistic, all subjects fully visible and framed without any crop, clean textless environment, vertical 9:16."
         )
 
         # FLUXO DE VÍDEO REAL CORRIGIDO

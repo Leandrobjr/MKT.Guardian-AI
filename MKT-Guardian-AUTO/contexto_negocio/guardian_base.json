@@ -1,0 +1,211 @@
+{
+  "PRODUTO_E_POSICIONAMENTO": {
+    "nome_produto": "Guardian AI",
+    "categoria": "App de Segurança Digital para WhatsApp",
+    "plataformas": ["Android (Play Store)", "iOS (App Store)"],
+    "url_oficial": "https://guardian-ai.app",
+    "posicionamento_comercial": "Proteção inteligente para sua vida, no WhatsApp.",
+    "proposta_unica_de_valor": "O único app que monitora, detecta e bloqueia golpes em tempo real diretamente no seu WhatsApp, sem complicação técnica.",
+    "tom_de_voz_obrigatorio": {
+      "estilo": "Autoritário, urgente, acolhedor e simples",
+      "regras_linguisticas": [
+        "Nunca usar jargões técnicos como 'firewall', 'criptografia', 'endpoint'",
+        "Sempre traduzir tecnologia em proteção emocional",
+        "Usar linguagem de alerta, não de venda",
+        "Sempre mencionar dor específica antes da solução",
+        "Máximo 15 palavras por frase de impacto"
+      ],
+      "palavras_proibidas": ["cybersecurity", "firewall", "endpoint", "SSL", "TLS", "protocolo"],
+      "palavras_chave": ["golpe", "proteção", "WhatsApp", "PIX", "família", "segurança", "invasão", "clone"]
+    }
+  },
+  "ICP_PUBLICOS": [
+    {
+      "id": "massa",
+      "nome": "Usuários Comuns",
+      "faixa_etaria": "25-70",
+      "descricao": "Pessoas comuns que usam WhatsApp para tudo e fazem PIX frequentemente",
+      "dores_principais": [
+        "Medo de golpe do PIX",
+        "Medo de clonagem do WhatsApp",
+        "Medo de perder dinheiro por mensagem falsa",
+        "Medo de ter conta bancária acessada por golpistas"
+      ],
+      "gatilhos_emocionais": ["urgência", "perda financeira", "medo de ser enganado"],
+      "prioridade": 1
+    },
+    {
+      "id": "pais",
+      "nome": "Pais e Responsáveis",
+      "faixa_etaria": "30-55",
+      "descricao": "Pais preocupados com a segurança digital dos filhos menores e idosos da família",
+      "dores_principais": [
+        "Medo de grooming e aliciamento de menores",
+        "Medo de filho exposto a conteúdo impróprio",
+        "Medo de idosos sendo enganados por falsos parentes",
+        "Medo de extorsão digital envolvendo filhos"
+      ],
+      "gatilhos_emocionais": ["proteção familiar", "culpa parental", "segurança dos filhos"],
+      "prioridade": 2
+    },
+    {
+      "id": "profissionais",
+      "nome": "Profissionais e Empresários",
+      "faixa_etaria": "28-60",
+      "descricao": "Médicos, advogados, empresários e vendedores com dados profissionais sensíveis",
+      "dores_principais": [
+        "Medo de sequestro de conta WhatsApp Business",
+        "Medo de vazamento de conversas com clientes",
+        "Medo de golpe de boleto falso",
+        "Medo de dano reputacional"
+      ],
+      "gatilhos_emocionais": ["reputação", "prejuízo financeiro", "paralisação do negócio"],
+      "prioridade": 3
+    },
+    {
+      "id": "idosos",
+      "nome": "Idosos e Aposentados",
+      "faixa_etaria": "55-75",
+      "descricao": "Aposentados vulneráveis a fraudes emocionais e golpes de falso parente",
+      "dores_principais": [
+        "Medo de golpe do falso parente pedindo dinheiro",
+        "Medo de falsa central bancária",
+        "Medo de perder a aposentadoria",
+        "Medo de serem enganados por desconhecerem tecnologia"
+      ],
+      "gatilhos_emocionais": ["desconfiança", "medo de perder dinheiro da aposentadoria", "solidão"],
+      "prioridade": 2
+    }
+  ],
+  "TIPOS_DE_GOLPE": [
+    {
+      "id": "pix_fantasma",
+      "nome": "Golpe do PIX Fantasma",
+      "descricao": "Golpistas enviam mensagem fingindo ser banco ou conhecido pedindo PIX urgente",
+      "gancho_modelo": "Novo golpe do PIX está roubando R$ 5.000 de quem usa WhatsApp",
+      "ganchos": [
+        "ELA FEZ UM PIX. PERDEU A APOSENTADORIA INTEIRA.",
+        "O PIX QUE VOCÊ FIZER HOJE PODE CAIR NA CONTA DE UM GOLPISTA",
+        "EM 30 SEGUNDOS, ELES ESVAZIARAM A CONTA DELE PELO WHATSAPP"
+      ],
+      "frase_golpista": "Oi, é do seu banco. Detectamos uma transação suspeita. Faça um PIX de segurança AGORA para o número informado ou sua conta será bloqueada.",
+      "direcao_arte_emocional": "Close on a worried person's face illuminated by phone screen, expression of dawning horror, dark tense lighting, a banking app showing a large outgoing PIX transfer, dramatic shadows, cinematic thriller mood",
+      "ctas": ["BLOQUEIE GOLPES DE PIX — BAIXE GRÁTIS", "PROTEJA SEU DINHEIRO AGORA"]
+    },
+    {
+      "id": "falso_parente",
+      "nome": "Golpe do Falso Parente",
+      "descricao": "Mensagem de número desconhecido fingindo ser filho ou parente em apuros",
+      "gancho_modelo": "Olá mãe, troquei de número. Preciso de dinheiro urgente",
+      "ganchos": [
+        "'MÃE, TROQUEI DE NÚMERO.' FOI ASSIM QUE ROUBARAM R$ 8 MIL DELA.",
+        "O 'FILHO' QUE PEDIU DINHEIRO NÃO ERA O FILHO DELA",
+        "ELA ACHOU QUE ESTAVA AJUDANDO O FILHO. ERA UM GOLPISTA."
+      ],
+      "frase_golpista": "Oi mãe, troquei de número, salva aí. Tô numa emergência e preciso que você faça um PIX urgente pra mim, depois te explico.",
+      "direcao_arte_emocional": "Close on an older Brazilian mother's face reacting with concern to a WhatsApp message, phone glowing, warm but tense lighting turning cold, emotional vulnerability, cinematic, shallow depth of field",
+      "ctas": ["NÃO CAIA NESSE GOLPE — BAIXE GRÁTIS", "PROTEJA SUA FAMÍLIA AGORA"]
+    },
+    {
+      "id": "clonagem_whatsapp",
+      "nome": "Clonagem de WhatsApp",
+      "descricao": "Golpistas clonam o número de WhatsApp para pedir dinheiro aos contatos",
+      "gancho_modelo": "Seu WhatsApp pode estar sendo clonado agora mesmo",
+      "ganchos": [
+        "CLONARAM O WHATSAPP DELE E PEDIRAM DINHEIRO A TODOS OS CONTATOS",
+        "SEU WHATSAPP PODE ESTAR SENDO CLONADO ENQUANTO VOCÊ LÊ ISTO",
+        "EM SEGUNDOS, VIRARAM VOCÊ — E ENGANARAM SUA FAMÍLIA INTEIRA"
+      ],
+      "frase_golpista": "Recebemos sua solicitação. Digite o código de 6 dígitos enviado por SMS para confirmar sua conta do WhatsApp.",
+      "direcao_arte_emocional": "A person staring in shock at two identical WhatsApp profiles on a phone, glitch effect suggesting duplication, cold blue threatening light, sense of identity theft, cinematic tension",
+      "ctas": ["BLINDE SEU WHATSAPP — BAIXE GRÁTIS", "EVITE A CLONAGEM AGORA"]
+    },
+    {
+      "id": "falsa_central",
+      "nome": "Falsa Central Bancária",
+      "descricao": "Ligação ou mensagem fingindo ser atendente do banco pedindo dados",
+      "gancho_modelo": "Ligação do banco pode ser golpe. Veja como identificar",
+      "ganchos": [
+        "O 'ATENDENTE DO BANCO' NA LINHA ERA UM LADRÃO",
+        "ELE CONFIOU NO ATENDENTE. PERDEU TUDO EM UMA LIGAÇÃO.",
+        "ESSA LIGAÇÃO DO SEU BANCO PODE SER UMA ARMADILHA"
+      ],
+      "frase_golpista": "Aqui é da central de segurança do seu banco. Para sua proteção, confirme sua senha e o código do cartão agora.",
+      "direcao_arte_emocional": "Close on an anxious person on a phone call, hand gripping the phone, a faceless silhouette in shadow representing the fake attendant, cold institutional lighting, paranoia, cinematic thriller",
+      "ctas": ["IDENTIFIQUE GOLPES NA HORA — BAIXE GRÁTIS", "NÃO SEJA A PRÓXIMA VÍTIMA"]
+    },
+    {
+      "id": "grooming",
+      "nome": "Grooming e Aliciamento Digital",
+      "descricao": "Adultos se passando por adolescentes para aliciar menores em chats",
+      "gancho_modelo": "Alerta: Estranhos estão tentando contato com seu filho no WhatsApp",
+      "ganchos": [
+        "ELE DISSE QUE TINHA 12 ANOS. TINHA 43.",
+        "ENQUANTO VOCÊ LÊ ISTO, UM ESTRANHO PODE ESTAR FALANDO COM SEU FILHO",
+        "'NÃO CONTA PRA SUA MÃE.' A FRASE QUE ANTECEDE UMA TRAGÉDIA"
+      ],
+      "frase_golpista": "vc é muito linda... não conta pra ninguém que a gente conversa, é nosso segredo 😉 manda uma foto sua?",
+      "direcao_arte_emocional": "Close on a worried mother discovering a suspicious message on her child's phone, expression of fear and protective alarm, child visible in soft focus background, dark tense lighting, dramatic shadows, cinematic emotional weight",
+      "ctas": ["PROTEJA SEU FILHO HOJE — É GRÁTIS", "VIGIE QUEM FALA COM SEU FILHO"]
+    },
+    {
+      "id": "phishing",
+      "nome": "Links de Phishing",
+      "descricao": "Links maliciosos enviados por contatos que tiveram conta clonada",
+      "gancho_modelo": "Esse link pode roubar todos os seus dados em segundos",
+      "ganchos": [
+        "ELE CLICOU NO LINK. PERDEU TODAS AS SENHAS EM 3 SEGUNDOS.",
+        "ESSE LINK INOCENTE PODE ROUBAR SUA VIDA DIGITAL INTEIRA",
+        "UM CLIQUE. E OS GOLPISTAS TINHAM ACESSO A TUDO."
+      ],
+      "frase_golpista": "Você ganhou um prêmio! Clique no link para resgatar antes que expire: bit.ly/premio-2026",
+      "direcao_arte_emocional": "Close on a finger about to tap a suspicious link on a phone, ominous red warning glow emerging from the screen, dark environment, sense of imminent danger, cinematic suspense",
+      "ctas": ["BLOQUEIE LINKS PERIGOSOS — BAIXE GRÁTIS", "PROTEJA SEUS DADOS AGORA"]
+    }
+  ],
+  "COPYWRITING_FRAMEWORK": {
+    "estrutura_obrigatoria": "PAS — Problema, Agitação, Solução, com urgência final",
+    "principios": [
+      "Vender medo controlado + solução imediata, nunca tecnologia",
+      "Tornar a ameaça concreta e visível (mostrar a frase real do golpista)",
+      "Usar histórias reais e perdas específicas em reais (R$)",
+      "Criar urgência: a ameaça está acontecendo AGORA",
+      "CTA sempre com benefício + gratuidade + comando direto"
+    ],
+    "roteiro_narracao_modelo": {
+      "problema_0_5s": "Apresentar a ameaça que atinge o público diretamente",
+      "agitacao_5_15s": "Mostrar como o golpe se desenrola e o que a vítima perde",
+      "solucao_15_22s": "Guardian AI detecta e bloqueia, avisando na hora",
+      "urgencia_cta_22_27s": "Comando para baixar grátis antes que seja tarde"
+    },
+    "regras_headline": [
+      "Máximo 10 palavras",
+      "Letras maiúsculas",
+      "Específica e visceral (números, frases reais, consequências)",
+      "Evitar termos técnicos e abstrações"
+    ],
+    "regras_card_notificacao": "Mostrar a mensagem REAL que o golpista enviaria, com o nome dinâmico da vítima, seguida de 'Guardian AI bloqueou e te avisou.'",
+    "intensidade_emocional": "alta"
+  },
+  "FORMATOS_MIDIA": {
+    "reels_tiktok": {"largura": 1080, "altura": 1920, "ratio": "9:16", "duracao_max_segundos": 60},
+    "feed_instagram": {"largura": 1080, "altura": 1080, "ratio": "1:1", "duracao_max_segundos": 60},
+    "stories": {"largura": 1080, "altura": 1920, "ratio": "9:16", "duracao_max_segundos": 15},
+    "youtube_shorts": {"largura": 1080, "altura": 1920, "ratio": "9:16", "duracao_max_segundos": 60}
+  },
+  "KPIS_META": {
+    "CAC_maximo_brl": 25.00,
+    "CPI_maximo_brl": 5.00,
+    "CTR_minimo_pct": 1.5,
+    "retencao_minima_pct": 20.0,
+    "budget_diario_brl": 50.00
+  },
+  "PERSONAS_EXEMPLO": [
+    {"nome": "Carlos", "idade": 62, "profissao": "Aposentado", "cidade": "São Paulo", "publico_id": "idosos"},
+    {"nome": "Ana", "idade": 45, "profissao": "Professora", "cidade": "Belo Horizonte", "publico_id": "pais"},
+    {"nome": "Roberto", "idade": 38, "profissao": "Comerciante", "cidade": "Rio de Janeiro", "publico_id": "profissionais"},
+    {"nome": "Maria", "idade": 55, "profissao": "Dona de casa", "cidade": "Fortaleza", "publico_id": "massa"},
+    {"nome": "Fernanda", "idade": 33, "profissao": "Enfermeira", "cidade": "Curitiba", "publico_id": "massa"},
+    {"nome": "José", "idade": 68, "profissao": "Aposentado INSS", "cidade": "Salvador", "publico_id": "idosos"}
+  ]
+}

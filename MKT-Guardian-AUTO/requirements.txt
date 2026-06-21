@@ -4,6 +4,10 @@ google-genai>=0.1.1
 # Manipulação, tratamento e design comercial de imagens (Substituto do Canva)
 Pillow>=10.2.0
 
+# Motor de composição por frames (renderização HTML/CSS dos overlays e cards)
+# Após instalar, rode tambem: playwright install chromium
+playwright>=1.44.0
+
 # Protocolos HTTP para chamadas das APIs externas (ElevenLabs, Runway, Meta)
 requests>=2.31.0
 

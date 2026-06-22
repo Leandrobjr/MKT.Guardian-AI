@@ -1,4 +1,8 @@
 #!/usr/bin/env python3
+# AVISO: Este e um script LEGADO (v3.0) na raiz do repositorio.
+# Usa gemini-2.5 e NAO e o pipeline de producao atual.
+# Execute SEMPRE a partir de MKT-Guardian-AUTO/:
+#   cd MKT-Guardian-AUTO && python campaign_orchestrator.py
 # MKT Guardian AI - Fábrica de Mídia v3.0 (Correção Total)
 import os, json, requests
 from dotenv import load_dotenv

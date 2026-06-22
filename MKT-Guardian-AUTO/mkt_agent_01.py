@@ -11,27 +11,59 @@ from playwright.async_api import async_playwright
 from dotenv import load_dotenv
 
 class MediaFactory:
+    BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
     def __init__(self):
-        load_dotenv()
+        load_dotenv(os.path.join(self.BASE_DIR, ".env"))
         self.gemini_key = os.getenv("GEMINI_API_KEY")
         self.elevenlabs_key = os.getenv("ELEVENLABS_API_KEY")
         self.kling_key = os.getenv("KLING_API_KEY")
-        
+
         self.client = genai.Client(api_key=self.gemini_key)
-        self.model_name = "gemini-3.1-flash-lite"
+        self.model_imagem = os.getenv("GEMINI_MODEL_IMAGEM", "gemini-3.1-flash-image")
         self.voice_id = "21m00Tcm4TlvDq8ikWAM"
-        
+
         self.kling_base_url = "https://api-singapore.klingai.com"
-        
-        self.base_audio_dir = os.path.abspath("trilhas_sonoras")
+
+        self.output_dir = os.path.join(self.BASE_DIR, "output_campanha")
+        self.frames_brutos_dir = os.path.join(self.output_dir, "frames_brutos")
+        self.frames_finais_dir = os.path.join(self.output_dir, "frames_finais")
+        self.base_audio_dir = os.path.join(self.BASE_DIR, "trilhas_sonoras")
         self.dir_suspense = os.path.join(self.base_audio_dir, "musicas_suspense")
         self.dir_corporativo = os.path.join(self.base_audio_dir, "musicas_corporativo")
 
+    def _build_visual_prompt(self, creative_data: dict) -> str:
+        """Monta prompt visual com cena do golpe + regras obrigatórias WhatsApp/humanização."""
+        cena = creative_data.get("direcao_arte_emocional") or (
+            "Documentary photorealistic photo of an ordinary Brazilian person in everyday clothes "
+            "at home, holding a smartphone showing the WhatsApp chat screen with green message bubbles."
+        )
+        visuais = creative_data.get("regras_visuais") or {}
+        obrigatorias = visuais.get("regras_obrigatorias", [])
+        proibicoes = visuais.get("proibicoes", [])
+        estilo = visuais.get(
+            "estilo_fotografico",
+            "Photorealistic documentary advertising, natural daylight, Brazilian everyday environment."
+        )
+
+        partes = [cena.strip(), estilo.strip()]
+        if obrigatorias:
+            partes.append("MANDATORY: " + " ".join(obrigatorias))
+        if proibicoes:
+            partes.append("FORBIDDEN: " + " ".join(proibicoes))
+        partes.append(
+            "Vertical 9:16 composition, all subjects fully visible without crop, "
+            "clean image with no text overlays (text added later in post-production)."
+        )
+        return " ".join(partes)
+
     def generate_campaign_assets(self, creative_data: dict) -> dict:
         print("\n🏭 [Fábrica de Mídia v15.0] Motor de Composição por Frames Ativo...")
-        os.makedirs("output_campanha", exist_ok=True)
-        os.makedirs("output_campanha/frames_brutos", exist_ok=True)
-        os.makedirs("output_campanha/frames_finais", exist_ok=True)
+        print(f"📁 Diretório de saída: {self.output_dir}")
+        print(f"🎨 Modelo de imagem (Nano Banana): {self.model_imagem}")
+        os.makedirs(self.output_dir, exist_ok=True)
+        os.makedirs(self.frames_brutos_dir, exist_ok=True)
+        os.makedirs(self.frames_finais_dir, exist_ok=True)
         
         formato_midia = creative_data.get("tipo_midia_selecionada", "Vídeo Vertical Reels (1080x1920)")
         canal_veiculacao = creative_data.get("canal_veiculacao_selecionado", "Meta Ads (Instagram/Facebook)")
@@ -52,17 +84,12 @@ class MediaFactory:
         )
         cta_texto = creative_data.get("chamada_para_acao_cta", "Baixe grátis agora")
         
-        base_image_path = os.path.abspath("output_campanha/anuncio_base.jpg")
-        final_design_path = os.path.abspath("output_campanha/anuncio_final_design.jpg")
-        video_output_path = os.path.abspath("output_campanha/anuncio_video_final.mp4")
+        base_image_path = os.path.join(self.output_dir, "anuncio_base.jpg")
+        final_design_path = os.path.join(self.output_dir, "anuncio_final_design.jpg")
+        video_output_path = os.path.join(self.output_dir, "anuncio_video_final.mp4")
 
-        # Direção de arte emocional dinâmica (tensão/medo, pessoas comuns) vinda do guardian_base.json.
-        # Fallback mantém clima de ameaça, nunca o "tom calmo de casa de luxo".
-        publicidade_prompt = creative_data.get("direcao_arte_emocional") or (
-            "Cinematic fear-based advertising photograph, an ordinary worried Brazilian person reacting "
-            "with alarm to a threatening message on a smartphone, dramatic tense lighting, deep shadows, "
-            "photorealistic, all subjects fully visible and framed without any crop, clean textless environment, vertical 9:16."
-        )
+        publicidade_prompt = self._build_visual_prompt(creative_data)
+        print(f"🎯 Prompt visual: {publicidade_prompt[:180]}...")
 
         # FLUXO DE VÍDEO REAL CORRIGIDO
         if "Vídeo" in formato_midia:
@@ -113,7 +140,7 @@ class MediaFactory:
                 if task.get("status") == "succeeded":
                     video_url = task.get("outputs", [{}])[0].get("url")
                     if video_url:
-                        raw_path = "output_campanha/kling_raw.mp4"
+                        raw_path = os.path.join(self.output_dir, "kling_raw.mp4")
                         with open(raw_path, "wb") as f:
                             f.write(requests.get(video_url).content)
                         return raw_path
@@ -124,18 +151,18 @@ class MediaFactory:
     def _extract_frames(self, video_path: str):
         subprocess.run([
             "ffmpeg", "-y", "-i", video_path, 
-            "-q:v", "2", "output_campanha/frames_brutos/frame_%04d.jpg"
+            "-q:v", "2", os.path.join(self.frames_brutos_dir, "frame_%04d.jpg")
         ], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
     async def _compose_all_frames(self, headline: str, alerta: str, cta: str):
-        frames = sorted([f for f in os.listdir("output_campanha/frames_brutos") if f.endswith(".jpg")])
+        frames = sorted([f for f in os.listdir(self.frames_brutos_dir) if f.endswith(".jpg")])
         async with async_playwright() as p:
             browser = await p.chromium.launch(headless=True)
             page = await browser.new_page()
             await page.set_viewport_size({"width": 1080, "height": 1920})
             
             for frame in frames:
-                frame_path = os.path.abspath(f"output_campanha/frames_brutos/{frame}")
+                frame_path = os.path.join(self.frames_brutos_dir, frame)
                 with open(frame_path, "rb") as f:
                     encoded_frame = base64.b64encode(f.read()).decode('utf-8')
                 
@@ -169,7 +196,7 @@ class MediaFactory:
                 </html>
                 """
                 await page.set_content(html_content)
-                out_path = os.path.abspath(f"output_campanha/frames_finais/{frame}")
+                out_path = os.path.join(self.frames_finais_dir, frame)
                 await page.screenshot(path=out_path, type="jpeg", quality=95)
                 
             await browser.close()
@@ -177,7 +204,7 @@ class MediaFactory:
     def _compile_processed_video(self, audio_path: str, output_path: str):
         subprocess.run([
             "ffmpeg", "-y", "-framerate", "25", 
-            "-i", "output_campanha/frames_finais/frame_%04d.jpg",
+            "-i", os.path.join(self.frames_finais_dir, "frame_%04d.jpg"),
             "-i", audio_path,
             "-c:v", "libx264", "-pix_fmt", "yuv420p",
             "-c:a", "aac", "-b:a", "192k", "-shortest",
@@ -185,10 +212,13 @@ class MediaFactory:
         ], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         
         # Limpeza técnica de cache de frames do sistema
-        subprocess.run("rm -rf output_campanha/frames_brutos/* output_campanha/frames_finais/*", shell=True)
+        for pasta in (self.frames_brutos_dir, self.frames_finais_dir):
+            for arquivo in os.listdir(pasta):
+                if arquivo.endswith(".jpg"):
+                    os.remove(os.path.join(pasta, arquivo))
 
     def _generate_audio(self, text: str) -> str:
-        path = "output_campanha/voz_pura.mp3"
+        path = os.path.join(self.output_dir, "voz_pura.mp3")
         if not self.elevenlabs_key: return path
         url = f"https://api.elevenlabs.io/v1/text-to-speech/{self.voice_id}"
         headers = {"Accept": "audio/mpeg", "Content-Type": "application/json", "xi-api-key": self.elevenlabs_key}
@@ -201,7 +231,7 @@ class MediaFactory:
         return path
 
     def _mix_background_track(self, voz_path: str, canal: str) -> str:
-        mixed_path = "output_campanha/anuncio_audio_final.mp3"
+        mixed_path = os.path.join(self.output_dir, "anuncio_audio_final.mp3")
         pasta_alvo = self.dir_suspense
         trilhas = []
         if os.path.exists(pasta_alvo):
@@ -220,13 +250,21 @@ class MediaFactory:
         except: return voz_path
 
     def _generate_gemini_image(self, prompt: str, output_path: str):
+        print(f"🎨 Gerando imagem com {self.model_imagem}...")
         try:
-            response = self.client.models.generate_content(model="gemini-3.1-flash-image", contents=prompt)
+            response = self.client.models.generate_content(
+                model=self.model_imagem,
+                contents=prompt,
+                config=types.GenerateContentConfig(response_modalities=["IMAGE"]),
+            )
             for part in response.candidates[0].content.parts:
                 if part.inline_data and part.inline_data.data:
-                    with open(output_path, "wb") as f: f.write(part.inline_data.data)
+                    with open(output_path, "wb") as f:
+                        f.write(part.inline_data.data)
+                    print(f"✅ Imagem salva em: {output_path}")
                     return
-        except: pass
+        except Exception as e:
+            print(f"❌ Falha na geração de imagem ({self.model_imagem}): {e}")
 
     async def _apply_html_css_layout(self, input_image_path: str, output_path: str, headline: str, alerta: str, cta: str):
         headline_upper = headline.upper().strip()

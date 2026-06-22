@@ -10,17 +10,35 @@ from mkt_agent_01 import MediaFactory
 from traffic_manager import TrafficManager
 
 class CampaignOrchestrator:
+    BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
     def __init__(self):
-        load_dotenv()
+        os.chdir(self.BASE_DIR)
+        load_dotenv(os.path.join(self.BASE_DIR, ".env"))
         self.api_key = os.getenv("GEMINI_API_KEY")
         self.client = genai.Client(api_key=self.api_key)
-        self.model_name = "gemini-3.1-flash-lite"
-        
-        self.context_path = "contexto_negocio/guardian_base.json"
+        self.model_name = os.getenv("GEMINI_MODEL_TEXTO", "gemini-3.1-flash-lite")
+
+        self.context_path = os.path.join(self.BASE_DIR, "contexto_negocio", "guardian_base.json")
         self.context_data = self._load_business_context()
-        
+        self.md_context = self._load_markdown_context()
+
         self.media_factory = MediaFactory()
         self.traffic_manager = TrafficManager()
+
+    def _load_markdown_context(self) -> str:
+        """Carrega documentos estratégicos de contexto_negocio/ para enriquecer o copy."""
+        ctx_dir = os.path.join(self.BASE_DIR, "contexto_negocio")
+        partes = []
+        for nome in ("GOLPES WHATSAPP.md", "PLANO MKT Guardian AUTO.md"):
+            caminho = os.path.join(ctx_dir, nome)
+            if os.path.exists(caminho):
+                try:
+                    with open(caminho, "r", encoding="utf-8") as f:
+                        partes.append(f"--- {nome} ---\n{f.read()}")
+                except Exception as e:
+                    print(f"⚠️ Não foi possível ler {nome}: {e}")
+        return "\n\n".join(partes)
 
     def _load_business_context(self) -> dict:
         if not os.path.exists(self.context_path):
@@ -62,14 +80,19 @@ class CampaignOrchestrator:
         print("[3] Falsa Central Bancária / Falso Atendente")
         print("[4] Grooming / Aliciamento Digital de Menores")
         print("[5] Links de Phishing / Páginas Clonadas")
+        print("[6] Clonagem de WhatsApp (Roubo de código SMS)")
         opcoes_golpe = {
             "1": "Golpe do Falso Parente / Novo Número no WhatsApp pedindo dinheiro urgente.",
             "2": "Golpe do PIX e transferências bancárias sob indução mecânica ou pânico.",
             "3": "Golpe da Falsa Central Bancária simulando atendimento institucional de segurança.",
             "4": "Grooming / Aliciamento digital de menores e exposição de crianças em redes e jogos online.",
-            "5": "Links maliciosos de Phishing e páginas clonadas projetadas para roubo de senhas."
+            "5": "Links maliciosos de Phishing e páginas clonadas projetadas para roubo de senhas.",
+            "6": "Clonagem de WhatsApp via engenharia social e roubo do código SMS de verificação."
         }
-        mapa_golpe_id = {"1": "falso_parente", "2": "pix_fantasma", "3": "falsa_central", "4": "grooming", "5": "phishing"}
+        mapa_golpe_id = {
+            "1": "falso_parente", "2": "pix_fantasma", "3": "falsa_central",
+            "4": "grooming", "5": "phishing", "6": "clonagem_whatsapp"
+        }
         g_escolhido = input("Digite o número da opção desejada: ").strip()
         golpe_final = opcoes_golpe.get(g_escolhido, "Fraudes gerais no WhatsApp.")
         golpe_id = mapa_golpe_id.get(g_escolhido, "pix_fantasma")
@@ -110,7 +133,9 @@ class CampaignOrchestrator:
         config = self.show_interactive_menu()
         
         print("\n======================================================================")
-        print("🚀 [MKT GUARDIAN AI - ENGINE ORQUESTRAÇÃO v3.7] Iniciando Esteira...")
+        print("🚀 [MKT GUARDIAN AI - ENGINE ORQUESTRAÇÃO v3.8] Iniciando Esteira...")
+        print(f"📁 Diretório de trabalho: {self.BASE_DIR}")
+        print(f"🧠 Modelo de copy: {self.model_name}")
         print("======================================================================")
         
         # Busca os ganchos virais, a frase real do golpista e a direção de arte do guardian_base.json
@@ -122,19 +147,31 @@ class CampaignOrchestrator:
         ganchos_ref = golpe_obj.get("ganchos", [golpe_obj.get("gancho_modelo", "")])
         frase_golpista = golpe_obj.get("frase_golpista", "")
 
-        # Consolida as respostas estruturadas para blindar os prompts dos agentes
+        produto = self.context_data.get("PRODUTO_E_POSICIONAMENTO", {})
+        foco_whatsapp = produto.get(
+            "foco_exclusivo",
+            "Guardian AI protege EXCLUSIVAMENTE o WhatsApp — pessoal e WhatsApp Business."
+        )
+
         contexto_injetado = (
             f"DIRETRIZES DE CAMPANHA SELECIONADAS:\n"
             f"- Público-Alvo: {config['publico']}\n"
             f"- Ameaça/Golpe Abordado: {config['golpe']}\n"
-            f"- Frase real que o golpista enviaria (base para o card): {frase_golpista}\n"
+            f"- Frase real que o golpista enviaria no WhatsApp (base para o card): {frase_golpista}\n"
             f"- Ganchos de referência (inspire-se, não copie literalmente): {' | '.join(ganchos_ref)}\n"
             f"- Canal de Distribuição: {config['canal']}\n"
             f"- Tipo de Mídia: {config['midia']}\n"
             f"- Objetivo de Conversão: {config['objetivo']}\n\n"
+            f"FOCO DO PRODUTO (OBRIGATÓRIO):\n"
+            f"- {foco_whatsapp}\n"
+            f"- Toda narrativa deve mencionar WhatsApp explicitamente.\n"
+            f"- Nunca fale de segurança genérica, cibersegurança abstrata ou outros apps.\n"
+            f"- O golpe acontece DENTRO do WhatsApp (mensagem, link, código, clonagem).\n\n"
             f"REGRAS DE TOM DE VOZ DA MARCA:\n"
-            f"- Posicionamento: {self.context_data.get('PRODUTO_E_POSICIONAMENTO', {}).get('posicionamento_comercial')}\n"
-            f"- Restrições Linguísticas: {'; '.join(self.context_data.get('PRODUTO_E_POSICIONAMENTO', {}).get('tom_de_voz_obrigatorio', {}).get('regras_linguisticas', []))}"
+            f"- Posicionamento: {produto.get('posicionamento_comercial')}\n"
+            f"- Restrições Linguísticas: {'; '.join(produto.get('tom_de_voz_obrigatorio', {}).get('regras_linguisticas', []))}\n\n"
+            f"CONTEXTO ESTRATÉGICO DE NEGÓCIO (documentos oficiais):\n"
+            f"{self.md_context[:12000] if self.md_context else 'Documentos MD não encontrados em contexto_negocio/'}"
         )
 
         print("\n🧠 [Agente Redator Sênior] Escrevendo copies de alta conversão (resposta direta)...")
@@ -144,20 +181,23 @@ class CampaignOrchestrator:
 
         system_instruction = (
             "Você é o Maior Copywriter de Resposta Direta do Brasil, especialista em anúncios de alta "
-            "conversão para apps de segurança digital. Seu objetivo é SENSIBILIZAR a dor do público e "
-            "levá-lo a baixar o app IMEDIATAMENTE. Nunca use tom calmo ou institucional.\n\n"
+            "conversão para o app Guardian AI — proteção EXCLUSIVA do WhatsApp (pessoal e Business). "
+            "Seu objetivo é SENSIBILIZAR a dor do público e levá-lo a baixar o app IMEDIATAMENTE. "
+            "Nunca use tom calmo ou institucional. Nunca fale de segurança genérica — sempre WhatsApp.\n\n"
             f"FRAMEWORK OBRIGATÓRIO: {framework.get('estrutura_obrigatoria', 'PAS — Problema, Agitação, Solução, Urgência')}\n"
             + ("PRINCÍPIOS:\n" + "\n".join(f"   - {p}" for p in framework.get("principios", [])) + "\n\n" if framework.get("principios") else "")
             + (f"ESTRUTURA DO ROTEIRO DE NARRAÇÃO (siga os tempos):\n{roteiro_txt}\n\n" if roteiro_txt else "")
             + "REGRAS OBRIGATÓRIAS DE OUTPUT (JSON estrito):\n"
-            "1. gancho_atencao_inicial: MANCHETE visceral em MAIÚSCULAS, máx 10 palavras, com números, "
-            "frases reais de golpistas ou consequências chocantes. Nada genérico.\n"
+            "1. gancho_atencao_inicial: MANCHETE visceral em MAIÚSCULAS, máx 10 palavras. "
+            "Deve citar WhatsApp, golpe ou PIX. Nada genérico sobre 'celular' ou 'internet'.\n"
             "2. desenvolvimento_copy: Roteiro de narração de 20-27s seguindo Problema→Agitação→Solução→Urgência. "
-            "Deve DOER e terminar empurrando para baixar grátis.\n"
-            "3. chamada_para_acao_cta: Comando curto em MAIÚSCULAS com benefício + gratuidade.\n"
-            "4. texto_card_notificacao: Simule a MENSAGEM REAL que o golpista enviaria à vítima, "
-            "seguida de 'Guardian AI bloqueou e te avisou.' Torna a ameaça visível e assustadora.\n"
+            "Descreva o golpe acontecendo NO WHATSAPP (mensagem, link, código SMS, clonagem). "
+            "Solução = Guardian AI detecta e bloqueia no WhatsApp. Termine empurrando para baixar grátis.\n"
+            "3. chamada_para_acao_cta: Comando curto em MAIÚSCULAS com benefício + gratuidade + WhatsApp.\n"
+            "4. texto_card_notificacao: Simule a MENSAGEM REAL que o golpista enviaria no WhatsApp "
+            "(como aparece no chat), seguida de 'Guardian AI bloqueou e te avisou.'\n"
             "5. publico_alvo_icp: Descrição resumida do público para segmentação.\n"
+            "PROIBIDO: falar de outros apps, redes sociais genéricas, escudos digitais, hackers genéricos.\n"
             "Retorne os dados estritamente em formato JSON."
         )
 
@@ -206,8 +246,9 @@ class CampaignOrchestrator:
         # INJEÇÃO TÉCNICA DE COMPATIBILIDADE: Mapeia as escolhas do menu para a Fábrica de Mídia
         creative_data["tipo_midia_selecionada"] = config["midia"]
         creative_data["canal_veiculacao_selecionado"] = config["canal"]
-        # Direção de arte emocional (tensão/medo) para o prompt do Kling/Nano Banana
         creative_data["direcao_arte_emocional"] = golpe_obj.get("direcao_arte_emocional", "")
+        creative_data["regras_visuais"] = self.context_data.get("DIRETRIZES_VISUAIS", {})
+        creative_data["golpe_nome"] = golpe_obj.get("nome", config["golpe"])
         
         # Envia os dados higienizados para a fábrica de mídia baseada em HTML/CSS e FFmpeg
         assets_resultado = self.media_factory.generate_campaign_assets(creative_data)

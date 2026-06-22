@@ -6,6 +6,7 @@
     "url_oficial": "https://guardian-ai.app",
     "posicionamento_comercial": "Proteção inteligente para sua vida, no WhatsApp.",
     "proposta_unica_de_valor": "O único app que monitora, detecta e bloqueia golpes em tempo real diretamente no seu WhatsApp, sem complicação técnica.",
+    "foco_exclusivo": "Guardian AI protege EXCLUSIVAMENTE o WhatsApp — versão pessoal e WhatsApp Business. Todo criativo deve mostrar golpes e proteção acontecendo dentro do WhatsApp.",
     "tom_de_voz_obrigatorio": {
       "estilo": "Autoritário, urgente, acolhedor e simples",
       "regras_linguisticas": [
@@ -89,7 +90,7 @@
         "EM 30 SEGUNDOS, ELES ESVAZIARAM A CONTA DELE PELO WHATSAPP"
       ],
       "frase_golpista": "Oi, é do seu banco. Detectamos uma transação suspeita. Faça um PIX de segurança AGORA para o número informado ou sua conta será bloqueada.",
-      "direcao_arte_emocional": "Close on a worried person's face illuminated by phone screen, expression of dawning horror, dark tense lighting, a banking app showing a large outgoing PIX transfer, dramatic shadows, cinematic thriller mood",
+      "direcao_arte_emocional": "Documentary photorealistic photo of an ordinary Brazilian woman in her 50s sitting at a simple kitchen table, worried expression, holding a smartphone close to her face showing the authentic WhatsApp chat interface with green message bubbles and a scammer message requesting urgent PIX payment, natural daylight from a window, everyday Brazilian home, no CGI, no neon, no bank app screens",
       "ctas": ["BLOQUEIE GOLPES DE PIX — BAIXE GRÁTIS", "PROTEJA SEU DINHEIRO AGORA"]
     },
     {
@@ -103,7 +104,7 @@
         "ELA ACHOU QUE ESTAVA AJUDANDO O FILHO. ERA UM GOLPISTA."
       ],
       "frase_golpista": "Oi mãe, troquei de número, salva aí. Tô numa emergência e preciso que você faça um PIX urgente pra mim, depois te explico.",
-      "direcao_arte_emocional": "Close on an older Brazilian mother's face reacting with concern to a WhatsApp message, phone glowing, warm but tense lighting turning cold, emotional vulnerability, cinematic, shallow depth of field",
+      "direcao_arte_emocional": "Documentary photorealistic photo of an elderly Brazilian mother on a living room sofa, concerned face, smartphone in hand showing WhatsApp chat from unknown number with message 'Oi mãe troquei de número preciso de PIX urgente', warm natural afternoon light, modest Brazilian home interior, authentic human skin texture, no digital effects",
       "ctas": ["NÃO CAIA NESSE GOLPE — BAIXE GRÁTIS", "PROTEJA SUA FAMÍLIA AGORA"]
     },
     {
@@ -117,7 +118,7 @@
         "EM SEGUNDOS, VIRARAM VOCÊ — E ENGANARAM SUA FAMÍLIA INTEIRA"
       ],
       "frase_golpista": "Recebemos sua solicitação. Digite o código de 6 dígitos enviado por SMS para confirmar sua conta do WhatsApp.",
-      "direcao_arte_emocional": "A person staring in shock at two identical WhatsApp profiles on a phone, glitch effect suggesting duplication, cold blue threatening light, sense of identity theft, cinematic tension",
+      "direcao_arte_emocional": "Documentary photorealistic photo of a Brazilian man in casual clothes looking shocked at his phone, WhatsApp screen visible showing verification code SMS scam message in chat, sitting at a bus stop or simple workplace, natural daylight, everyday urban Brazil, photojournalism style, no sci-fi elements",
       "ctas": ["BLINDE SEU WHATSAPP — BAIXE GRÁTIS", "EVITE A CLONAGEM AGORA"]
     },
     {
@@ -131,7 +132,7 @@
         "ESSA LIGAÇÃO DO SEU BANCO PODE SER UMA ARMADILHA"
       ],
       "frase_golpista": "Aqui é da central de segurança do seu banco. Para sua proteção, confirme sua senha e o código do cartão agora.",
-      "direcao_arte_emocional": "Close on an anxious person on a phone call, hand gripping the phone, a faceless silhouette in shadow representing the fake attendant, cold institutional lighting, paranoia, cinematic thriller",
+      "direcao_arte_emocional": "Documentary photorealistic photo of a Brazilian senior citizen at home reading a WhatsApp message pretending to be bank security asking for password, authentic WhatsApp green chat bubbles visible on phone screen, worried expression, simple living room, natural window light, no phone call scene, no generic bank logos",
       "ctas": ["IDENTIFIQUE GOLPES NA HORA — BAIXE GRÁTIS", "NÃO SEJA A PRÓXIMA VÍTIMA"]
     },
     {
@@ -145,7 +146,7 @@
         "'NÃO CONTA PRA SUA MÃE.' A FRASE QUE ANTECEDE UMA TRAGÉDIA"
       ],
       "frase_golpista": "vc é muito linda... não conta pra ninguém que a gente conversa, é nosso segredo 😉 manda uma foto sua?",
-      "direcao_arte_emocional": "Close on a worried mother discovering a suspicious message on her child's phone, expression of fear and protective alarm, child visible in soft focus background, dark tense lighting, dramatic shadows, cinematic emotional weight",
+      "direcao_arte_emocional": "Documentary photorealistic photo of a Brazilian mother checking her teenage child's phone, WhatsApp chat visible with suspicious message from stranger, protective worried expression, child sitting on bed in background, modest bedroom, natural light, authentic family moment, no horror movie lighting",
       "ctas": ["PROTEJA SEU FILHO HOJE — É GRÁTIS", "VIGIE QUEM FALA COM SEU FILHO"]
     },
     {
@@ -159,7 +160,7 @@
         "UM CLIQUE. E OS GOLPISTAS TINHAM ACESSO A TUDO."
       ],
       "frase_golpista": "Você ganhou um prêmio! Clique no link para resgatar antes que expire: bit.ly/premio-2026",
-      "direcao_arte_emocional": "Close on a finger about to tap a suspicious link on a phone, ominous red warning glow emerging from the screen, dark environment, sense of imminent danger, cinematic suspense",
+      "direcao_arte_emocional": "Documentary photorealistic photo of a Brazilian person hesitating before tapping a suspicious link inside a WhatsApp chat message, phone screen clearly showing WhatsApp interface with green bubbles and fake prize link, sitting at kitchen counter, natural daylight, everyday clothes, photorealistic skin, no red neon glow or matrix effects",
       "ctas": ["BLOQUEIE LINKS PERIGOSOS — BAIXE GRÁTIS", "PROTEJA SEUS DADOS AGORA"]
     }
   ],
@@ -186,6 +187,24 @@
     ],
     "regras_card_notificacao": "Mostrar a mensagem REAL que o golpista enviaria, com o nome dinâmico da vítima, seguida de 'Guardian AI bloqueou e te avisou.'",
     "intensidade_emocional": "alta"
+  },
+  "DIRETRIZES_VISUAIS": {
+    "estilo_fotografico": "Documentary photorealistic advertising photography, Brazilian everyday life, natural daylight, authentic human skin texture, photojournalism look, 50mm lens shallow depth of field.",
+    "regras_obrigatorias": [
+      "Every phone screen MUST show the authentic WhatsApp chat interface with green message bubbles.",
+      "Scene must depict real Brazilian people in everyday environments: home, kitchen, sofa, bus stop, small shop.",
+      "The scam must be visible inside WhatsApp (message, link, code request) — never generic phone or bank app.",
+      "Subjects must look like ordinary Brazilians with natural expressions — worry, shock, protection.",
+      "Product context is WhatsApp security only — personal and WhatsApp Business."
+    ],
+    "proibicoes": [
+      "NO neon shields, floating padlocks, blue auras, matrix data rain, or cyberpunk overlays.",
+      "NO stock photo tech backgrounds with human face pasted on top.",
+      "NO generic hacker in hoodie, server rooms, or abstract digital security imagery.",
+      "NO bank app screens, Instagram, Telegram or other messaging apps.",
+      "NO overly plastic AI skin, fake white teeth, or uncanny valley faces.",
+      "NO luxury mansions, sci-fi environments, or calm smiling seniors without threat context."
+    ]
   },
   "FORMATOS_MIDIA": {
     "reels_tiktok": {"largura": 1080, "altura": 1920, "ratio": "9:16", "duracao_max_segundos": 60},

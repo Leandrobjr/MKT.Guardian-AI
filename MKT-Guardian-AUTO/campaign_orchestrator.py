@@ -1,5 +1,6 @@
 import os
 import json
+import re
 import time
 from google import genai
 from google.genai import types
@@ -69,32 +70,70 @@ class CampaignOrchestrator:
             return text
         if feminino:
             pairs = [
-                ("Seu filho", "Sua filha"), ("seu filho", "sua filha"), ("SEU FILHO", "SUA FILHA"),
-                ("do filho", "da filha"), ("Do filho", "Da filha"), ("DO FILHO", "DA FILHA"),
-                ("o filho", "a filha"), ("O filho", "A filha"),
-                ("vida dele", "vida dela"), ("Vida dele", "Vida dela"),
-                (" dele ", " dela "), (" dele.", " dela."), (" dele,", " dela,"),
-                (" ele ", " ela "), ("Ele ", "Ela "),
+                ("NO WHATSAPP DO SEU FILHO", "NO WHATSAPP DA SUA FILHA"),
+                ("No WhatsApp do seu filho", "No WhatsApp da sua filha"),
+                ("WHATSAPP DO SEU FILHO", "WHATSAPP DA SUA FILHA"),
+                ("WhatsApp do SEU FILHO", "WhatsApp da SUA FILHA"),
+                ("WhatsApp do seu filho", "WhatsApp da sua filha"),
                 ("segurança do seu filho", "segurança da sua filha"),
                 ("Segurança do seu filho", "Segurança da sua filha"),
-                ("WhatsApp do seu filho", "WhatsApp da sua filha"),
-                ("WhatsApp do SEU FILHO", "WhatsApp da SUA FILHA"),
+                ("para o seu filho", "para a sua filha"),
+                ("Para o seu filho", "Para a sua filha"),
+                ("proteja seu filho", "proteja sua filha"),
+                ("Proteja seu filho", "Proteja sua filha"),
+                ("DO SEU FILHO", "DA SUA FILHA"),
+                ("do seu filho", "da sua filha"),
+                ("Do seu filho", "Da sua filha"),
+                ("no seu filho", "na sua filha"),
+                ("No seu filho", "Na sua filha"),
+                ("SEU FILHO", "SUA FILHA"),
+                ("Seu filho", "Sua filha"),
+                ("seu filho", "sua filha"),
             ]
         else:
             pairs = [
-                ("Sua filha", "Seu filho"), ("sua filha", "seu filho"), ("SUA FILHA", "SEU FILHO"),
-                ("da filha", "do filho"), ("Da filha", "Do filho"), ("DA FILHA", "DO FILHO"),
-                ("a filha", "o filho"), ("A filha", "O filho"),
-                ("vida dela", "vida dele"), ("Vida dela", "Vida dele"),
-                (" dela ", " dele "), (" dela.", " dele."), (" dela,", " dele,"),
-                (" ela ", " ele "), ("Ela ", "Ele "),
+                ("NO WHATSAPP DA SUA FILHA", "NO WHATSAPP DO SEU FILHO"),
+                ("No WhatsApp da sua filha", "No WhatsApp do seu filho"),
+                ("WHATSAPP DA SUA FILHA", "WHATSAPP DO SEU FILHO"),
+                ("WhatsApp da SUA FILHA", "WhatsApp do SEU FILHO"),
+                ("WhatsApp da sua filha", "WhatsApp do seu filho"),
                 ("segurança da sua filha", "segurança do seu filho"),
                 ("Segurança da sua filha", "Segurança do seu filho"),
-                ("WhatsApp da sua filha", "WhatsApp do seu filho"),
-                ("WhatsApp da SUA FILHA", "WhatsApp do SEU FILHO"),
+                ("para a sua filha", "para o seu filho"),
+                ("Para a sua filha", "Para o seu filho"),
+                ("proteja sua filha", "proteja seu filho"),
+                ("Proteja sua filha", "Proteja seu filho"),
+                ("DA SUA FILHA", "DO SEU FILHO"),
+                ("da sua filha", "do seu filho"),
+                ("Da sua filha", "Do seu filho"),
+                ("na sua filha", "no seu filho"),
+                ("Na sua filha", "No seu filho"),
+                ("SUA FILHA", "SEU FILHO"),
+                ("Sua filha", "Seu filho"),
+                ("sua filha", "seu filho"),
             ]
+        pairs.sort(key=lambda p: len(p[0]), reverse=True)
         for old, new in pairs:
             text = text.replace(old, new)
+        return self._fix_pt_artifacts(text)
+
+    def _fix_pt_artifacts(self, text: str) -> str:
+        """Corrige artefatos de concordância após substituição mecânica."""
+        text = re.sub(r"\bdo sua\b", "da sua", text, flags=re.IGNORECASE)
+        text = re.sub(r"\bno sua\b", "na sua", text, flags=re.IGNORECASE)
+        text = re.sub(r"\bo sua\b", "a sua", text, flags=re.IGNORECASE)
+        text = re.sub(
+            r"(Guardian AI[^.!?]*[.!?]\s*)Ela\s+(detecta|bloqueia|monitora|envia|avisa)",
+            r"\1Ele \2",
+            text,
+            flags=re.IGNORECASE,
+        )
+        text = re.sub(
+            r"(O app[^.!?]*[.!?]\s*)Ela\s+(detecta|bloqueia|monitora|envia|avisa)",
+            r"\1Ele \2",
+            text,
+            flags=re.IGNORECASE,
+        )
         return text
 
     def _build_art_direction(self, golpe_obj: dict, creative_data: dict, config: dict) -> str:
@@ -151,7 +190,12 @@ class CampaignOrchestrator:
             creative_data["genero_campanha"] = "neutro"
 
         if feminino or masculino:
-            for field in ("texto_card_solucao", "desenvolvimento_copy", "chamada_para_acao_cta"):
+            for field in (
+                "gancho_atencao_inicial",
+                "texto_card_solucao",
+                "desenvolvimento_copy",
+                "chamada_para_acao_cta",
+            ):
                 if creative_data.get(field):
                     creative_data[field] = self._apply_gender_pt(creative_data[field], feminino=feminino)
         return creative_data
@@ -302,7 +346,8 @@ class CampaignOrchestrator:
             "3. chamada_para_acao_cta: Comando curto em MAIÚSCULAS. Ex: 'BAIXE GRÁTIS — PROTEJA SEU WHATSAPP'.\n"
             "4. texto_card_notificacao: APENAS a mensagem REAL que o golpista enviaria no WhatsApp. "
             "O genero da vitima na mensagem DEVE combinar com genero_personagem_visual "
-            "(se escrever 'linda' = menina; se 'lindo' = menino).\n"
+            "(se escrever 'linda' = menina/filha em TODA a copy incluindo headline; se 'lindo' = menino/filho).\n"
+            "Guardian AI é masculino (ele/o app detecta, bloqueia) — NUNCA use 'ela' para o app.\n"
             "5. frase_destaque_golpista: A frase-chave mais chocante do golpista para destacar "
             "no card (ex: 'NÃO CONTA PRA SUA MÃE'). Será exibida entre aspas com exclamação.\n"
             "6. genero_personagem_visual: Quem aparece na cena — ex: 'menina adolescente', "

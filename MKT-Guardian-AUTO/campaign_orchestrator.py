@@ -50,15 +50,52 @@ class CampaignOrchestrator:
             print(f"❌ Erro ao ler JSON de contexto: {e}")
             return {}
 
-    def _build_cta_button(self, config: dict) -> str:
+    def _build_cta_button(self, config: dict, genero_campanha: str = "neutro") -> str:
         publico_id = config.get("publico_id", "massa")
         if publico_id == "pais":
-            return "TESTE GRÁTIS — PROTEJA o WhatsApp do SEU FILHO, AGORA!"
+            if genero_campanha == "feminino":
+                return "TESTE GRÁTIS — PROTEJA o WhatsApp da SUA FILHA, AGORA!"
+            if genero_campanha == "masculino":
+                return "TESTE GRÁTIS — PROTEJA o WhatsApp do SEU FILHO, AGORA!"
+            return "TESTE GRÁTIS — PROTEJA o WhatsApp dos SEUS FILHOS, AGORA!"
         if publico_id == "idosos":
             return "TESTE GRÁTIS — PROTEJA SEU WHATSAPP AGORA!"
         if publico_id == "profissionais":
             return "TESTE GRÁTIS — PROTEJA SEU WHATSAPP BUSINESS AGORA!"
         return "TESTE GRÁTIS — PROTEJA SEU WHATSAPP AGORA!"
+
+    def _apply_gender_pt(self, text: str, feminino: bool) -> str:
+        if not text:
+            return text
+        if feminino:
+            pairs = [
+                ("Seu filho", "Sua filha"), ("seu filho", "sua filha"), ("SEU FILHO", "SUA FILHA"),
+                ("do filho", "da filha"), ("Do filho", "Da filha"), ("DO FILHO", "DA FILHA"),
+                ("o filho", "a filha"), ("O filho", "A filha"),
+                ("vida dele", "vida dela"), ("Vida dele", "Vida dela"),
+                (" dele ", " dela "), (" dele.", " dela."), (" dele,", " dela,"),
+                (" ele ", " ela "), ("Ele ", "Ela "),
+                ("segurança do seu filho", "segurança da sua filha"),
+                ("Segurança do seu filho", "Segurança da sua filha"),
+                ("WhatsApp do seu filho", "WhatsApp da sua filha"),
+                ("WhatsApp do SEU FILHO", "WhatsApp da SUA FILHA"),
+            ]
+        else:
+            pairs = [
+                ("Sua filha", "Seu filho"), ("sua filha", "seu filho"), ("SUA FILHA", "SEU FILHO"),
+                ("da filha", "do filho"), ("Da filha", "Do filho"), ("DA FILHA", "DO FILHO"),
+                ("a filha", "o filho"), ("A filha", "O filho"),
+                ("vida dela", "vida dele"), ("Vida dela", "Vida dele"),
+                (" dela ", " dele "), (" dela.", " dele."), (" dela,", " dele,"),
+                (" ela ", " ele "), ("Ela ", "Ele "),
+                ("segurança da sua filha", "segurança do seu filho"),
+                ("Segurança da sua filha", "Segurança do seu filho"),
+                ("WhatsApp da sua filha", "WhatsApp do seu filho"),
+                ("WhatsApp da SUA FILHA", "WhatsApp do SEU FILHO"),
+            ]
+        for old, new in pairs:
+            text = text.replace(old, new)
+        return text
 
     def _build_art_direction(self, golpe_obj: dict, creative_data: dict, config: dict) -> str:
         base = golpe_obj.get("direcao_arte_emocional", "")
@@ -95,7 +132,7 @@ class CampaignOrchestrator:
         return f"{base} {ambiente}"
 
     def _harmonize_gender_copy(self, creative_data: dict) -> dict:
-        """Alinha filho/filha e linda/lindo entre mensagem, solução e cena visual."""
+        """Alinha filho/filha e linda/lindo entre mensagem, narração, CTA e cena visual."""
         genero = creative_data.get("genero_personagem_visual", "").lower()
         msg = creative_data.get("texto_card_notificacao", "").lower()
         feminino = "menina" in genero or "filha" in genero or "linda" in msg or "princesa" in msg
@@ -103,15 +140,20 @@ class CampaignOrchestrator:
             "lindo" in msg and "linda" not in msg
         )
 
-        solucao = creative_data.get("texto_card_solucao", "")
         if feminino:
-            solucao = solucao.replace("Seu filho", "Sua filha").replace("seu filho", "sua filha")
-            solucao = solucao.replace("do filho", "da filha").replace("o filho", "a filha")
+            creative_data["genero_campanha"] = "feminino"
             if not genero:
                 creative_data["genero_personagem_visual"] = "menina adolescente brasileira"
         elif masculino:
+            creative_data["genero_campanha"] = "masculino"
             creative_data["genero_personagem_visual"] = genero or "menino adolescente brasileiro"
-        creative_data["texto_card_solucao"] = solucao
+        else:
+            creative_data["genero_campanha"] = "neutro"
+
+        if feminino or masculino:
+            for field in ("texto_card_solucao", "desenvolvimento_copy", "chamada_para_acao_cta"):
+                if creative_data.get(field):
+                    creative_data[field] = self._apply_gender_pt(creative_data[field], feminino=feminino)
         return creative_data
 
     def show_interactive_menu(self) -> dict:
@@ -316,10 +358,6 @@ class CampaignOrchestrator:
             print("❌ Falha crítica: Impossível gerar roteiro.")
             return
 
-        print("\n📝 CAMPANHA ESTRUTURADA PELOS AGENTES:")
-        print(f"🔥 HEADLINE GERADA: {creative_data['gancho_atencao_inicial']}")
-        print(f"📖 ROTEIRO DE ÁUDIO: {creative_data['desenvolvimento_copy']}\n")
-        
         # INJEÇÃO TÉCNICA DE COMPATIBILIDADE: Mapeia as escolhas do menu para a Fábrica de Mídia
         creative_data = self._harmonize_gender_copy(creative_data)
         creative_data["tipo_midia_selecionada"] = config["midia"]
@@ -328,8 +366,16 @@ class CampaignOrchestrator:
         creative_data["regras_visuais"] = self.context_data.get("DIRETRIZES_VISUAIS", {})
         creative_data["golpe_nome"] = golpe_obj.get("nome", config["golpe"])
         creative_data["link_conversao"] = produto.get("url_oficial", "https://guardian-ai.app")
-        creative_data["texto_botao_conversao"] = self._build_cta_button(config)
+        creative_data["texto_botao_conversao"] = self._build_cta_button(
+            config, creative_data.get("genero_campanha", "neutro")
+        )
         creative_data["publico_id"] = config.get("publico_id", "massa")
+
+        print("\n📝 CAMPANHA ESTRUTURADA PELOS AGENTES:")
+        print(f"🔥 HEADLINE GERADA: {creative_data['gancho_atencao_inicial']}")
+        print(f"📖 ROTEIRO DE ÁUDIO: {creative_data['desenvolvimento_copy']}")
+        print(f"👤 Gênero campanha: {creative_data.get('genero_campanha', 'neutro')}")
+        print(f"🔘 CTA: {creative_data['texto_botao_conversao']}\n")
 
         # Envia os dados higienizados para a fábrica de mídia
         assets_resultado = self.media_factory.generate_campaign_assets(creative_data)

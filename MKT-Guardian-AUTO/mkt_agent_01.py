@@ -155,6 +155,28 @@ class MediaFactory:
                 x += self._text_width(draw, seg, font)
             y += 34
 
+    def _split_line_by_highlights(self, line: str, highlight_phrases: list[str]) -> list[tuple[str, bool]]:
+        if not highlight_phrases or not line:
+            return [(line, False)]
+        work = line
+        segments: list[tuple[str, bool]] = []
+        while work:
+            best = None
+            for hp in highlight_phrases:
+                hp_core = hp.upper().strip('"').strip("'").rstrip("!")
+                idx = work.upper().find(hp_core)
+                if idx != -1 and (best is None or idx < best[0]):
+                    best = (idx, idx + len(hp_core))
+            if best is None:
+                segments.append((work, False))
+                break
+            idx, end = best
+            if idx > 0:
+                segments.append((work[:idx], False))
+            segments.append((work[idx:end], True))
+            work = work[end:]
+        return segments
+
     def _draw_headline_branded(
         self, draw: ImageDraw.ImageDraw, headline: str, highlight_phrases: list[str]
     ):
@@ -162,16 +184,13 @@ class MediaFactory:
         lines = self._wrap_text(draw, headline.upper(), font, 980, max_lines=3)
         y = 56
         for line in lines:
-            x = 540 - self._text_width(draw, line, font) // 2
-            self._draw_text_with_shadow(draw, (x, y), line, font, self.BRAND_TEXT)
-            for hp in highlight_phrases:
-                hp_core = hp.upper().strip('"').strip("'").rstrip("!")
-                if hp_core and hp_core in line:
-                    idx = line.find(hp_core)
-                    prefix = line[:idx]
-                    highlighted = self._format_highlight_phrase(hp)
-                    x_hi = x + self._text_width(draw, prefix, font)
-                    draw.text((x_hi, y), highlighted, font=font, fill=self.BRAND_GREEN)
+            segments = self._split_line_by_highlights(line, highlight_phrases)
+            total_w = sum(self._text_width(draw, seg, font) for seg, _ in segments)
+            x = 540 - total_w // 2
+            for seg, is_hi in segments:
+                color = self.BRAND_GREEN if is_hi else self.BRAND_TEXT
+                self._draw_text_with_shadow(draw, (x, y), seg, font, color)
+                x += self._text_width(draw, seg, font)
             y += 50
 
     def _draw_brand_card(

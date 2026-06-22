@@ -191,12 +191,14 @@ class CampaignOrchestrator:
             "1. gancho_atencao_inicial: MANCHETE visceral em MAIÚSCULAS, máx 10 palavras. "
             "Deve citar WhatsApp, golpe ou PIX. Nada genérico sobre 'celular' ou 'internet'.\n"
             "2. desenvolvimento_copy: Roteiro de narração de 20-27s seguindo Problema→Agitação→Solução→Urgência. "
-            "Descreva o golpe acontecendo NO WHATSAPP (mensagem, link, código SMS, clonagem). "
-            "Solução = Guardian AI detecta e bloqueia no WhatsApp. Termine empurrando para baixar grátis.\n"
-            "3. chamada_para_acao_cta: Comando curto em MAIÚSCULAS com benefício + gratuidade + WhatsApp.\n"
-            "4. texto_card_notificacao: Simule a MENSAGEM REAL que o golpista enviaria no WhatsApp "
-            "(como aparece no chat), seguida de 'Guardian AI bloqueou e te avisou.'\n"
-            "5. publico_alvo_icp: Descrição resumida do público para segmentação.\n"
+            "Descreva o golpe acontecendo NO WHATSAPP. Na SOLUÇÃO, explique claramente o que o Guardian AI faz "
+            "(monitora, detecta, bloqueia golpes no WhatsApp). Termine com convite para baixar GRÁTIS em guardian-ai.app.\n"
+            "3. chamada_para_acao_cta: Comando curto em MAIÚSCULAS. Ex: 'BAIXE GRÁTIS — PROTEJA SEU WHATSAPP'.\n"
+            "4. texto_card_notificacao: APENAS a mensagem REAL que o golpista enviaria no WhatsApp "
+            "(como aparece no chat verde). Sem menção ao Guardian aqui.\n"
+            "5. texto_card_solucao: Card de SOLUÇÃO do produto (1-2 frases). Explique o benefício concreto "
+            "do Guardian AI bloqueando/prevenindo o golpe no WhatsApp. Tom de alívio + proteção.\n"
+            "6. publico_alvo_icp: Descrição resumida do público para segmentação.\n"
             "PROIBIDO: falar de outros apps, redes sociais genéricas, escudos digitais, hackers genéricos.\n"
             "Retorne os dados estritamente em formato JSON."
         )
@@ -212,9 +214,13 @@ class CampaignOrchestrator:
                     "desenvolvimento_copy": {"type": "STRING"},
                     "chamada_para_acao_cta": {"type": "STRING"},
                     "texto_card_notificacao": {"type": "STRING"},
+                    "texto_card_solucao": {"type": "STRING"},
                     "publico_alvo_icp": {"type": "STRING"}
                 },
-                "required": ["gancho_atencao_inicial", "desenvolvimento_copy", "chamada_para_acao_cta", "texto_card_notificacao", "publico_alvo_icp"]
+                "required": [
+                    "gancho_atencao_inicial", "desenvolvimento_copy", "chamada_para_acao_cta",
+                    "texto_card_notificacao", "texto_card_solucao", "publico_alvo_icp"
+                ]
             }
         )
 
@@ -249,6 +255,7 @@ class CampaignOrchestrator:
         creative_data["direcao_arte_emocional"] = golpe_obj.get("direcao_arte_emocional", "")
         creative_data["regras_visuais"] = self.context_data.get("DIRETRIZES_VISUAIS", {})
         creative_data["golpe_nome"] = golpe_obj.get("nome", config["golpe"])
+        creative_data["link_conversao"] = produto.get("url_oficial", "https://guardian-ai.app")
         
         # Envia os dados higienizados para a fábrica de mídia baseada em HTML/CSS e FFmpeg
         assets_resultado = self.media_factory.generate_campaign_assets(creative_data)
@@ -260,7 +267,9 @@ class CampaignOrchestrator:
         print("🏁 [PIPELINE DA CAMPANHA CONCLUÍDO COM SUCESSO]")
         print("======================================================================")
         print(f"🖼️ Arte Final Publicitária: {assets_resultado['static_image_file']}")
-        print(f"🎙️ Áudio Mixado para {config['canal']}: {assets_resultado['audio_file']}")
+        print(f"🎬 Vídeo Comercial Final: {assets_resultado.get('commercial_video_file', 'N/A')}")
+        print(f"🎙️ Áudio para {config['canal']}: {assets_resultado['audio_file']}")
+        print(f"🔗 Link de conversão: {creative_data.get('link_conversao', 'https://guardian-ai.app')}")
         print(f"🎯 Canal de Tráfego Configurado: {config['canal']}")
         print(f"📈 Objetivo Comercial Alvo: {config['objetivo']}")
         print("======================================================================\n")

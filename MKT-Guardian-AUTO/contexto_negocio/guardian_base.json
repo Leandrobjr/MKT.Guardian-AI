@@ -185,7 +185,9 @@
       "Específica e visceral (números, frases reais, consequências)",
       "Evitar termos técnicos e abstrações"
     ],
-    "regras_card_notificacao": "Mostrar a mensagem REAL que o golpista enviaria, com o nome dinâmico da vítima, seguida de 'Guardian AI bloqueou e te avisou.'",
+    "regras_card_notificacao": "Mostrar APENAS a mensagem REAL que o golpista enviaria no WhatsApp (chat verde).",
+    "regras_card_solucao": "Card separado explicando como Guardian AI detectou, bloqueou e protege o WhatsApp 24h.",
+    "link_conversao_obrigatorio": "https://guardian-ai.app",
     "intensidade_emocional": "alta"
   },
   "DIRETRIZES_VISUAIS": {

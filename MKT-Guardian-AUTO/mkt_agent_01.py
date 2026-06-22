@@ -1,6 +1,7 @@
 import os
 import time
 import random
+import html
 import requests
 import asyncio
 import base64
@@ -31,6 +32,79 @@ class MediaFactory:
         self.base_audio_dir = os.path.join(self.BASE_DIR, "trilhas_sonoras")
         self.dir_suspense = os.path.join(self.base_audio_dir, "musicas_suspense")
         self.dir_corporativo = os.path.join(self.base_audio_dir, "musicas_corporativo")
+        self.url_conversao = os.getenv("GUARDIAN_URL_CONVERSAO", "https://guardian-ai.app")
+
+    def _render_overlay_html(
+        self,
+        encoded_frame: str,
+        headline: str,
+        alerta: str,
+        solucao: str,
+        cta: str,
+        url: str,
+    ) -> str:
+        """HTML/CSS inline — sem CDN externo (Tailwind quebrava overlays no Linux headless)."""
+        h = html.escape(headline.upper().strip())
+        a = html.escape(alerta.strip())
+        s = html.escape(solucao.strip())
+        c = html.escape(cta.upper().strip())
+        u = html.escape(url.strip())
+        return f"""<!DOCTYPE html>
+<html><head><meta charset="utf-8">
+<style>
+  * {{ margin:0; padding:0; box-sizing:border-box; }}
+  body {{ width:1080px; height:1920px; font-family:Arial,Helvetica,sans-serif; overflow:hidden; }}
+  .bg {{
+    width:100%; height:100%;
+    background:url('data:image/jpeg;base64,{encoded_frame}') center/cover no-repeat;
+    display:flex; flex-direction:column; justify-content:space-between;
+    padding:40px 36px 56px;
+  }}
+  .headline {{
+    text-align:center; margin-top:32px; color:#fff; font-size:46px; font-weight:900;
+    text-shadow:2px 2px 0 #000,-2px -2px 0 #000,0 4px 14px rgba(0,0,0,0.95);
+    line-height:1.12; letter-spacing:-0.5px;
+  }}
+  .bottom {{ display:flex; flex-direction:column; gap:18px; }}
+  .card-scam {{
+    background:rgba(255,255,255,0.98); border-radius:18px; padding:22px 24px;
+    border-left:8px solid #25D366; box-shadow:0 8px 32px rgba(0,0,0,0.45);
+  }}
+  .card-scam-label {{ color:#128C7E; font-weight:900; font-size:15px; margin-bottom:10px; }}
+  .card-scam p {{ color:#111; font-size:21px; font-weight:700; line-height:1.38; }}
+  .card-solucao {{
+    background:linear-gradient(135deg,#1e40af 0%,#059669 100%);
+    border-radius:18px; padding:22px 24px;
+    box-shadow:0 8px 32px rgba(0,0,0,0.5);
+  }}
+  .card-solucao .brand {{ font-size:14px; font-weight:900; color:#a7f3d0; margin-bottom:8px; }}
+  .card-solucao p {{ color:#fff; font-size:22px; font-weight:800; line-height:1.35; }}
+  .cta {{
+    background:#dc2626; color:#fff; text-align:center; padding:24px 20px;
+    border-radius:18px; font-size:26px; font-weight:900;
+    border-bottom:6px solid #991b1b; box-shadow:0 6px 20px rgba(0,0,0,0.4);
+  }}
+  .url {{
+    text-align:center; color:#fff; font-size:22px; font-weight:800;
+    text-shadow:1px 1px 4px #000; letter-spacing:0.5px;
+  }}
+</style></head><body>
+<div class="bg">
+  <div class="headline">{h}</div>
+  <div class="bottom">
+    <div class="card-scam">
+      <div class="card-scam-label">⚠️ MENSAGEM SUSPEITA NO WHATSAPP</div>
+      <p>{a}</p>
+    </div>
+    <div class="card-solucao">
+      <div class="brand">🛡️ GUARDIAN AI — PROTEÇÃO WHATSAPP</div>
+      <p>{s}</p>
+    </div>
+    <div class="cta">{c}</div>
+    <div class="url">👉 {u}</div>
+  </div>
+</div>
+</body></html>"""
 
     def _build_visual_prompt(self, creative_data: dict) -> str:
         """Monta prompt visual com cena do golpe + regras obrigatórias WhatsApp/humanização."""
@@ -83,6 +157,11 @@ class MediaFactory:
             creative_data.get("desenvolvimento_copy", "")
         )
         cta_texto = creative_data.get("chamada_para_acao_cta", "Baixe grátis agora")
+        solucao_texto = creative_data.get(
+            "texto_card_solucao",
+            "Guardian AI monitora seu WhatsApp 24h, detecta golpes e bloqueia antes do prejuízo."
+        )
+        url_conversao = creative_data.get("link_conversao", self.url_conversao)
         
         base_image_path = os.path.join(self.output_dir, "anuncio_base.jpg")
         final_design_path = os.path.join(self.output_dir, "anuncio_final_design.jpg")
@@ -102,15 +181,22 @@ class MediaFactory:
                 print("🎞️ [Frame Processing Engine] Extraindo frames sequenciais do vídeo da IA...")
                 self._extract_frames(video_bruto_path)
                 
-                print("📐 [HTML Headless Compositor] Queimando marcas e textos em português frame por frame...")
-                asyncio.run(self._compose_all_frames(creative_data['gancho_atencao_inicial'], alerta_texto, cta_texto))
+                print("📐 [HTML Headless Compositor] Queimando cards WhatsApp + solução + CTA frame por frame...")
+                asyncio.run(self._compose_all_frames(
+                    creative_data["gancho_atencao_inicial"],
+                    alerta_texto, solucao_texto, cta_texto, url_conversao
+                ))
                 
                 print("🎬 [FFmpeg Multiplexer] Compilando vídeo comercial em movimento com áudio de suspense...")
                 self._compile_processed_video(audio_final_path, video_output_path)
             else:
                 print("⚠️ Fallback: Usando renderizador estático por indisponibilidade do servidor Kling...")
                 self._generate_gemini_image(publicidade_prompt, base_image_path)
-                asyncio.run(self._apply_html_css_layout(base_image_path, final_design_path, creative_data['gancho_atencao_inicial'], alerta_texto, cta_texto))
+                asyncio.run(self._apply_html_css_layout(
+                    base_image_path, final_design_path,
+                    creative_data["gancho_atencao_inicial"],
+                    alerta_texto, solucao_texto, cta_texto, url_conversao
+                ))
                 self._compile_still_video(final_design_path, audio_final_path, video_output_path)
                 
             return {"audio_file": audio_final_path, "commercial_video_file": video_output_path, "static_image_file": "Não solicitada"}
@@ -118,7 +204,11 @@ class MediaFactory:
         else:
             print("🖼️ [Fluxo de Imagem Ativo] Gerando anúncio estático premium...")
             self._generate_gemini_image(publicidade_prompt, base_image_path)
-            asyncio.run(self._apply_html_css_layout(base_image_path, final_design_path, creative_data['gancho_atencao_inicial'], alerta_texto, cta_texto))
+            asyncio.run(self._apply_html_css_layout(
+                base_image_path, final_design_path,
+                creative_data["gancho_atencao_inicial"],
+                alerta_texto, solucao_texto, cta_texto, url_conversao
+            ))
             return {"audio_file": audio_final_path, "static_image_file": final_design_path, "commercial_video_file": "Não solicitado"}
 
     def _generate_kling_video(self, prompt: str) -> str:
@@ -154,64 +244,61 @@ class MediaFactory:
             "-q:v", "2", os.path.join(self.frames_brutos_dir, "frame_%04d.jpg")
         ], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
-    async def _compose_all_frames(self, headline: str, alerta: str, cta: str):
+    async def _compose_all_frames(self, headline: str, alerta: str, solucao: str, cta: str, url: str):
         frames = sorted([f for f in os.listdir(self.frames_brutos_dir) if f.endswith(".jpg")])
+        if not frames:
+            print("❌ Nenhum frame extraído — overlay não aplicado.")
+            return
+        print(f"📐 Compondo {len(frames)} frames com cards de alerta + solução...")
         async with async_playwright() as p:
             browser = await p.chromium.launch(headless=True)
-            page = await browser.new_page()
-            await page.set_viewport_size({"width": 1080, "height": 1920})
-            
+            page = await browser.new_page(viewport={"width": 1080, "height": 1920})
             for frame in frames:
                 frame_path = os.path.join(self.frames_brutos_dir, frame)
                 with open(frame_path, "rb") as f:
-                    encoded_frame = base64.b64encode(f.read()).decode('utf-8')
-                
-                html_content = f"""
-                <!DOCTYPE html>
-                <html>
-                <head>
-                    <meta charset="utf-8">
-                    <script src="https://cdn.tailwindcss.com"></script>
-                    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@700;900&display=swap" rel="stylesheet">
-                </head>
-                <body class="m-0 p-0 overflow-hidden select-none" style="font-family: 'Montserrat', sans-serif; width: 1080px; height: 1920px;">
-                    <div class="relative w-full h-full bg-cover bg-center flex flex-col justify-between p-12" style="background-image: url('data:image/jpeg;base64,{encoded_frame}');">
-                        <div class="w-full text-center mt-12">
-                            <h1 class="text-[52px] leading-[1.1] font-[900] text-white tracking-tight uppercase" style="text-shadow: -3px -3px 0 #000, 3px -3px 0 #000, -3px 3px 0 #000, 3px 3px 0 #000, 0px 8px 16px rgba(0,0,0,0.95);">{headline.upper()}</h1>
-                        </div>
-                        <div class="w-full px-6 mb-16 flex flex-col items-center gap-8">
-                            <div class="w-full bg-slate-950/95 border-l-8 border-red-500 rounded-2xl p-6 shadow-2xl">
-                                <div class="flex items-center gap-3 mb-3">
-                                    <div class="bg-gradient-to-tr from-blue-600 to-emerald-500 px-2 py-1 rounded text-white font-[900] text-xs">Guardian-AI</div>
-                                    <span class="text-emerald-400 font-[900] text-lg uppercase tracking-wider">Guardian-AI</span>
-                                </div>
-                                <p class="text-white text-[22px] font-[700] leading-[1.4]">{alerta}</p>
-                            </div>
-                            <div class="w-full text-center">
-                                <div class="bg-red-600 text-white text-[26px] font-[900] tracking-wide uppercase px-6 py-5 rounded-2xl border-b-[6px] border-red-900 w-full shadow-2xl">{cta.upper()}</div>
-                            </div>
-                        </div>
-                    </div>
-                </body>
-                </html>
-                """
-                await page.set_content(html_content)
+                    encoded_frame = base64.b64encode(f.read()).decode("utf-8")
+                await page.set_content(
+                    self._render_overlay_html(encoded_frame, headline, alerta, solucao, cta, url),
+                    wait_until="load",
+                )
+                await asyncio.sleep(0.5)
                 out_path = os.path.join(self.frames_finais_dir, frame)
                 await page.screenshot(path=out_path, type="jpeg", quality=95)
-                
             await browser.close()
+        print(f"✅ {len(frames)} frames compostos em {self.frames_finais_dir}")
+
+    def _get_audio_duration(self, audio_path: str) -> float:
+        try:
+            result = subprocess.run(
+                [
+                    "ffprobe", "-v", "error", "-show_entries", "format=duration",
+                    "-of", "default=noprint_wrappers=1:nokey=1", audio_path,
+                ],
+                capture_output=True, text=True, check=True,
+            )
+            return max(float(result.stdout.strip()), 8.0)
+        except Exception:
+            return 27.0
 
     def _compile_processed_video(self, audio_path: str, output_path: str):
+        frames = sorted([f for f in os.listdir(self.frames_finais_dir) if f.endswith(".jpg")])
+        if not frames:
+            print("❌ Sem frames finais — vídeo não compilado.")
+            return
+        duration = self._get_audio_duration(audio_path)
+        print(f"🎬 Compilando vídeo ({duration:.1f}s de narração, {len(frames)} frames em loop)...")
         subprocess.run([
-            "ffmpeg", "-y", "-framerate", "25", 
+            "ffmpeg", "-y",
+            "-framerate", "25", "-stream_loop", "-1",
             "-i", os.path.join(self.frames_finais_dir, "frame_%04d.jpg"),
             "-i", audio_path,
+            "-map", "0:v:0", "-map", "1:a:0",
             "-c:v", "libx264", "-pix_fmt", "yuv420p",
-            "-c:a", "aac", "-b:a", "192k", "-shortest",
-            output_path
+            "-c:a", "aac", "-b:a", "192k",
+            "-t", f"{duration:.2f}",
+            output_path,
         ], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        
-        # Limpeza técnica de cache de frames do sistema
+        print(f"✅ Vídeo final: {output_path}")
         for pasta in (self.frames_brutos_dir, self.frames_finais_dir):
             for arquivo in os.listdir(pasta):
                 if arquivo.endswith(".jpg"):
@@ -219,15 +306,27 @@ class MediaFactory:
 
     def _generate_audio(self, text: str) -> str:
         path = os.path.join(self.output_dir, "voz_pura.mp3")
-        if not self.elevenlabs_key: return path
+        if not self.elevenlabs_key:
+            print("❌ ELEVENLABS_API_KEY ausente — narração não gerada.")
+            return path
+        print(f"🎙️ Gerando narração ({len(text)} caracteres)...")
         url = f"https://api.elevenlabs.io/v1/text-to-speech/{self.voice_id}"
         headers = {"Accept": "audio/mpeg", "Content-Type": "application/json", "xi-api-key": self.elevenlabs_key}
-        data = {"text": text, "model_id": "eleven_multilingual_v2", "voice_settings": {"stability": 0.5, "similarity_boost": 0.8}}
+        data = {
+            "text": text,
+            "model_id": "eleven_multilingual_v2",
+            "voice_settings": {"stability": 0.45, "similarity_boost": 0.85, "style": 0.35},
+        }
         try:
-            response = requests.post(url, json=data, headers=headers)
-            if response.status_code == 200:
-                with open(path, "wb") as f: f.write(response.content)
-        except: pass
+            response = requests.post(url, json=data, headers=headers, timeout=120)
+            if response.status_code == 200 and len(response.content) > 1000:
+                with open(path, "wb") as f:
+                    f.write(response.content)
+                print(f"✅ Narração salva: {path} ({len(response.content) // 1024} KB)")
+            else:
+                print(f"❌ ElevenLabs falhou: HTTP {response.status_code} — {response.text[:200]}")
+        except Exception as e:
+            print(f"❌ Erro ElevenLabs: {e}")
         return path
 
     def _mix_background_track(self, voz_path: str, canal: str) -> str:
@@ -266,47 +365,20 @@ class MediaFactory:
         except Exception as e:
             print(f"❌ Falha na geração de imagem ({self.model_imagem}): {e}")
 
-    async def _apply_html_css_layout(self, input_image_path: str, output_path: str, headline: str, alerta: str, cta: str):
-        headline_upper = headline.upper().strip()
-        cta_upper = cta.upper().strip()
+    async def _apply_html_css_layout(
+        self, input_image_path: str, output_path: str,
+        headline: str, alerta: str, solucao: str, cta: str, url: str,
+    ):
         with open(input_image_path, "rb") as image_file:
-            encoded_string = base64.b64encode(image_file.read()).decode('utf-8')
-
-        html_content = f"""
-        <!DOCTYPE html>
-        <html>
-        <head>
-            <meta charset="utf-8">
-            <script src="https://cdn.tailwindcss.com"></script>
-            <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@700;900&display=swap" rel="stylesheet">
-        </head>
-        <body class="m-0 p-0 overflow-hidden select-none bg-slate-900" style="font-family: 'Montserrat', sans-serif; width: 1080px; height: 1920px;">
-            <div class="relative w-full h-full bg-cover bg-center flex flex-col justify-between p-12" style="background-image: url('data:image/jpeg;base64,{encoded_string}');">
-                <div class="w-full text-center mt-12">
-                    <h1 class="text-[52px] leading-[1.1] font-[900] text-white tracking-tight uppercase" style="text-shadow: -3px -3px 0 #000, 3px -3px 0 #000, -3px 3px 0 #000, 3px 3px 0 #000, 0px 8px 16px rgba(0,0,0,0.95);">{headline_upper}</h1>
-                </div>
-                <div class="w-full px-6 mb-16 flex flex-col items-center gap-8">
-                    <div class="w-full bg-slate-950/95 border-l-8 border-red-500 rounded-2xl p-6 shadow-2xl">
-                        <div class="flex items-center gap-3 mb-3">
-                            <div class="bg-gradient-to-tr from-blue-600 to-emerald-500 px-2 py-1 rounded text-white font-[900] text-xs">Guardian-AI</div>
-                            <span class="text-emerald-400 font-[900] text-lg uppercase tracking-wider">Guardian-AI</span>
-                        </div>
-                        <p class="text-white text-[22px] font-[700] leading-[1.4]">{alerta}</p>
-                    </div>
-                    <div class="w-full text-center">
-                        <div class="bg-red-600 text-white text-[26px] font-[900] tracking-wide uppercase px-6 py-5 rounded-2xl border-b-[6px] border-red-900 w-full shadow-2xl">{cta_upper}</div>
-                    </div>
-                </div>
-            </div>
-        </body>
-        </html>
-        """
+            encoded_string = base64.b64encode(image_file.read()).decode("utf-8")
         async with async_playwright() as p:
             browser = await p.chromium.launch(headless=True)
-            page = await browser.new_page()
-            await page.set_viewport_size({"width": 1080, "height": 1920})
-            await page.set_content(html_content)
-            await asyncio.sleep(0.8)
+            page = await browser.new_page(viewport={"width": 1080, "height": 1920})
+            await page.set_content(
+                self._render_overlay_html(encoded_string, headline, alerta, solucao, cta, url),
+                wait_until="load",
+            )
+            await asyncio.sleep(0.5)
             await page.screenshot(path=output_path, type="jpeg", quality=98)
             await browser.close()
 

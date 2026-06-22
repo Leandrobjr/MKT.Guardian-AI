@@ -2,13 +2,24 @@ import os
 import json
 import re
 import time
+import uuid
 from google import genai
 from google.genai import types
 from dotenv import load_dotenv
 
-# Importação dos submódulos do ecossistema Guardian AI
 from mkt_agent_01 import MediaFactory
 from traffic_manager import TrafficManager
+from agent_memory import AgentMemory
+
+try:
+    from telegram_approval import TelegramApproval
+except ImportError:
+    TelegramApproval = None
+
+try:
+    from meta_publisher import MetaPublisher
+except ImportError:
+    MetaPublisher = None
 
 class CampaignOrchestrator:
     BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -26,6 +37,33 @@ class CampaignOrchestrator:
 
         self.media_factory = MediaFactory()
         self.traffic_manager = TrafficManager()
+        self.memory = AgentMemory(self.BASE_DIR)
+        self.max_revisoes = int(os.getenv("MAX_REVISOES", "3"))
+        self.telegram_timeout = int(os.getenv("TELEGRAM_TIMEOUT", "3600"))
+        self.telegram = None
+        self.publisher = None
+
+    def _init_telegram(self) -> bool:
+        if TelegramApproval is None:
+            print("⚠️ telegram_approval.py não encontrado — aprovação desativada.")
+            return False
+        try:
+            self.telegram = TelegramApproval()
+            return True
+        except EnvironmentError as e:
+            print(f"⚠️ Telegram desativado: {e}")
+            return False
+
+    def _init_publisher(self) -> bool:
+        if MetaPublisher is None:
+            print("⚠️ meta_publisher.py não encontrado — publicação desativada.")
+            return False
+        try:
+            self.publisher = MetaPublisher()
+            return True
+        except EnvironmentError as e:
+            print(f"⚠️ Meta Publisher desativado: {e}")
+            return False
 
     def _load_markdown_context(self) -> str:
         """Carrega documentos estratégicos de contexto_negocio/ para enriquecer o copy."""
@@ -282,6 +320,182 @@ class CampaignOrchestrator:
                     creative_data[field] = self._apply_gender_pt(creative_data[field], feminino=feminino)
         return creative_data
 
+    def _merge_regras_visuais(self, creative_data: dict) -> dict:
+        base = dict(self.context_data.get("DIRETRIZES_VISUAIS", {}))
+        extra = creative_data.get("regras_visuais") or {}
+        if extra.get("proibicoes"):
+            base["proibicoes"] = list(base.get("proibicoes", [])) + list(extra["proibicoes"])
+        for chave in ("estilo_fotografico", "regras_obrigatorias"):
+            if extra.get(chave):
+                base[chave] = extra[chave]
+        creative_data["regras_visuais"] = base
+        return creative_data
+
+    def _finalize_creative_data(self, creative_data: dict, config: dict, golpe_obj: dict) -> dict:
+        produto = self.context_data.get("PRODUTO_E_POSICIONAMENTO", {})
+        creative_data = self._harmonize_gender_copy(creative_data)
+        creative_data["tipo_midia_selecionada"] = config["midia"]
+        creative_data["canal_veiculacao_selecionado"] = config["canal"]
+        creative_data["direcao_arte_emocional"] = self._build_art_direction(golpe_obj, creative_data, config)
+
+        if config.get("publico_slug") == "empresarios":
+            creative_data.setdefault(
+                "genero_personagem_visual",
+                "empresário ou comerciante brasileiro, 35-55 anos, ambiente comercial",
+            )
+            creative_data["regras_visuais"] = {
+                "proibicoes": [
+                    "NO home kitchen, NO domestic cooking scene, NO housewife at stove, "
+                    "NO residential kitchen table with food bowls.",
+                ]
+            }
+        elif config.get("publico_slug") == "escolas":
+            creative_data.setdefault(
+                "genero_personagem_visual",
+                "diretor ou professora brasileiro em ambiente escolar",
+            )
+
+        creative_data = self._merge_regras_visuais(creative_data)
+        creative_data["golpe_nome"] = golpe_obj.get("nome", config["golpe"])
+        creative_data["link_conversao"] = produto.get("url_oficial", "https://guardian-ai.app")
+        creative_data["texto_botao_conversao"] = self._build_cta_button(
+            config, creative_data.get("genero_campanha", "neutro")
+        )
+        creative_data["publico_id"] = config.get("publico_id", "massa")
+        creative_data["publico_slug"] = config.get("publico_slug", creative_data["publico_id"])
+        return creative_data
+
+    def _generate_creative_data(
+        self, config: dict, golpe_obj: dict, instrucoes_extras: str = ""
+    ) -> dict | None:
+        framework = self.context_data.get("COPYWRITING_FRAMEWORK", {})
+        ganchos_ref = golpe_obj.get("ganchos", [golpe_obj.get("gancho_modelo", "")])
+        frase_golpista = golpe_obj.get("frase_golpista", "")
+        produto = self.context_data.get("PRODUTO_E_POSICIONAMENTO", {})
+        foco_whatsapp = produto.get(
+            "foco_exclusivo",
+            "Guardian AI protege EXCLUSIVAMENTE o WhatsApp — pessoal e WhatsApp Business.",
+        )
+
+        memoria_txt = self.memory.format_for_prompt()
+        contexto_injetado = (
+            f"DIRETRIZES DE CAMPANHA SELECIONADAS:\n"
+            f"- Público-Alvo: {config['publico']}\n"
+            f"- Ameaça/Golpe Abordado: {config['golpe']}\n"
+            f"- Frase real que o golpista enviaria no WhatsApp (base para o card): {frase_golpista}\n"
+            f"- Ganchos de referência (inspire-se, não copie literalmente): {' | '.join(ganchos_ref)}\n"
+            f"- Canal de Distribuição: {config['canal']}\n"
+            f"- Tipo de Mídia: {config['midia']}\n"
+            f"- Objetivo de Conversão: {config['objetivo']}\n\n"
+            f"FOCO DO PRODUTO (OBRIGATÓRIO):\n"
+            f"- {foco_whatsapp}\n"
+            f"- Toda narrativa deve mencionar WhatsApp explicitamente.\n\n"
+            f"REGRAS DE TOM DE VOZ DA MARCA:\n"
+            f"- Posicionamento: {produto.get('posicionamento_comercial')}\n"
+            f"- Restrições Linguísticas: "
+            f"{'; '.join(produto.get('tom_de_voz_obrigatorio', {}).get('regras_linguisticas', []))}\n\n"
+            f"CONTEXTO ESTRATÉGICO DE NEGÓCIO:\n"
+            f"{self.md_context[:12000] if self.md_context else ''}\n"
+        )
+        if memoria_txt:
+            contexto_injetado += f"\nMEMÓRIA — REGRAS APRENDIDAS (prioridade máxima):\n{memoria_txt}\n"
+        if instrucoes_extras:
+            contexto_injetado += (
+                f"\nINSTRUÇÕES DE MELHORIA DO ADMINISTRADOR (prioridade absoluta):\n"
+                f"{instrucoes_extras}\n"
+            )
+
+        roteiro = framework.get("roteiro_narracao_modelo", {})
+        roteiro_txt = "\n".join(f"   - {k}: {v}" for k, v in roteiro.items())
+
+        system_instruction = (
+            "Você é o Maior Copywriter de Resposta Direta do Brasil, especialista em anúncios de alta "
+            "conversão para o app Guardian AI — proteção EXCLUSIVA do WhatsApp (pessoal e Business). "
+            "Seu objetivo é SENSIBILIZAR a dor do público e levá-lo a baixar o app IMEDIATAMENTE. "
+            "Nunca use tom calmo ou institucional. Nunca fale de segurança genérica — sempre WhatsApp.\n\n"
+            f"FRAMEWORK OBRIGATÓRIO: {framework.get('estrutura_obrigatoria', 'PAS')}\n"
+            + ("PRINCÍPIOS:\n" + "\n".join(f"   - {p}" for p in framework.get("principios", [])) + "\n\n" if framework.get("principios") else "")
+            + (f"ESTRUTURA DO ROTEIRO DE NARRAÇÃO:\n{roteiro_txt}\n\n" if roteiro_txt else "")
+            + "REGRAS OBRIGATÓRIAS DE OUTPUT (JSON estrito):\n"
+            "1. gancho_atencao_inicial: MANCHETE visceral em MAIÚSCULAS, máx 10 palavras.\n"
+            "2. desenvolvimento_copy: Roteiro 20-27s PAS. Termine convidando a baixar GRÁTIS em guardian-ai.app.\n"
+            "3. chamada_para_acao_cta: Comando curto em MAIÚSCULAS.\n"
+            "4. texto_card_notificacao: APENAS a mensagem REAL do golpista no WhatsApp.\n"
+            "5. frase_destaque_golpista: Frase-chave do golpista para destacar no card.\n"
+            "6. genero_personagem_visual: DEVE combinar com o público-alvo da campanha.\n"
+            "7. texto_card_solucao: Guardian AI detectou e bloqueou no WhatsApp.\n"
+            "8. publico_alvo_icp: Descrição resumida do público.\n"
+            "Retorne JSON estrito."
+        )
+
+        config_creative = types.GenerateContentConfig(
+            system_instruction=system_instruction,
+            temperature=0.45,
+            response_mime_type="application/json",
+            response_schema={
+                "type": "OBJECT",
+                "properties": {
+                    "gancho_atencao_inicial": {"type": "STRING"},
+                    "desenvolvimento_copy": {"type": "STRING"},
+                    "chamada_para_acao_cta": {"type": "STRING"},
+                    "texto_card_notificacao": {"type": "STRING"},
+                    "frase_destaque_golpista": {"type": "STRING"},
+                    "genero_personagem_visual": {"type": "STRING"},
+                    "texto_card_solucao": {"type": "STRING"},
+                    "publico_alvo_icp": {"type": "STRING"},
+                },
+                "required": [
+                    "gancho_atencao_inicial", "desenvolvimento_copy", "chamada_para_acao_cta",
+                    "texto_card_notificacao", "frase_destaque_golpista", "genero_personagem_visual",
+                    "texto_card_solucao", "publico_alvo_icp",
+                ],
+            },
+        )
+
+        for tentativa in range(3):
+            try:
+                response = self.client.models.generate_content(
+                    model=self.model_name,
+                    contents=contexto_injetado,
+                    config=config_creative,
+                )
+                dados = json.loads(response.text)
+                return self._finalize_creative_data(dados, config, golpe_obj)
+            except Exception as e:
+                if "429" in str(e):
+                    time.sleep(15)
+                else:
+                    print(f"❌ Erro no Agente Criativo: {e}")
+                    return None
+        return None
+
+    def _resolve_primary_asset(self, assets: dict) -> str:
+        video = assets.get("commercial_video_file", "")
+        if video and video not in ("N/A", "FALHOU", "Não solicitado", "Não solicitada"):
+            if os.path.isfile(video):
+                return video
+        imagem = assets.get("static_image_file", "")
+        if imagem and imagem not in ("N/A", "Não solicitada", "Não solicitado"):
+            if os.path.isfile(imagem):
+                return imagem
+        return ""
+
+    def _montar_caption_instagram(self, creative_data: dict) -> str:
+        headline = creative_data.get("gancho_atencao_inicial", "")
+        copy = creative_data.get("desenvolvimento_copy", "")
+        cta = creative_data.get("chamada_para_acao_cta", "Baixe grátis")
+        url = creative_data.get("link_conversao", "https://guardian-ai.app")
+        hashtags = "#guardianai #segurancadigital #golpewhatsapp #whatsapp #pix #golpe"
+        return f"{headline}\n\n{copy[:800]}\n\n{cta} — {url}\n\n{hashtags}"
+
+    def _print_creative_summary(self, creative_data: dict) -> None:
+        print("\n📝 CAMPANHA ESTRUTURADA PELOS AGENTES:")
+        print(f"🔥 HEADLINE: {creative_data['gancho_atencao_inicial']}")
+        print(f"📖 ROTEIRO: {creative_data['desenvolvimento_copy'][:200]}...")
+        print(f"👤 Gênero: {creative_data.get('genero_campanha', 'neutro')}")
+        print(f"🔘 CTA: {creative_data['texto_botao_conversao']}")
+        print(f"🎬 Cena: {creative_data['direcao_arte_emocional'][:120]}...\n")
+
     def show_interactive_menu(self) -> dict:
         """Exibe o painel interativo de configuração de campanha para o usuário."""
         print("\n======================================================================")
@@ -352,6 +566,18 @@ class CampaignOrchestrator:
         o_escolhido = input("Digite o número da opção desejada: ").strip()
         objetivo_final = "Instalação do Aplicativo (Downloads)" if o_escolhido == "1" else "Geração de Leads Qualificados"
 
+        print("\n📲 ETAPA 6: Fluxo após gerar o criativo:")
+        print("[1] Apenas salvar arquivos localmente (sem Telegram)")
+        print("[2] Salvar + Aprovação via Telegram (recomendado)")
+        print("[3] Salvar + Telegram + Postar no Instagram após APROVAR")
+        f_escolhido = input("Digite o número da opção desejada: ").strip()
+        fluxo_map = {
+            "1": {"aprovacao_telegram": False, "postar_instagram": False},
+            "2": {"aprovacao_telegram": True, "postar_instagram": False},
+            "3": {"aprovacao_telegram": True, "postar_instagram": True},
+        }
+        fluxo = fluxo_map.get(f_escolhido, fluxo_map["2"])
+
         return {
             "publico": publico_final,
             "publico_id": publico_id,
@@ -360,192 +586,137 @@ class CampaignOrchestrator:
             "golpe_id": golpe_id,
             "midia": midia_final,
             "canal": canal_final,
-            "objetivo": objetivo_final
+            "objetivo": objetivo_final,
+            "aprovacao_telegram": fluxo["aprovacao_telegram"],
+            "postar_instagram": fluxo["postar_instagram"],
         }
 
     def execute_automated_pipeline(self):
-        # Dispara o menu interativo e captura as escolhas do usuário
         config = self.show_interactive_menu()
-        
+
         print("\n======================================================================")
-        print("🚀 [MKT GUARDIAN AI - ENGINE ORQUESTRAÇÃO v3.8] Iniciando Esteira...")
+        print("🚀 [MKT GUARDIAN AI - ENGINE ORQUESTRAÇÃO v4.0] Iniciando Esteira...")
         print(f"📁 Diretório de trabalho: {self.BASE_DIR}")
         print(f"🧠 Modelo de copy: {self.model_name}")
         print("======================================================================")
-        
-        # Busca os ganchos virais, a frase real do golpista e a direção de arte do guardian_base.json
+
         golpe_obj = next(
             (g for g in self.context_data.get("TIPOS_DE_GOLPE", []) if g.get("id") == config.get("golpe_id")),
-            {}
-        )
-        framework = self.context_data.get("COPYWRITING_FRAMEWORK", {})
-        ganchos_ref = golpe_obj.get("ganchos", [golpe_obj.get("gancho_modelo", "")])
-        frase_golpista = golpe_obj.get("frase_golpista", "")
-
-        produto = self.context_data.get("PRODUTO_E_POSICIONAMENTO", {})
-        foco_whatsapp = produto.get(
-            "foco_exclusivo",
-            "Guardian AI protege EXCLUSIVAMENTE o WhatsApp — pessoal e WhatsApp Business."
+            {},
         )
 
-        contexto_injetado = (
-            f"DIRETRIZES DE CAMPANHA SELECIONADAS:\n"
-            f"- Público-Alvo: {config['publico']}\n"
-            f"- Ameaça/Golpe Abordado: {config['golpe']}\n"
-            f"- Frase real que o golpista enviaria no WhatsApp (base para o card): {frase_golpista}\n"
-            f"- Ganchos de referência (inspire-se, não copie literalmente): {' | '.join(ganchos_ref)}\n"
-            f"- Canal de Distribuição: {config['canal']}\n"
-            f"- Tipo de Mídia: {config['midia']}\n"
-            f"- Objetivo de Conversão: {config['objetivo']}\n\n"
-            f"FOCO DO PRODUTO (OBRIGATÓRIO):\n"
-            f"- {foco_whatsapp}\n"
-            f"- Toda narrativa deve mencionar WhatsApp explicitamente.\n"
-            f"- Nunca fale de segurança genérica, cibersegurança abstrata ou outros apps.\n"
-            f"- O golpe acontece DENTRO do WhatsApp (mensagem, link, código, clonagem).\n\n"
-            f"REGRAS DE TOM DE VOZ DA MARCA:\n"
-            f"- Posicionamento: {produto.get('posicionamento_comercial')}\n"
-            f"- Restrições Linguísticas: {'; '.join(produto.get('tom_de_voz_obrigatorio', {}).get('regras_linguisticas', []))}\n\n"
-            f"CONTEXTO ESTRATÉGICO DE NEGÓCIO (documentos oficiais):\n"
-            f"{self.md_context[:12000] if self.md_context else 'Documentos MD não encontrados em contexto_negocio/'}"
-        )
+        if config.get("aprovacao_telegram"):
+            self._init_telegram()
+        if config.get("postar_instagram"):
+            self._init_publisher()
 
-        print("\n🧠 [Agente Redator Sênior] Escrevendo copies de alta conversão (resposta direta)...")
+        memoria_resumo = self.memory.format_for_prompt(limit_correcoes=3)
+        if memoria_resumo:
+            print(f"🧠 Memória carregada ({len(memoria_resumo.splitlines())} regras aprendidas)")
 
-        roteiro = framework.get("roteiro_narracao_modelo", {})
-        roteiro_txt = "\n".join(f"   - {k}: {v}" for k, v in roteiro.items())
-
-        system_instruction = (
-            "Você é o Maior Copywriter de Resposta Direta do Brasil, especialista em anúncios de alta "
-            "conversão para o app Guardian AI — proteção EXCLUSIVA do WhatsApp (pessoal e Business). "
-            "Seu objetivo é SENSIBILIZAR a dor do público e levá-lo a baixar o app IMEDIATAMENTE. "
-            "Nunca use tom calmo ou institucional. Nunca fale de segurança genérica — sempre WhatsApp.\n\n"
-            f"FRAMEWORK OBRIGATÓRIO: {framework.get('estrutura_obrigatoria', 'PAS — Problema, Agitação, Solução, Urgência')}\n"
-            + ("PRINCÍPIOS:\n" + "\n".join(f"   - {p}" for p in framework.get("principios", [])) + "\n\n" if framework.get("principios") else "")
-            + (f"ESTRUTURA DO ROTEIRO DE NARRAÇÃO (siga os tempos):\n{roteiro_txt}\n\n" if roteiro_txt else "")
-            + "REGRAS OBRIGATÓRIAS DE OUTPUT (JSON estrito):\n"
-            "1. gancho_atencao_inicial: MANCHETE visceral em MAIÚSCULAS, máx 10 palavras. "
-            "Deve citar WhatsApp, golpe ou PIX. Nada genérico sobre 'celular' ou 'internet'.\n"
-            "2. desenvolvimento_copy: Roteiro de narração de 20-27s seguindo Problema→Agitação→Solução→Urgência. "
-            "Descreva o golpe acontecendo NO WHATSAPP. Na SOLUÇÃO, explique claramente o que o Guardian AI faz "
-            "(monitora, detecta, bloqueia golpes no WhatsApp). Termine convidando a baixar GRÁTIS em guardian-ai.app "
-            "(escrito assim na copy; a narração fala o endereço em português automaticamente).\n"
-            "Mantenha 'Guardian AI' em inglês ao citar o nome do aplicativo — isso soa natural na voz.\n"
-            "3. chamada_para_acao_cta: Comando curto em MAIÚSCULAS. Ex: 'BAIXE GRÁTIS — PROTEJA SEU WHATSAPP'.\n"
-            "4. texto_card_notificacao: APENAS a mensagem REAL que o golpista enviaria no WhatsApp. "
-            "O genero da vitima na mensagem DEVE combinar com genero_personagem_visual "
-            "(se escrever 'linda' = menina/filha em TODA a copy incluindo headline; se 'lindo' = menino/filho).\n"
-            "Guardian AI é masculino (ele/o app detecta, bloqueia) — NUNCA use 'ela' para o app.\n"
-            "5. frase_destaque_golpista: A frase-chave mais chocante do golpista para destacar "
-            "no card (ex: 'NÃO CONTA PRA SUA MÃE'). Será exibida entre aspas com exclamação.\n"
-            "6. genero_personagem_visual: Quem aparece na cena — DEVE combinar com o público-alvo "
-            "(empresário/comerciante em loja ou escritório; pai/mãe para pais; idoso para idosos; "
-            "diretor/professor para escolas). Nunca colocar empresário em cozinha doméstica.\n"
-            "7. texto_card_solucao: Card de SOLUÇÃO (1-2 frases). Guardian AI detectou e bloqueou no WhatsApp.\n"
-            "8. publico_alvo_icp: Descrição resumida do público para segmentação.\n"
-            "PROIBIDO: falar de outros apps, redes sociais genéricas, escudos digitais, hackers genéricos.\n"
-            "Retorne os dados estritamente em formato JSON."
-        )
-
-        config_creative = types.GenerateContentConfig(
-            system_instruction=system_instruction,
-            temperature=0.45,
-            response_mime_type="application/json",
-            response_schema={
-                "type": "OBJECT",
-                "properties": {
-                    "gancho_atencao_inicial": {"type": "STRING"},
-                    "desenvolvimento_copy": {"type": "STRING"},
-                    "chamada_para_acao_cta": {"type": "STRING"},
-                    "texto_card_notificacao": {"type": "STRING"},
-                    "frase_destaque_golpista": {"type": "STRING"},
-                    "genero_personagem_visual": {"type": "STRING"},
-                    "texto_card_solucao": {"type": "STRING"},
-                    "publico_alvo_icp": {"type": "STRING"}
-                },
-                "required": [
-                    "gancho_atencao_inicial", "desenvolvimento_copy", "chamada_para_acao_cta",
-                    "texto_card_notificacao", "frase_destaque_golpista", "genero_personagem_visual",
-                    "texto_card_solucao", "publico_alvo_icp"
-                ]
-            }
-        )
-
+        instrucoes_melhoria = ""
+        assets_resultado = {}
         creative_data = {}
-        for tentativa in range(3):
-            try:
-                response = self.client.models.generate_content(
-                    model=self.model_name,
-                    contents=contexto_injetado,
-                    config=config_creative
-                )
-                creative_data = json.loads(response.text)
-                break
-            except Exception as e:
-                if "429" in str(e):
-                    time.sleep(15)
-                else:
-                    print(f"❌ Erro no Agente Criativo: {e}")
-                    return
+        aprovado = False
 
-        if not creative_data:
-            print("❌ Falha crítica: Impossível gerar roteiro.")
+        for revisao in range(self.max_revisoes + 1):
+            if revisao > 0:
+                print(f"\n🔄 Revisão {revisao}/{self.max_revisoes} — aplicando feedback do admin...")
+
+            print("\n🧠 [Agente Redator Sênior] Escrevendo copies de alta conversão...")
+            creative_data = self._generate_creative_data(config, golpe_obj, instrucoes_melhoria)
+            if not creative_data:
+                print("❌ Falha crítica: impossível gerar roteiro.")
+                return
+
+            self._print_creative_summary(creative_data)
+            assets_resultado = self.media_factory.generate_campaign_assets(creative_data)
+
+            if not config.get("aprovacao_telegram") or not self.telegram:
+                aprovado = True
+                break
+
+            asset_path = self._resolve_primary_asset(assets_resultado)
+            if not asset_path:
+                print("❌ Nenhum asset visual gerado para aprovação.")
+                return
+
+            job_id = f"{assets_resultado.get('basename', uuid.uuid4().hex[:8])}_r{revisao}"
+            acao = self.telegram.aprovar_sincronamente(
+                asset_path=asset_path,
+                headline=creative_data["gancho_atencao_inicial"],
+                copy=creative_data["desenvolvimento_copy"],
+                job_id=job_id,
+                timeout_segundos=self.telegram_timeout,
+            )
+            print(f"📲 Decisão Telegram: {acao['action']}")
+
+            if acao["action"] == "approve":
+                self.memory.registrar_aprovado(
+                    config.get("publico_slug", ""),
+                    config.get("golpe_id", ""),
+                    assets_resultado.get("basename", job_id),
+                    creative_data["gancho_atencao_inicial"],
+                    asset_path,
+                )
+                aprovado = True
+                break
+
+            if acao["action"] == "improve":
+                if revisao >= self.max_revisoes:
+                    print(f"❌ Limite de {self.max_revisoes} revisões atingido.")
+                    return
+                feedback = acao.get("prompt", "")
+                self.memory.registrar_correcao(
+                    config.get("publico_slug", ""),
+                    config.get("golpe_id", ""),
+                    feedback,
+                    assets_resultado.get("basename", ""),
+                    revisao,
+                )
+                instrucoes_melhoria = feedback
+                continue
+
+            motivo = acao.get("motivo", acao["action"])
+            self.memory.registrar_rejeitado(
+                config.get("publico_slug", ""),
+                config.get("golpe_id", ""),
+                assets_resultado.get("basename", ""),
+                motivo,
+            )
+            print(f"❌ Campanha encerrada: {motivo}")
             return
 
-        # INJEÇÃO TÉCNICA DE COMPATIBILIDADE: Mapeia as escolhas do menu para a Fábrica de Mídia
-        creative_data = self._harmonize_gender_copy(creative_data)
-        creative_data["tipo_midia_selecionada"] = config["midia"]
-        creative_data["canal_veiculacao_selecionado"] = config["canal"]
-        creative_data["direcao_arte_emocional"] = self._build_art_direction(golpe_obj, creative_data, config)
-        if config.get("publico_slug") == "empresarios":
-            creative_data.setdefault(
-                "genero_personagem_visual",
-                "empresário ou comerciante brasileiro, 35-55 anos, ambiente comercial",
-            )
-            regras = dict(creative_data.get("regras_visuais") or {})
-            proib = list(regras.get("proibicoes", []))
-            proib.append(
-                "NO home kitchen, NO domestic cooking scene, NO housewife at stove, "
-                "NO residential kitchen table with food bowls."
-            )
-            regras["proibicoes"] = proib
-            creative_data["regras_visuais"] = regras
-        elif config.get("publico_slug") == "escolas":
-            creative_data.setdefault(
-                "genero_personagem_visual",
-                "diretor ou professora brasileiro em ambiente escolar",
-            )
-        creative_data["regras_visuais"] = self.context_data.get("DIRETRIZES_VISUAIS", {})
-        creative_data["golpe_nome"] = golpe_obj.get("nome", config["golpe"])
-        creative_data["link_conversao"] = produto.get("url_oficial", "https://guardian-ai.app")
-        creative_data["texto_botao_conversao"] = self._build_cta_button(
-            config, creative_data.get("genero_campanha", "neutro")
-        )
-        creative_data["publico_id"] = config.get("publico_id", "massa")
-        creative_data["publico_slug"] = config.get("publico_slug", creative_data["publico_id"])
+        if not aprovado:
+            return
 
-        print("\n📝 CAMPANHA ESTRUTURADA PELOS AGENTES:")
-        print(f"🔥 HEADLINE GERADA: {creative_data['gancho_atencao_inicial']}")
-        print(f"📖 ROTEIRO DE ÁUDIO: {creative_data['desenvolvimento_copy']}")
-        print(f"👤 Gênero campanha: {creative_data.get('genero_campanha', 'neutro')}")
-        print(f"🔘 CTA: {creative_data['texto_botao_conversao']}")
-        print(f"🎬 Cena visual: {creative_data['direcao_arte_emocional'][:120]}...\n")
+        self.traffic_manager.structure_advertising_campaign(creative_data, assets_resultado)
 
-        # Envia os dados higienizados para a fábrica de mídia
-        assets_resultado = self.media_factory.generate_campaign_assets(creative_data)
-        
-        # Envia as configurações para o gestor de tráfego injetar no Meta/TikTok Ads
-        config_trafego = self.traffic_manager.structure_advertising_campaign(creative_data, assets_resultado)
+        if config.get("postar_instagram") and self.publisher:
+            asset_path = self._resolve_primary_asset(assets_resultado)
+            if asset_path:
+                caption = self._montar_caption_instagram(creative_data)
+                resultado = self.publisher.postar_asset(asset_path, caption)
+                if resultado.get("ok"):
+                    if self.telegram:
+                        self.telegram.notificar_sync(
+                            f"✅ Publicado no Instagram!\nID: `{resultado.get('post_id')}`"
+                        )
+                else:
+                    print(f"❌ Falha ao publicar: {resultado.get('erro')}")
 
         print("\n======================================================================")
         print("🏁 [PIPELINE DA CAMPANHA CONCLUÍDO COM SUCESSO]")
         print("======================================================================")
         print(f"📛 Identificador: {assets_resultado.get('basename', 'N/A')}")
-        print(f"🖼️ Arte Final Publicitária: {assets_resultado['static_image_file']}")
-        print(f"🎬 Vídeo Comercial Final: {assets_resultado.get('commercial_video_file', 'N/A')}")
-        print(f"🎙️ Áudio para {config['canal']}: {assets_resultado['audio_file']}")
-        print(f"🔗 Link de conversão: {creative_data.get('link_conversao', 'https://guardian-ai.app')}")
-        print(f"🎯 Canal de Tráfego Configurado: {config['canal']}")
-        print(f"📈 Objetivo Comercial Alvo: {config['objetivo']}")
+        print(f"🖼️ Arte: {assets_resultado.get('static_image_file', 'N/A')}")
+        print(f"🎬 Vídeo: {assets_resultado.get('commercial_video_file', 'N/A')}")
+        print(f"🎙️ Áudio: {assets_resultado.get('audio_file', 'N/A')}")
+        print(f"🔗 Link: {creative_data.get('link_conversao', 'https://guardian-ai.app')}")
+        print(f"🎯 Canal: {config['canal']}")
+        print(f"📈 Objetivo: {config['objetivo']}")
+        if config.get("aprovacao_telegram"):
+            print("✅ Status: APROVADO pelo administrador")
         print("======================================================================\n")
 
 if __name__ == "__main__":

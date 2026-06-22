@@ -10,6 +10,7 @@ playwright>=1.44.0
 
 # Protocolos HTTP para chamadas das APIs externas (ElevenLabs, Runway, Meta)
 requests>=2.31.0
+aiohttp>=3.9.0
 
 # Biblioteca oficial da Meta para futura integração direta de tráfego (Opcional para Dry-Run)
 facebook-business>=19.0.0

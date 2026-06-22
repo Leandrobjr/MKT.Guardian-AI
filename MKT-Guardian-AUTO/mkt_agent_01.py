@@ -12,6 +12,17 @@ from dotenv import load_dotenv
 
 class MediaFactory:
     BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+    # Identidade visual guardian-ai.app
+    BRAND_NAVY = (11, 20, 36)
+    BRAND_CARD = (15, 23, 42)
+    BRAND_CARD_BORDER = (30, 58, 95)
+    BRAND_GREEN = (52, 211, 153)
+    BRAND_GREEN_DARK = (16, 185, 129)
+    BRAND_TEXT = (255, 255, 255)
+    BRAND_TEXT_MUTED = (148, 163, 184)
+    BRAND_HIGHLIGHT = (251, 191, 36)
+    BRAND_CTA_TEXT = (11, 20, 36)
+    WHATSAPP_GREEN = (37, 211, 102)
     FONT_CANDIDATES = [
         "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
         "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
@@ -89,7 +100,81 @@ class MediaFactory:
             draw.text((x + dx, y + dy), text, font=font, fill=(0, 0, 0))
         draw.text((x, y), text, font=font, fill=fill)
 
-    def _draw_card(
+    def _format_highlight_phrase(self, phrase: str) -> str:
+        p = phrase.strip().strip('"').strip("'")
+        if not p.endswith("!"):
+            p += "!"
+        return f'"{p.upper()}"'
+
+    def _draw_rich_text_block(
+        self,
+        draw: ImageDraw.ImageDraw,
+        box: tuple[int, int, int, int],
+        text: str,
+        font,
+        default_color: tuple,
+        highlight_phrases: list[str],
+        highlight_color: tuple,
+    ):
+        x0, y0, x1, _y1 = box
+        max_w = x1 - x0 - 40
+        lines = self._wrap_text(draw, text, font, max_w, max_lines=5)
+        y = y0
+        for line in lines:
+            x = x0 + 20
+            lower_line = line.lower()
+            segments: list[tuple[str, bool]] = []
+            if highlight_phrases:
+                work = line
+                while work:
+                    best = None
+                    for hp in highlight_phrases:
+                        hp_fmt = self._format_highlight_phrase(hp).strip('"').rstrip("!").lower()
+                        idx = work.lower().find(hp_fmt)
+                        if idx == -1:
+                            for variant in (hp.lower(), hp_fmt):
+                                idx = work.lower().find(variant)
+                                if idx != -1:
+                                    break
+                        if idx != -1 and (best is None or idx < best[0]):
+                            best = (idx, idx + len(hp_fmt), hp)
+                    if best is None:
+                        segments.append((work, False))
+                        break
+                    idx, end, hp = best
+                    if idx > 0:
+                        segments.append((work[:idx], False))
+                    segments.append((self._format_highlight_phrase(hp), True))
+                    work = work[end:]
+            else:
+                segments = [(line, False)]
+
+            for seg, is_hi in segments:
+                color = highlight_color if is_hi else default_color
+                draw.text((x, y), seg, font=font, fill=color)
+                x += self._text_width(draw, seg, font)
+            y += 34
+
+    def _draw_headline_branded(
+        self, draw: ImageDraw.ImageDraw, headline: str, highlight_phrases: list[str]
+    ):
+        font = self._load_font(42, bold=True)
+        lines = self._wrap_text(draw, headline.upper(), font, 980, max_lines=3)
+        y = 56
+        for line in lines:
+            x = 540 - self._text_width(draw, line, font) // 2
+            self._draw_text_with_shadow(draw, (x, y), line, font, self.BRAND_TEXT)
+            for hp in highlight_phrases:
+                hp_core = hp.upper().strip('"').strip("'").rstrip("!")
+                if hp_core and hp_core in line:
+                    idx = line.find(hp_core)
+                    prefix = line[:idx]
+                    highlighted = self._format_highlight_phrase(hp)
+                    x_hi = x + self._text_width(draw, prefix, font)
+                    draw.text((x_hi, y), highlighted, font=font, fill=self.BRAND_GREEN)
+            y += 50
+
+    def _draw_brand_card(
         self,
         draw: ImageDraw.ImageDraw,
         box: tuple[int, int, int, int],
@@ -97,19 +182,40 @@ class MediaFactory:
         body: str,
         title_color: tuple,
         body_color: tuple,
-        fill: tuple,
-        border: tuple | None = None,
+        highlight_phrases: list[str] | None = None,
+        highlight_color: tuple | None = None,
     ):
         x0, y0, x1, y1 = box
-        draw.rounded_rectangle(box, radius=20, fill=fill, outline=border, width=4 if border else 0)
-        font_title = self._load_font(22, bold=True)
-        font_body = self._load_font(28, bold=True)
-        draw.text((x0 + 20, y0 + 16), title, font=font_title, fill=title_color)
-        lines = self._wrap_text(draw, body, font_body, (x1 - x0) - 40, max_lines=4)
-        y = y0 + 52
+        draw.rounded_rectangle(box, radius=20, fill=self.BRAND_CARD, outline=self.BRAND_CARD_BORDER, width=2)
+        font_title = self._load_font(20, bold=True)
+        font_body = self._load_font(26, bold=True)
+        draw.text((x0 + 20, y0 + 14), title, font=font_title, fill=title_color)
+        body_box = (x0, y0 + 46, x1, y1 - 10)
+        if highlight_phrases:
+            self._draw_rich_text_block(
+                draw, body_box, body, font_body, body_color,
+                highlight_phrases, highlight_color or self.BRAND_HIGHLIGHT,
+            )
+        else:
+            lines = self._wrap_text(draw, body, font_body, (x1 - x0) - 40, max_lines=4)
+            y = y0 + 48
+            for line in lines:
+                draw.text((x0 + 20, y), line, font=font_body, fill=body_color)
+                y += 34
+
+    def _draw_cta_button(self, draw: ImageDraw.ImageDraw, box: tuple[int, int, int, int], main_text: str, url: str):
+        draw.rounded_rectangle(box, radius=36, fill=self.BRAND_GREEN, outline=self.BRAND_GREEN_DARK, width=3)
+        font_main = self._load_font(24, bold=True)
+        font_url = self._load_font(18, bold=True)
+        lines = self._wrap_text(draw, main_text.upper(), font_main, box[2] - box[0] - 40, max_lines=2)
+        y = box[1] + 18
         for line in lines:
-            draw.text((x0 + 20, y), line, font=font_body, fill=body_color)
-            y += 36
+            x = (box[0] + box[2]) // 2 - self._text_width(draw, line, font_main) // 2
+            draw.text((x, y), line, font=font_main, fill=self.BRAND_CTA_TEXT)
+            y += 30
+        url_clean = url.replace("https://", "").replace("http://", "")
+        xu = (box[0] + box[2]) // 2 - self._text_width(draw, url_clean, font_url) // 2
+        draw.text((xu, box[3] - 36), url_clean, font=font_url, fill=self.BRAND_CTA_TEXT)
 
     def _compose_frame_pillow(
         self,
@@ -120,67 +226,60 @@ class MediaFactory:
         solucao: str,
         cta: str,
         url: str,
+        frases_destaque: list[str] | None = None,
     ):
         img = Image.open(frame_path).convert("RGB")
         img = img.resize((1080, 1920), Image.Resampling.LANCZOS)
         draw = ImageDraw.Draw(img)
+        highlights = frases_destaque or []
 
-        font_headline = self._load_font(44, bold=True)
-        headline_lines = self._wrap_text(draw, headline.upper(), font_headline, 980, max_lines=3)
-        y_head = 60
-        for line in headline_lines:
-            self._draw_text_with_shadow(draw, (540 - self._text_width(draw, line, font_headline) // 2, y_head), line, font_headline)
-            y_head += 52
+        self._draw_headline_branded(draw, headline, highlights)
 
-        self._draw_card(
-            draw, (36, 1080, 1044, 1280),
+        self._draw_brand_card(
+            draw, (36, 1050, 1044, 1240),
             "MENSAGEM SUSPEITA NO WHATSAPP",
             alerta,
-            (18, 140, 126), (17, 17, 17), (255, 255, 255), (37, 211, 102),
+            self.WHATSAPP_GREEN, self.BRAND_TEXT,
+            highlight_phrases=highlights, highlight_color=self.BRAND_HIGHLIGHT,
         )
-        self._draw_card(
-            draw, (36, 1300, 1044, 1520),
+        self._draw_brand_card(
+            draw, (36, 1260, 1044, 1440),
             "GUARDIAN AI — PROTECAO WHATSAPP",
             solucao,
-            (167, 243, 208), (255, 255, 255), (30, 64, 175),
+            self.BRAND_GREEN, self.BRAND_TEXT,
         )
-
-        draw.rounded_rectangle((36, 1540, 1044, 1630), radius=20, fill=(220, 38, 38))
-        font_cta = self._load_font(30, bold=True)
-        cta_line = cta.upper()[:60]
-        draw.text(
-            (540 - self._text_width(draw, cta_line, font_cta) // 2, 1570),
-            cta_line, font=font_cta, fill=(255, 255, 255),
-        )
-
-        draw.rounded_rectangle((36, 1650, 1044, 1720), radius=16, fill=(25, 25, 25))
-        font_url = self._load_font(26, bold=True)
-        url_text = f"BAIXE GRATIS: {url}"
-        draw.text(
-            (540 - self._text_width(draw, url_text, font_url) // 2, 1668),
-            url_text, font=font_url, fill=(255, 255, 100),
+        self._draw_cta_button(
+            draw, (36, 1470, 1044, 1600),
+            cta,
+            url,
         )
 
         img.save(out_path, "JPEG", quality=95)
 
-    def _compose_all_frames(self, headline: str, alerta: str, solucao: str, cta: str, url: str):
+    def _compose_all_frames(
+        self, headline: str, alerta: str, solucao: str, cta: str, url: str,
+        frases_destaque: list[str] | None = None,
+    ):
         frames = sorted(f for f in os.listdir(self.frames_brutos_dir) if f.endswith(".jpg"))
         if not frames:
             print("❌ Nenhum frame bruto — overlay não aplicado.")
             return False
-        print(f"📐 [Pillow] Compondo {len(frames)} frames (cards + CTA + link)...")
+        print(f"📐 [Pillow] Compondo {len(frames)} frames (identidade Guardian AI)...")
         for frame in frames:
             src = os.path.join(self.frames_brutos_dir, frame)
             dst = os.path.join(self.frames_finais_dir, frame)
-            self._compose_frame_pillow(src, dst, headline, alerta, solucao, cta, url)
+            self._compose_frame_pillow(src, dst, headline, alerta, solucao, cta, url, frases_destaque)
         print(f"✅ Overlay aplicado em {len(frames)} frames.")
         return True
 
     def _apply_pillow_layout(
         self, input_image_path: str, output_path: str,
         headline: str, alerta: str, solucao: str, cta: str, url: str,
+        frases_destaque: list[str] | None = None,
     ):
-        self._compose_frame_pillow(input_image_path, output_path, headline, alerta, solucao, cta, url)
+        self._compose_frame_pillow(
+            input_image_path, output_path, headline, alerta, solucao, cta, url, frases_destaque,
+        )
 
     def _build_visual_prompt(self, creative_data: dict) -> str:
         cena = creative_data.get("direcao_arte_emocional") or (
@@ -209,7 +308,7 @@ class MediaFactory:
         return os.path.isfile(path) and os.path.getsize(path) >= min_bytes
 
     def generate_campaign_assets(self, creative_data: dict) -> dict:
-        print("\n🏭 [Fábrica de Mídia v15.1] Compositor Pillow + FFmpeg...")
+        print("\n🏭 [Fábrica de Mídia v15.2] Compositor Pillow + FFmpeg...")
         print(f"📁 Diretório de saída: {self.output_dir}")
         print(f"🎨 Modelo de imagem: {self.model_imagem}")
 
@@ -234,9 +333,16 @@ class MediaFactory:
             "texto_card_solucao",
             "Guardian AI monitora seu WhatsApp 24h, detecta golpes e bloqueia antes do prejuízo.",
         )
-        cta_texto = creative_data.get("chamada_para_acao_cta", "BAIXE GRATIS — PROTEJA SEU WHATSAPP")
+        cta_texto = creative_data.get(
+            "texto_botao_conversao",
+            creative_data.get("chamada_para_acao_cta", "TESTE GRÁTIS — PROTEJA SEU WHATSAPP AGORA!"),
+        )
         url_conversao = creative_data.get("link_conversao", self.url_conversao)
         headline = creative_data.get("gancho_atencao_inicial", "")
+        frases_destaque: list[str] = []
+        if creative_data.get("frase_destaque_golpista"):
+            frases_destaque.append(creative_data["frase_destaque_golpista"])
+        frases_destaque.extend(creative_data.get("frases_destaque_extra", []))
 
         print(f"📝 Card golpe: {alerta_texto[:80]}...")
         print(f"🛡️ Card solução: {solucao_texto[:80]}...")
@@ -256,7 +362,9 @@ class MediaFactory:
 
             if video_bruto_path and os.path.exists(video_bruto_path):
                 self._extract_frames(video_bruto_path)
-                overlay_ok = self._compose_all_frames(headline, alerta_texto, solucao_texto, cta_texto, url_conversao)
+                overlay_ok = self._compose_all_frames(
+                    headline, alerta_texto, solucao_texto, cta_texto, url_conversao, frases_destaque,
+                )
                 if overlay_ok and self._audio_ok(audio_final_path):
                     self._compile_processed_video(audio_final_path, video_output_path)
                 else:
@@ -266,7 +374,7 @@ class MediaFactory:
                 self._generate_gemini_image(publicidade_prompt, base_image_path)
                 self._apply_pillow_layout(
                     base_image_path, final_design_path,
-                    headline, alerta_texto, solucao_texto, cta_texto, url_conversao,
+                    headline, alerta_texto, solucao_texto, cta_texto, url_conversao, frases_destaque,
                 )
                 if self._audio_ok(audio_final_path):
                     self._compile_still_video(final_design_path, audio_final_path, video_output_path)
@@ -281,7 +389,7 @@ class MediaFactory:
         self._generate_gemini_image(publicidade_prompt, base_image_path)
         self._apply_pillow_layout(
             base_image_path, final_design_path,
-            headline, alerta_texto, solucao_texto, cta_texto, url_conversao,
+            headline, alerta_texto, solucao_texto, cta_texto, url_conversao, frases_destaque,
         )
         return {
             "audio_file": audio_final_path,
@@ -298,9 +406,13 @@ class MediaFactory:
             if not task_id:
                 print(f"❌ Kling sem task_id: {res.text[:200]}")
                 return ""
-            print("⏳ Renderizando na Kling AI...")
-            for _ in range(40):
-                time.sleep(10)
+            print("⏳ Renderizando na Kling AI (fila da nuvem — tempo varia)...")
+            inicio = time.time()
+            for tentativa in range(40):
+                time.sleep(5)
+                elapsed = int(time.time() - inicio)
+                if tentativa % 2 == 0:
+                    print(f"   ... {elapsed}s aguardando render Kling")
                 status_res = requests.get(f"{self.kling_base_url}/tasks?task_ids={task_id}", headers=headers, timeout=30)
                 task = status_res.json().get("data", [])[0]
                 if task.get("status") == "succeeded":
@@ -309,6 +421,7 @@ class MediaFactory:
                         raw_path = os.path.join(self.output_dir, "kling_raw.mp4")
                         with open(raw_path, "wb") as f:
                             f.write(requests.get(video_url, timeout=120).content)
+                        print(f"✅ Kling concluiu em {int(time.time() - inicio)}s")
                         return raw_path
                 elif task.get("status") in ("failed", "cancelled"):
                     break

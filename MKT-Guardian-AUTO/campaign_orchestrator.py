@@ -50,6 +50,50 @@ class CampaignOrchestrator:
             print(f"❌ Erro ao ler JSON de contexto: {e}")
             return {}
 
+    def _build_cta_button(self, config: dict) -> str:
+        publico_id = config.get("publico_id", "massa")
+        if publico_id == "pais":
+            return "TESTE GRÁTIS — PROTEJA o WhatsApp do SEU FILHO, AGORA!"
+        if publico_id == "idosos":
+            return "TESTE GRÁTIS — PROTEJA SEU WHATSAPP AGORA!"
+        if publico_id == "profissionais":
+            return "TESTE GRÁTIS — PROTEJA SEU WHATSAPP BUSINESS AGORA!"
+        return "TESTE GRÁTIS — PROTEJA SEU WHATSAPP AGORA!"
+
+    def _build_art_direction(self, golpe_obj: dict, creative_data: dict, config: dict) -> str:
+        base = golpe_obj.get("direcao_arte_emocional", "")
+        golpe_id = config.get("golpe_id", "")
+        msg = creative_data.get("texto_card_notificacao", "").lower()
+        genero = creative_data.get("genero_personagem_visual", "").lower()
+
+        ambiente = (
+            "Clean well-kept Brazilian home, tidy painted walls, pleasant natural daylight, "
+            "relatable working-class comfort — not luxury mansion, not worn-out poverty, not peeling paint."
+        )
+
+        if golpe_id == "grooming":
+            feminino = any(w in msg for w in ("linda", "princesa", "gata", "manda uma foto")) or "menina" in genero
+            masculino = any(w in msg for w in ("lindo", "mano", "cara")) or "menino" in genero
+            if feminino:
+                base = (
+                    "Documentary photorealistic photo of a Brazilian mother checking her teenage "
+                    "daughter's smartphone, daughter (girl, 12-15) visible in background on bed, "
+                    "WhatsApp chat on phone screen with suspicious message, worried mother expression, "
+                )
+            elif masculino:
+                base = (
+                    "Documentary photorealistic photo of a Brazilian mother checking her teenage "
+                    "son's smartphone, son (boy, 12-15) visible in background, "
+                    "WhatsApp chat on phone with suspicious message, worried mother expression, "
+                )
+            else:
+                base = (
+                    "Documentary photorealistic photo of a Brazilian parent checking a teenager's "
+                    "smartphone, WhatsApp chat with suspicious grooming message visible, "
+                )
+
+        return f"{base} {ambiente}"
+
     def show_interactive_menu(self) -> dict:
         """Exibe o painel interativo de configuração de campanha para o usuário."""
         print("\n======================================================================")
@@ -194,11 +238,15 @@ class CampaignOrchestrator:
             "Descreva o golpe acontecendo NO WHATSAPP. Na SOLUÇÃO, explique claramente o que o Guardian AI faz "
             "(monitora, detecta, bloqueia golpes no WhatsApp). Termine com convite para baixar GRÁTIS em guardian-ai.app.\n"
             "3. chamada_para_acao_cta: Comando curto em MAIÚSCULAS. Ex: 'BAIXE GRÁTIS — PROTEJA SEU WHATSAPP'.\n"
-            "4. texto_card_notificacao: APENAS a mensagem REAL que o golpista enviaria no WhatsApp "
-            "(como aparece no chat verde). Sem menção ao Guardian aqui.\n"
-            "5. texto_card_solucao: Card de SOLUÇÃO do produto (1-2 frases). Explique o benefício concreto "
-            "do Guardian AI bloqueando/prevenindo o golpe no WhatsApp. Tom de alívio + proteção.\n"
-            "6. publico_alvo_icp: Descrição resumida do público para segmentação.\n"
+            "4. texto_card_notificacao: APENAS a mensagem REAL que o golpista enviaria no WhatsApp. "
+            "O genero da vitima na mensagem DEVE combinar com genero_personagem_visual "
+            "(se escrever 'linda' = menina; se 'lindo' = menino).\n"
+            "5. frase_destaque_golpista: A frase-chave mais chocante do golpista para destacar "
+            "no card (ex: 'NÃO CONTA PRA SUA MÃE'). Será exibida entre aspas com exclamação.\n"
+            "6. genero_personagem_visual: Quem aparece na cena — ex: 'menina adolescente', "
+            "'menino adolescente', 'mulher madura', 'homem', 'idoso'.\n"
+            "7. texto_card_solucao: Card de SOLUÇÃO (1-2 frases). Guardian AI detectou e bloqueou no WhatsApp.\n"
+            "8. publico_alvo_icp: Descrição resumida do público para segmentação.\n"
             "PROIBIDO: falar de outros apps, redes sociais genéricas, escudos digitais, hackers genéricos.\n"
             "Retorne os dados estritamente em formato JSON."
         )
@@ -214,12 +262,15 @@ class CampaignOrchestrator:
                     "desenvolvimento_copy": {"type": "STRING"},
                     "chamada_para_acao_cta": {"type": "STRING"},
                     "texto_card_notificacao": {"type": "STRING"},
+                    "frase_destaque_golpista": {"type": "STRING"},
+                    "genero_personagem_visual": {"type": "STRING"},
                     "texto_card_solucao": {"type": "STRING"},
                     "publico_alvo_icp": {"type": "STRING"}
                 },
                 "required": [
                     "gancho_atencao_inicial", "desenvolvimento_copy", "chamada_para_acao_cta",
-                    "texto_card_notificacao", "texto_card_solucao", "publico_alvo_icp"
+                    "texto_card_notificacao", "frase_destaque_golpista", "genero_personagem_visual",
+                    "texto_card_solucao", "publico_alvo_icp"
                 ]
             }
         )
@@ -252,10 +303,12 @@ class CampaignOrchestrator:
         # INJEÇÃO TÉCNICA DE COMPATIBILIDADE: Mapeia as escolhas do menu para a Fábrica de Mídia
         creative_data["tipo_midia_selecionada"] = config["midia"]
         creative_data["canal_veiculacao_selecionado"] = config["canal"]
-        creative_data["direcao_arte_emocional"] = golpe_obj.get("direcao_arte_emocional", "")
+        creative_data["direcao_arte_emocional"] = self._build_art_direction(golpe_obj, creative_data, config)
         creative_data["regras_visuais"] = self.context_data.get("DIRETRIZES_VISUAIS", {})
         creative_data["golpe_nome"] = golpe_obj.get("nome", config["golpe"])
         creative_data["link_conversao"] = produto.get("url_oficial", "https://guardian-ai.app")
+        creative_data["texto_botao_conversao"] = self._build_cta_button(config)
+        creative_data["publico_id"] = config.get("publico_id", "massa")
         
         # Envia os dados higienizados para a fábrica de mídia baseada em HTML/CSS e FFmpeg
         assets_resultado = self.media_factory.generate_campaign_assets(creative_data)

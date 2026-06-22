@@ -94,6 +94,26 @@ class CampaignOrchestrator:
 
         return f"{base} {ambiente}"
 
+    def _harmonize_gender_copy(self, creative_data: dict) -> dict:
+        """Alinha filho/filha e linda/lindo entre mensagem, solução e cena visual."""
+        genero = creative_data.get("genero_personagem_visual", "").lower()
+        msg = creative_data.get("texto_card_notificacao", "").lower()
+        feminino = "menina" in genero or "filha" in genero or "linda" in msg or "princesa" in msg
+        masculino = "menino" in genero or ("filho" in genero and "filha" not in genero) or (
+            "lindo" in msg and "linda" not in msg
+        )
+
+        solucao = creative_data.get("texto_card_solucao", "")
+        if feminino:
+            solucao = solucao.replace("Seu filho", "Sua filha").replace("seu filho", "sua filha")
+            solucao = solucao.replace("do filho", "da filha").replace("o filho", "a filha")
+            if not genero:
+                creative_data["genero_personagem_visual"] = "menina adolescente brasileira"
+        elif masculino:
+            creative_data["genero_personagem_visual"] = genero or "menino adolescente brasileiro"
+        creative_data["texto_card_solucao"] = solucao
+        return creative_data
+
     def show_interactive_menu(self) -> dict:
         """Exibe o painel interativo de configuração de campanha para o usuário."""
         print("\n======================================================================")
@@ -301,6 +321,7 @@ class CampaignOrchestrator:
         print(f"📖 ROTEIRO DE ÁUDIO: {creative_data['desenvolvimento_copy']}\n")
         
         # INJEÇÃO TÉCNICA DE COMPATIBILIDADE: Mapeia as escolhas do menu para a Fábrica de Mídia
+        creative_data = self._harmonize_gender_copy(creative_data)
         creative_data["tipo_midia_selecionada"] = config["midia"]
         creative_data["canal_veiculacao_selecionado"] = config["canal"]
         creative_data["direcao_arte_emocional"] = self._build_art_direction(golpe_obj, creative_data, config)
@@ -309,8 +330,8 @@ class CampaignOrchestrator:
         creative_data["link_conversao"] = produto.get("url_oficial", "https://guardian-ai.app")
         creative_data["texto_botao_conversao"] = self._build_cta_button(config)
         creative_data["publico_id"] = config.get("publico_id", "massa")
-        
-        # Envia os dados higienizados para a fábrica de mídia baseada em HTML/CSS e FFmpeg
+
+        # Envia os dados higienizados para a fábrica de mídia
         assets_resultado = self.media_factory.generate_campaign_assets(creative_data)
         
         # Envia as configurações para o gestor de tráfego injetar no Meta/TikTok Ads

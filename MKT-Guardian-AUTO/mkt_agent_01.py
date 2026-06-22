@@ -370,7 +370,7 @@ class MediaFactory:
                 else:
                     print("❌ Vídeo NÃO gerado — overlay ou áudio inválido.")
             else:
-                print("⚠️ Fallback: imagem estática + vídeo...")
+                print("⚠️ Fallback: Kling indisponível — gerando vídeo com imagem estática + overlay Guardian...")
                 self._generate_gemini_image(publicidade_prompt, base_image_path)
                 self._apply_pillow_layout(
                     base_image_path, final_design_path,
@@ -400,22 +400,39 @@ class MediaFactory:
     def _generate_kling_video(self, prompt: str) -> str:
         headers = {"Authorization": f"Bearer {self.kling_key}", "Content-Type": "application/json"}
         payload = {"prompt": prompt, "settings": {"duration": 5, "resolution": "720p", "aspect_ratio": "9:16"}}
+        inicio = time.time()
         try:
-            res = requests.post(f"{self.kling_base_url}/text-to-video/kling-3.0-turbo", headers=headers, json=payload, timeout=60)
-            task_id = res.json().get("data", {}).get("id")
+            res = requests.post(
+                f"{self.kling_base_url}/text-to-video/kling-3.0-turbo",
+                headers=headers, json=payload, timeout=60,
+            )
+            if res.status_code != 200:
+                print(f"❌ Kling HTTP {res.status_code}: {res.text[:300]}")
+                return ""
+            body = res.json()
+            task_id = body.get("data", {}).get("id")
             if not task_id:
-                print(f"❌ Kling sem task_id: {res.text[:200]}")
+                print(f"❌ Kling sem task_id. Resposta: {str(body)[:300]}")
                 return ""
             print("⏳ Renderizando na Kling AI (fila da nuvem — tempo varia)...")
-            inicio = time.time()
-            for tentativa in range(40):
+            for tentativa in range(48):
                 time.sleep(5)
                 elapsed = int(time.time() - inicio)
                 if tentativa % 2 == 0:
                     print(f"   ... {elapsed}s aguardando render Kling")
-                status_res = requests.get(f"{self.kling_base_url}/tasks?task_ids={task_id}", headers=headers, timeout=30)
-                task = status_res.json().get("data", [])[0]
-                if task.get("status") == "succeeded":
+                status_res = requests.get(
+                    f"{self.kling_base_url}/tasks?task_ids={task_id}",
+                    headers=headers, timeout=30,
+                )
+                if status_res.status_code != 200:
+                    print(f"⚠️ Kling status HTTP {status_res.status_code}")
+                    continue
+                tasks = status_res.json().get("data", [])
+                if not tasks:
+                    continue
+                task = tasks[0]
+                status = task.get("status", "")
+                if status == "succeeded":
                     video_url = task.get("outputs", [{}])[0].get("url")
                     if video_url:
                         raw_path = os.path.join(self.output_dir, "kling_raw.mp4")
@@ -423,8 +440,12 @@ class MediaFactory:
                             f.write(requests.get(video_url, timeout=120).content)
                         print(f"✅ Kling concluiu em {int(time.time() - inicio)}s")
                         return raw_path
-                elif task.get("status") in ("failed", "cancelled"):
-                    break
+                    print("❌ Kling succeeded mas sem URL de vídeo.")
+                    return ""
+                if status in ("failed", "cancelled"):
+                    print(f"❌ Kling {status}: {task.get('message') or task.get('error') or task}")
+                    return ""
+            print(f"❌ Kling timeout após {int(time.time() - inicio)}s (fila cheia — usando fallback estático).")
         except Exception as e:
             print(f"❌ Erro Kling: {e}")
         return ""

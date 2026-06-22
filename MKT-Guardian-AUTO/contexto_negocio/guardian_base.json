@@ -61,7 +61,8 @@
         "Medo de dano reputacional"
       ],
       "gatilhos_emocionais": ["reputação", "prejuízo financeiro", "paralisação do negócio"],
-      "prioridade": 3
+      "prioridade": 3,
+      "direcao_arte_referencia": "Comerciante ou empresário brasileiro em loja, balcão ou escritório comercial — nunca cozinha doméstica. WhatsApp Business visível no celular."
     },
     {
       "id": "idosos",

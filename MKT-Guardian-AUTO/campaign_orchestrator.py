@@ -136,16 +136,98 @@ class CampaignOrchestrator:
         )
         return text
 
-    def _build_art_direction(self, golpe_obj: dict, creative_data: dict, config: dict) -> str:
-        base = golpe_obj.get("direcao_arte_emocional", "")
-        golpe_id = config.get("golpe_id", "")
-        msg = creative_data.get("texto_card_notificacao", "").lower()
-        genero = creative_data.get("genero_personagem_visual", "").lower()
-
-        ambiente = (
+    def _build_ambiente(self, publico_slug: str) -> str:
+        if publico_slug == "empresarios":
+            return (
+                "Clean organized Brazilian small business interior — neighborhood shop, commercial counter, "
+                "back office with invoices or stock shelves, pleasant natural daylight, relatable working commerce, "
+                "NOT home kitchen, NOT residential cooking area, NOT luxury corporate skyscraper."
+            )
+        if publico_slug == "escolas":
+            return (
+                "Clean Brazilian school administrative office or staff room, bulletin board, books, "
+                "pleasant daylight, professional educational environment, NOT home kitchen, NOT bedroom."
+            )
+        if publico_slug == "idosos":
+            return (
+                "Clean well-kept Brazilian home living room, tidy painted walls, pleasant natural daylight, "
+                "modest comfortable retirement setting — not kitchen, not worn-out poverty, not peeling paint."
+            )
+        return (
             "Clean well-kept Brazilian home, tidy painted walls, pleasant natural daylight, "
             "relatable working-class comfort — not luxury mansion, not worn-out poverty, not peeling paint."
         )
+
+    def _build_publico_scene(self, publico_slug: str, golpe_id: str) -> str | None:
+        """Cena visual alinhada ao ICP; sobrescreve direção genérica do golpe quando necessário."""
+        wa = (
+            "authentic WhatsApp chat with green message bubbles visible on phone screen, "
+            "worried focused expression, documentary photorealistic, "
+        )
+        if publico_slug == "empresarios":
+            por_golpe = {
+                "pix_fantasma": (
+                    "Documentary photorealistic photo of a Brazilian shop owner or entrepreneur (35-55, "
+                    "polo shirt or store apron) behind a neighborhood store counter with products and cash register, "
+                    f"holding smartphone showing {wa} urgent fake bank PIX scam message, active retail workspace, "
+                ),
+                "falsa_central": (
+                    "Documentary photorealistic photo of a Brazilian small business owner at a commercial desk "
+                    f"with notebook and receipts, reading {wa} fake bank security message on WhatsApp Business, "
+                ),
+                "clonagem_whatsapp": (
+                    "Documentary photorealistic photo of a Brazilian entrepreneur in a shop back office "
+                    f"looking alarmed at smartphone showing {wa} WhatsApp SMS verification code scam, "
+                ),
+                "falso_parente": (
+                    "Documentary photorealistic photo of a Brazilian merchant at their store counter "
+                    f"checking {wa} message from fake relative asking urgent PIX, customers area blurred behind, "
+                ),
+                "phishing": (
+                    "Documentary photorealistic photo of a Brazilian business owner hesitating before a suspicious link "
+                    f"inside {wa} fake prize message, sitting at commercial desk with computer monitor off to side, "
+                ),
+            }
+            padrao = (
+                "Documentary photorealistic photo of a Brazilian entrepreneur or shopkeeper (35-55) "
+                "at a commercial workspace — store counter, delivery desk, or small office — "
+                f"holding smartphone with {wa} WhatsApp Business conversation, professional casual attire, "
+            )
+            return por_golpe.get(golpe_id, padrao)
+
+        if publico_slug == "escolas":
+            por_golpe = {
+                "phishing": (
+                    "Documentary photorealistic photo of a Brazilian school director or teacher (40-55) "
+                    "in a school administrative office reviewing "
+                    f"{wa} suspicious phishing link in WhatsApp group message, diplomas on wall, "
+                ),
+                "clonagem_whatsapp": (
+                    "Documentary photorealistic photo of a Brazilian school coordinator at office desk "
+                    f"with alarmed expression reading {wa} fake WhatsApp verification code message, "
+                ),
+            }
+            padrao = (
+                "Documentary photorealistic photo of a Brazilian school principal or teacher (40-55) "
+                "in an administrative office "
+                f"holding smartphone with {wa} suspicious WhatsApp message, educational setting, "
+            )
+            return por_golpe.get(golpe_id, padrao)
+
+        if publico_slug == "idosos":
+            return None
+
+        return None
+
+    def _build_art_direction(self, golpe_obj: dict, creative_data: dict, config: dict) -> str:
+        golpe_id = config.get("golpe_id", "")
+        publico_slug = config.get("publico_slug", "")
+        msg = creative_data.get("texto_card_notificacao", "").lower()
+        genero = creative_data.get("genero_personagem_visual", "").lower()
+
+        cena_publico = self._build_publico_scene(publico_slug, golpe_id)
+        base = cena_publico or golpe_obj.get("direcao_arte_emocional", "")
+        ambiente = self._build_ambiente(publico_slug)
 
         if golpe_id == "grooming":
             feminino = any(w in msg for w in ("linda", "princesa", "gata", "manda uma foto")) or "menina" in genero
@@ -355,8 +437,9 @@ class CampaignOrchestrator:
             "Guardian AI é masculino (ele/o app detecta, bloqueia) — NUNCA use 'ela' para o app.\n"
             "5. frase_destaque_golpista: A frase-chave mais chocante do golpista para destacar "
             "no card (ex: 'NÃO CONTA PRA SUA MÃE'). Será exibida entre aspas com exclamação.\n"
-            "6. genero_personagem_visual: Quem aparece na cena — ex: 'menina adolescente', "
-            "'menino adolescente', 'mulher madura', 'homem', 'idoso'.\n"
+            "6. genero_personagem_visual: Quem aparece na cena — DEVE combinar com o público-alvo "
+            "(empresário/comerciante em loja ou escritório; pai/mãe para pais; idoso para idosos; "
+            "diretor/professor para escolas). Nunca colocar empresário em cozinha doméstica.\n"
             "7. texto_card_solucao: Card de SOLUÇÃO (1-2 frases). Guardian AI detectou e bloqueou no WhatsApp.\n"
             "8. publico_alvo_icp: Descrição resumida do público para segmentação.\n"
             "PROIBIDO: falar de outros apps, redes sociais genéricas, escudos digitais, hackers genéricos.\n"
@@ -413,6 +496,24 @@ class CampaignOrchestrator:
         creative_data["tipo_midia_selecionada"] = config["midia"]
         creative_data["canal_veiculacao_selecionado"] = config["canal"]
         creative_data["direcao_arte_emocional"] = self._build_art_direction(golpe_obj, creative_data, config)
+        if config.get("publico_slug") == "empresarios":
+            creative_data.setdefault(
+                "genero_personagem_visual",
+                "empresário ou comerciante brasileiro, 35-55 anos, ambiente comercial",
+            )
+            regras = dict(creative_data.get("regras_visuais") or {})
+            proib = list(regras.get("proibicoes", []))
+            proib.append(
+                "NO home kitchen, NO domestic cooking scene, NO housewife at stove, "
+                "NO residential kitchen table with food bowls."
+            )
+            regras["proibicoes"] = proib
+            creative_data["regras_visuais"] = regras
+        elif config.get("publico_slug") == "escolas":
+            creative_data.setdefault(
+                "genero_personagem_visual",
+                "diretor ou professora brasileiro em ambiente escolar",
+            )
         creative_data["regras_visuais"] = self.context_data.get("DIRETRIZES_VISUAIS", {})
         creative_data["golpe_nome"] = golpe_obj.get("nome", config["golpe"])
         creative_data["link_conversao"] = produto.get("url_oficial", "https://guardian-ai.app")
@@ -426,7 +527,8 @@ class CampaignOrchestrator:
         print(f"🔥 HEADLINE GERADA: {creative_data['gancho_atencao_inicial']}")
         print(f"📖 ROTEIRO DE ÁUDIO: {creative_data['desenvolvimento_copy']}")
         print(f"👤 Gênero campanha: {creative_data.get('genero_campanha', 'neutro')}")
-        print(f"🔘 CTA: {creative_data['texto_botao_conversao']}\n")
+        print(f"🔘 CTA: {creative_data['texto_botao_conversao']}")
+        print(f"🎬 Cena visual: {creative_data['direcao_arte_emocional'][:120]}...\n")
 
         # Envia os dados higienizados para a fábrica de mídia
         assets_resultado = self.media_factory.generate_campaign_assets(creative_data)

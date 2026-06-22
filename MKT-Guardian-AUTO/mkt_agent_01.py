@@ -64,6 +64,10 @@ class MediaFactory:
         self.dir_suspense = os.path.join(self.base_audio_dir, "musicas_suspense")
         self.dir_corporativo = os.path.join(self.base_audio_dir, "musicas_corporativo")
         self.url_conversao = os.getenv("GUARDIAN_URL_CONVERSAO", "https://guardian-ai.app")
+        self.url_falada_pt = os.getenv(
+            "GUARDIAN_URL_FALADA",
+            "guardian traço a i ponto app",
+        )
 
     def _load_font(self, size: int, bold: bool = True) -> ImageFont.FreeTypeFont | ImageFont.ImageFont:
         candidates = self.FONT_CANDIDATES if bold else self.FONT_CANDIDATES[1:]
@@ -399,7 +403,10 @@ class MediaFactory:
             f"{creative_data['gancho_atencao_inicial']}. "
             f"{creative_data['desenvolvimento_copy']}"
         )
-        voz_pura_path = self._generate_audio(texto_audio, names["voice_raw"])
+        texto_audio_tts = self._prepare_narration_text_for_tts(texto_audio)
+        if texto_audio_tts != texto_audio:
+            print(f"🔊 Site na narração (PT): {self.url_falada_pt}")
+        voz_pura_path = self._generate_audio(texto_audio_tts, names["voice_raw"])
         if not self._audio_ok(voz_pura_path):
             print("❌ CRÍTICO: Narração não gerada — verifique ELEVENLABS_API_KEY e créditos.")
         audio_final_path = self._mix_background_track(voz_pura_path, canal_veiculacao, names["audio"])
@@ -601,6 +608,44 @@ class MediaFactory:
             for arquivo in os.listdir(pasta):
                 if arquivo.endswith(".jpg"):
                     os.remove(os.path.join(pasta, arquivo))
+
+    def _extract_domain(self, url: str) -> str:
+        domain = url.strip().lower()
+        domain = re.sub(r"^https?://", "", domain)
+        domain = re.sub(r"^www\.", "", domain)
+        return domain.split("/")[0].split("?")[0]
+
+    def _domain_to_spoken_pt(self, url_or_domain: str) -> str:
+        domain = self._extract_domain(url_or_domain)
+        conhecidos = {
+            "guardian-ai.app": self.url_falada_pt,
+        }
+        if domain in conhecidos:
+            return conhecidos[domain]
+        falado = domain.replace("-", " traço ")
+        if "." in falado:
+            nome, tld = falado.rsplit(".", 1)
+            falado = f"{nome} ponto {tld}"
+        return falado
+
+    def _prepare_narration_text_for_tts(self, text: str) -> str:
+        """
+        Converte endereços web para pronúncia em português na narração.
+        Mantém 'Guardian AI' (marca do app) sem alteração — só URLs/domínios.
+        """
+        dominio = self._extract_domain(self.url_conversao)
+        if not dominio:
+            return text
+        falado = self._domain_to_spoken_pt(dominio)
+        dominio_re = re.escape(dominio).replace(r"\-", "[\\-.]")
+        padroes = [
+            rf"https?://(?:www\.)?{dominio_re}",
+            rf"(?:www\.)?{dominio_re}",
+        ]
+        resultado = text
+        for padrao in padroes:
+            resultado = re.sub(padrao, falado, resultado, flags=re.IGNORECASE)
+        return resultado
 
     def _generate_audio(self, text: str, output_path: str | None = None) -> str:
         path = output_path or os.path.join(self.work_dir, "voz_pura.mp3")

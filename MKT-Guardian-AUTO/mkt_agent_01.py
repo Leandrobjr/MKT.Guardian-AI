@@ -24,12 +24,21 @@ class MediaFactory:
     def __init__(self):
         load_dotenv(os.path.join(self.BASE_DIR, ".env"))
         self.gemini_key = os.getenv("GEMINI_API_KEY")
-        self.elevenlabs_key = os.getenv("ELEVENLABS_API_KEY")
+        # Aceita os dois nomes de variavel (novo e legado) para compatibilidade com .env existente
+        self.elevenlabs_key = (
+            os.getenv("ELEVENLABS_API_KEY")
+            or os.getenv("ELEVEN_LABS_API_KEY")
+            or os.getenv("ELEVENLABS_KEY")
+        )
         self.kling_key = os.getenv("KLING_API_KEY")
 
         self.client = genai.Client(api_key=self.gemini_key)
         self.model_imagem = os.getenv("GEMINI_MODEL_IMAGEM", "gemini-3.1-flash-image")
-        self.voice_id = os.getenv("ELEVENLABS_VOICE_ID", "21m00Tcm4TlvDq8ikWAM")
+        self.voice_id = (
+            os.getenv("ELEVENLABS_VOICE_ID")
+            or os.getenv("ELEVEN_LABS_VOICE_ID")
+            or "21m00Tcm4TlvDq8ikWAM"
+        )
 
         self.kling_base_url = "https://api-singapore.klingai.com"
 
@@ -380,7 +389,7 @@ class MediaFactory:
     def _generate_audio(self, text: str) -> str:
         path = os.path.join(self.output_dir, "voz_pura.mp3")
         if not self.elevenlabs_key:
-            print("❌ ELEVENLABS_API_KEY ausente.")
+            print("❌ Chave ElevenLabs ausente no .env. Use ELEVENLABS_API_KEY (ou ELEVEN_LABS_API_KEY).")
             return path
         print(f"🎙️ Gerando narração ({len(text)} chars)...")
         url = f"https://api.elevenlabs.io/v1/text-to-speech/{self.voice_id}"

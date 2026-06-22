@@ -1,10 +1,21 @@
 #!/usr/bin/env python3
-# AVISO: Este e um script LEGADO (v3.0) na raiz do repositorio.
-# Usa gemini-2.5 e NAO e o pipeline de producao atual.
-# Execute SEMPRE a partir de MKT-Guardian-AUTO/:
-#   cd MKT-Guardian-AUTO && python campaign_orchestrator.py
-# MKT Guardian AI - Fábrica de Mídia v3.0 (Correção Total)
-import os, json, requests
+# Script LEGADO (v3.0) — DESATIVADO. Usa gemini-2.5 e salva em output_videos/.
+# Pipeline oficial: cd MKT-Guardian-AUTO && python campaign_orchestrator.py
+import os
+import sys
+
+if os.getenv("ALLOW_LEGACY_SCRIPT") != "1":
+    print(
+        "\n❌ SCRIPT LEGADO DESATIVADO (mkt_agent_01.py na raiz do repositório)\n"
+        "   Este script usa Gemini 2.5 e salva em output_videos/ — NÃO é o pipeline v15.\n\n"
+        "   ✅ Use o pipeline correto:\n"
+        "      cd ~/Documentos/Guardian-AI/MKT_Guardian-AI/MKT-Guardian-AUTO\n"
+        "      python campaign_orchestrator.py\n\n"
+        "   Saída correta: MKT-Guardian-AUTO/output_campanha/\n"
+    )
+    sys.exit(1)
+
+import json, requests
 from dotenv import load_dotenv
 from google import genai
 from google.genai import types

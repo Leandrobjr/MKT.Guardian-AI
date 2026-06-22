@@ -219,9 +219,11 @@ class CampaignOrchestrator:
             "4": "Dirigentes, diretores e professores focados na segurança de dados escolares e ataques de phishing."
         }
         mapa_publico_id = {"1": "idosos", "2": "pais", "3": "profissionais", "4": "profissionais"}
+        mapa_publico_slug = {"1": "idosos", "2": "pais", "3": "empresarios", "4": "escolas"}
         p_escolhido = input("Digite o número da opção desejada: ").strip()
         publico_final = opcoes_publico.get(p_escolhido, "Idosos e aposentados vulneráveis.")
         publico_id = mapa_publico_id.get(p_escolhido, "massa")
+        publico_slug = mapa_publico_slug.get(p_escolhido, "geral")
 
         # 2. SELEÇÃO DO TIPO DE GOLPE
         print("\n⚠️ ETAPA 2: Selecione o TIPO DE GOLPE a ser abordado:")
@@ -271,6 +273,7 @@ class CampaignOrchestrator:
         return {
             "publico": publico_final,
             "publico_id": publico_id,
+            "publico_slug": publico_slug,
             "golpe": golpe_final,
             "golpe_id": golpe_id,
             "midia": midia_final,
@@ -415,6 +418,7 @@ class CampaignOrchestrator:
             config, creative_data.get("genero_campanha", "neutro")
         )
         creative_data["publico_id"] = config.get("publico_id", "massa")
+        creative_data["publico_slug"] = config.get("publico_slug", creative_data["publico_id"])
 
         print("\n📝 CAMPANHA ESTRUTURADA PELOS AGENTES:")
         print(f"🔥 HEADLINE GERADA: {creative_data['gancho_atencao_inicial']}")
@@ -431,6 +435,7 @@ class CampaignOrchestrator:
         print("\n======================================================================")
         print("🏁 [PIPELINE DA CAMPANHA CONCLUÍDO COM SUCESSO]")
         print("======================================================================")
+        print(f"📛 Identificador: {assets_resultado.get('basename', 'N/A')}")
         print(f"🖼️ Arte Final Publicitária: {assets_resultado['static_image_file']}")
         print(f"🎬 Vídeo Comercial Final: {assets_resultado.get('commercial_video_file', 'N/A')}")
         print(f"🎙️ Áudio para {config['canal']}: {assets_resultado['audio_file']}")

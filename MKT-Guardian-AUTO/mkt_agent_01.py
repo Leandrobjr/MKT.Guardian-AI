@@ -1,8 +1,10 @@
 import os
+import re
 import time
 import random
 import shutil
 import subprocess
+from datetime import datetime
 import requests
 from PIL import Image, ImageDraw, ImageFont
 from google import genai
@@ -54,9 +56,10 @@ class MediaFactory:
         self.kling_base_url = "https://api-singapore.klingai.com"
 
         self.output_dir = os.path.join(self.BASE_DIR, "output_campanha")
-        self.frames_brutos_dir = os.path.join(self.output_dir, "frames_brutos")
-        self.frames_finais_dir = os.path.join(self.output_dir, "frames_finais")
-        self.frames_loop_dir = os.path.join(self.output_dir, "frames_loop")
+        self.work_dir = os.path.join(self.output_dir, "_work")
+        self.frames_brutos_dir = os.path.join(self.work_dir, "frames_brutos")
+        self.frames_finais_dir = os.path.join(self.work_dir, "frames_finais")
+        self.frames_loop_dir = os.path.join(self.work_dir, "frames_loop")
         self.base_audio_dir = os.path.join(self.BASE_DIR, "trilhas_sonoras")
         self.dir_suspense = os.path.join(self.base_audio_dir, "musicas_suspense")
         self.dir_corporativo = os.path.join(self.base_audio_dir, "musicas_corporativo")
@@ -323,17 +326,71 @@ class MediaFactory:
         )
         return " ".join(partes)
 
+    def _slug_filename(self, text: str) -> str:
+        slug = re.sub(r"[^a-z0-9]+", "_", text.lower().strip())
+        return slug.strip("_") or "geral"
+
+    def _resolve_midia_slug(self, creative_data: dict) -> str:
+        formato = creative_data.get("tipo_midia_selecionada", "")
+        if "Vídeo" in formato or "video" in formato.lower():
+            return "video"
+        return "imagem"
+
+    def _allocate_campaign_seq(self, publico: str, midia: str, date_str: str) -> int:
+        pattern = re.compile(
+            rf"^(\d+)_{re.escape(publico)}_{re.escape(midia)}_{re.escape(date_str)}(?:_|\.|$)"
+        )
+        max_seq = 0
+        if os.path.isdir(self.output_dir):
+            for fname in os.listdir(self.output_dir):
+                if fname.startswith("_"):
+                    continue
+                match = pattern.match(fname)
+                if match:
+                    max_seq = max(max_seq, int(match.group(1)))
+        return max_seq + 1
+
+    def _resolve_output_names(self, creative_data: dict) -> dict:
+        publico = self._slug_filename(
+            creative_data.get("publico_slug") or creative_data.get("publico_id") or "geral"
+        )
+        midia = self._resolve_midia_slug(creative_data)
+        date_str = datetime.now().strftime("%Y-%m-%d")
+        seq = self._allocate_campaign_seq(publico, midia, date_str)
+        basename = f"{seq}_{publico}_{midia}_{date_str}"
+        os.makedirs(self.work_dir, exist_ok=True)
+        return {
+            "basename": basename,
+            "seq": seq,
+            "publico": publico,
+            "midia": midia,
+            "date": date_str,
+            "video": os.path.join(self.output_dir, f"{basename}.mp4"),
+            "final_image": os.path.join(self.output_dir, f"{basename}.jpg"),
+            "base_image": os.path.join(self.output_dir, f"{basename}_base.jpg"),
+            "audio": os.path.join(self.output_dir, f"{basename}.mp3"),
+            "voice_raw": os.path.join(self.work_dir, f"{basename}_voz.mp3"),
+            "kling_raw": os.path.join(self.work_dir, f"{basename}_kling_raw.mp4"),
+        }
+
     def _audio_ok(self, path: str, min_bytes: int = 5000) -> bool:
         return os.path.isfile(path) and os.path.getsize(path) >= min_bytes
 
     def generate_campaign_assets(self, creative_data: dict) -> dict:
-        print("\n🏭 [Fábrica de Mídia v15.2] Compositor Pillow + FFmpeg...")
+        print("\n🏭 [Fábrica de Mídia v15.3] Compositor Pillow + FFmpeg...")
         print(f"📁 Diretório de saída: {self.output_dir}")
         print(f"🎨 Modelo de imagem: {self.model_imagem}")
 
         os.makedirs(self.output_dir, exist_ok=True)
+        os.makedirs(self.work_dir, exist_ok=True)
         os.makedirs(self.frames_brutos_dir, exist_ok=True)
         os.makedirs(self.frames_finais_dir, exist_ok=True)
+
+        names = self._resolve_output_names(creative_data)
+        print(
+            f"📛 Arquivos: {names['basename']} "
+            f"(#{names['seq']} | {names['publico']} | {names['midia']} | {names['date']})"
+        )
 
         formato_midia = creative_data.get("tipo_midia_selecionada", "Vídeo Vertical Reels (1080x1920)")
         canal_veiculacao = creative_data.get("canal_veiculacao_selecionado", "Meta Ads (Instagram/Facebook)")
@@ -342,10 +399,10 @@ class MediaFactory:
             f"{creative_data['gancho_atencao_inicial']}. "
             f"{creative_data['desenvolvimento_copy']}"
         )
-        voz_pura_path = self._generate_audio(texto_audio)
+        voz_pura_path = self._generate_audio(texto_audio, names["voice_raw"])
         if not self._audio_ok(voz_pura_path):
             print("❌ CRÍTICO: Narração não gerada — verifique ELEVENLABS_API_KEY e créditos.")
-        audio_final_path = self._mix_background_track(voz_pura_path, canal_veiculacao)
+        audio_final_path = self._mix_background_track(voz_pura_path, canal_veiculacao, names["audio"])
 
         alerta_texto = creative_data.get("texto_card_notificacao", "")
         solucao_texto = creative_data.get(
@@ -367,17 +424,19 @@ class MediaFactory:
         print(f"🛡️ Card solução: {solucao_texto[:80]}...")
         print(f"🔗 Link: {url_conversao}")
 
-        base_image_path = os.path.join(self.output_dir, "anuncio_base.jpg")
-        final_design_path = os.path.join(self.output_dir, "anuncio_final_design.jpg")
-        video_output_path = os.path.join(self.output_dir, "anuncio_video_final.mp4")
-        if os.path.exists(video_output_path):
-            os.remove(video_output_path)
+        base_image_path = names["base_image"]
+        final_design_path = names["final_image"]
+        video_output_path = names["video"]
 
         publicidade_prompt = self._build_visual_prompt(creative_data)
 
         if "Vídeo" in formato_midia:
             print("🎬 Solicitando clipe Kling AI...")
-            video_bruto_path = self._generate_kling_video(publicidade_prompt) if self.kling_key else ""
+            video_bruto_path = (
+                self._generate_kling_video(publicidade_prompt, names["kling_raw"])
+                if self.kling_key
+                else ""
+            )
 
             if video_bruto_path and os.path.exists(video_bruto_path):
                 self._extract_frames(video_bruto_path)
@@ -399,9 +458,12 @@ class MediaFactory:
                     self._compile_still_video(final_design_path, audio_final_path, video_output_path)
 
             return {
+                "basename": names["basename"],
                 "audio_file": audio_final_path,
                 "commercial_video_file": video_output_path if os.path.exists(video_output_path) else "FALHOU",
-                "static_image_file": "Não solicitada",
+                "static_image_file": (
+                    final_design_path if os.path.exists(final_design_path) else "Não solicitada"
+                ),
             }
 
         print("🖼️ Fluxo de imagem estática...")
@@ -411,12 +473,13 @@ class MediaFactory:
             headline, alerta_texto, solucao_texto, cta_texto, url_conversao, frases_destaque,
         )
         return {
+            "basename": names["basename"],
             "audio_file": audio_final_path,
             "static_image_file": final_design_path,
             "commercial_video_file": "Não solicitado",
         }
 
-    def _generate_kling_video(self, prompt: str) -> str:
+    def _generate_kling_video(self, prompt: str, raw_output_path: str) -> str:
         headers = {"Authorization": f"Bearer {self.kling_key}", "Content-Type": "application/json"}
         payload = {"prompt": prompt, "settings": {"duration": 5, "resolution": "720p", "aspect_ratio": "9:16"}}
         inicio = time.time()
@@ -454,11 +517,11 @@ class MediaFactory:
                 if status == "succeeded":
                     video_url = task.get("outputs", [{}])[0].get("url")
                     if video_url:
-                        raw_path = os.path.join(self.output_dir, "kling_raw.mp4")
-                        with open(raw_path, "wb") as f:
+                        os.makedirs(os.path.dirname(raw_output_path), exist_ok=True)
+                        with open(raw_output_path, "wb") as f:
                             f.write(requests.get(video_url, timeout=120).content)
                         print(f"✅ Kling concluiu em {int(time.time() - inicio)}s")
-                        return raw_path
+                        return raw_output_path
                     print("❌ Kling succeeded mas sem URL de vídeo.")
                     return ""
                 if status in ("failed", "cancelled"):
@@ -539,8 +602,9 @@ class MediaFactory:
                 if arquivo.endswith(".jpg"):
                     os.remove(os.path.join(pasta, arquivo))
 
-    def _generate_audio(self, text: str) -> str:
-        path = os.path.join(self.output_dir, "voz_pura.mp3")
+    def _generate_audio(self, text: str, output_path: str | None = None) -> str:
+        path = output_path or os.path.join(self.work_dir, "voz_pura.mp3")
+        os.makedirs(os.path.dirname(path), exist_ok=True)
         if not self.elevenlabs_key:
             print("❌ Chave ElevenLabs ausente no .env. Use ELEVENLABS_API_KEY (ou ELEVEN_LABS_API_KEY).")
             return path
@@ -564,8 +628,9 @@ class MediaFactory:
             print(f"❌ ElevenLabs erro: {e}")
         return path
 
-    def _mix_background_track(self, voz_path: str, canal: str) -> str:
-        mixed_path = os.path.join(self.output_dir, "anuncio_audio_final.mp3")
+    def _mix_background_track(self, voz_path: str, canal: str, output_path: str | None = None) -> str:
+        mixed_path = output_path or os.path.join(self.output_dir, "anuncio_audio_final.mp3")
+        os.makedirs(os.path.dirname(mixed_path), exist_ok=True)
         if not self._audio_ok(voz_path):
             print("❌ Sem narração válida — mixagem abortada.")
             return voz_path

@@ -66,7 +66,7 @@ class MediaFactory:
         self.url_conversao = os.getenv("GUARDIAN_URL_CONVERSAO", "https://guardian-ai.app")
         self.url_falada_pt = os.getenv(
             "GUARDIAN_URL_FALADA",
-            "guardian traço a i ponto app",
+            "guardian traço a i ponto a p p",
         )
 
     def _load_font(self, size: int, bold: bool = True) -> ImageFont.FreeTypeFont | ImageFont.ImageFont:

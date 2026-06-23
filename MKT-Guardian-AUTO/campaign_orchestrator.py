@@ -1,5 +1,6 @@
 import os
 import json
+import random
 import re
 import time
 import uuid
@@ -11,6 +12,7 @@ from mkt_agent_01 import MediaFactory
 from traffic_manager import TrafficManager
 from agent_memory import AgentMemory
 from feedback_router import classify_improvement, describe_plan
+from visual_variety import VisualVarietyEngine
 
 try:
     from telegram_approval import TelegramApproval
@@ -39,6 +41,7 @@ class CampaignOrchestrator:
         self.media_factory = MediaFactory()
         self.traffic_manager = TrafficManager()
         self.memory = AgentMemory(self.BASE_DIR)
+        self.visual_variety = VisualVarietyEngine(self.BASE_DIR)
         self.max_revisoes = int(os.getenv("MAX_REVISOES", "3"))
         self.telegram_timeout = int(os.getenv("TELEGRAM_TIMEOUT", "3600"))
         self.telegram = None
@@ -254,7 +257,85 @@ class CampaignOrchestrator:
             return por_golpe.get(golpe_id, padrao)
 
         if publico_slug == "idosos":
-            return None
+            variants = [
+                (
+                    "Documentary photorealistic photo of a Brazilian senior man (65-75) on a living room "
+                    f"armchair reading {wa} urgent fake PIX payment message, "
+                ),
+                (
+                    "Documentary photorealistic photo of a Brazilian senior woman (58-72) with reading glasses "
+                    f"on sofa checking {wa} scam message pretending to be bank or relative, "
+                ),
+                (
+                    "Documentary photorealistic photo of elderly Brazilian couple at a simple dining table, "
+                    f"one showing the other {wa} suspicious WhatsApp conversation, "
+                ),
+            ]
+            return random.choice(variants)
+
+        if publico_slug == "pais":
+            por_golpe = {
+                "falso_parente": random.choice([
+                    (
+                        "Documentary photorealistic photo of a Brazilian mother (40-52) at home "
+                        f"reading {wa} message from fake son or daughter asking urgent PIX, "
+                    ),
+                    (
+                        "Documentary photorealistic photo of a Brazilian father (40-55) in living room "
+                        f"staring at {wa} fake relative emergency message, "
+                    ),
+                ]),
+                "grooming": (
+                    "Documentary photorealistic photo of a Brazilian parent checking teenager's smartphone, "
+                    f"{wa} suspicious grooming message visible, worried expression, "
+                ),
+                "pix_fantasma": random.choice([
+                    (
+                        "Documentary photorealistic photo of a Brazilian parent (38-50) at kitchen counter "
+                        f"holding phone with {wa} urgent PIX scam, "
+                    ),
+                    (
+                        "Documentary photorealistic photo of a Brazilian mother (35-48) in home office "
+                        f"reacting to {wa} fake payment request, "
+                    ),
+                ]),
+            }
+            padrao = random.choice([
+                (
+                    "Documentary photorealistic photo of a Brazilian parent (35-50) at home "
+                    f"holding smartphone with {wa} suspicious family-related scam, "
+                ),
+                (
+                    "Documentary photorealistic photo of a Brazilian father or mother (38-52) "
+                    f"in living room reading {wa} WhatsApp scam targeting parents, "
+                ),
+            ])
+            return por_golpe.get(golpe_id, padrao)
+
+        if publico_slug in ("massa", "geral"):
+            profissoes = [
+                (
+                    "Documentary photorealistic photo of a Brazilian nurse (30-45) on break at hospital corridor "
+                    f"checking {wa} suspicious message, "
+                ),
+                (
+                    "Documentary photorealistic photo of a Brazilian delivery worker (25-40) on motorcycle "
+                    f"stopped safely reading {wa} fake prize scam, "
+                ),
+                (
+                    "Documentary photorealistic photo of a Brazilian office clerk (28-45) at modest desk "
+                    f"with {wa} phishing link in WhatsApp chat, "
+                ),
+                (
+                    "Documentary photorealistic photo of a Brazilian taxi driver (40-58) in parked car "
+                    f"reading {wa} fake bank security message, "
+                ),
+                (
+                    "Documentary photorealistic photo of a Brazilian woman (35-55) at supermarket checkout "
+                    f"glancing at {wa} urgent PIX request on phone, "
+                ),
+            ]
+            return random.choice(profissoes)
 
         return None
 
@@ -338,6 +419,7 @@ class CampaignOrchestrator:
         creative_data["tipo_midia_selecionada"] = config["midia"]
         creative_data["canal_veiculacao_selecionado"] = config["canal"]
         creative_data["direcao_arte_emocional"] = self._build_art_direction(golpe_obj, creative_data, config)
+        creative_data = self.visual_variety.enrich(creative_data, config, self.context_data)
 
         if config.get("publico_slug") == "empresarios":
             creative_data.setdefault(

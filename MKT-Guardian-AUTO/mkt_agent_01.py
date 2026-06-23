@@ -11,6 +11,8 @@ from google import genai
 from google.genai import types
 from dotenv import load_dotenv
 
+from visual_variety import VisualVarietyEngine
+
 
 class MediaFactory:
     BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -69,6 +71,7 @@ class MediaFactory:
             "guardian traço a i ponto a p p",
         )
         self.card_body_font_size = 22
+        self.visual_variety = VisualVarietyEngine(self.BASE_DIR)
 
     def _load_font(self, size: int, bold: bool = True) -> ImageFont.FreeTypeFont | ImageFont.ImageFont:
         candidates = self.FONT_CANDIDATES if bold else self.FONT_CANDIDATES[1:]
@@ -397,6 +400,12 @@ class MediaFactory:
             "Vertical 9:16 composition, all subjects fully visible without crop, "
             "clean image with no text overlays (text added later in post-production)."
         )
+        vid = creative_data.get("visual_variation_id")
+        if vid:
+            partes.append(
+                f"MANDATORY UNIQUENESS: Campaign visual ID {vid}. "
+                "Distinct individual face, outfit and room — never repeat generic stock look."
+            )
         return " ".join(partes)
 
     def _slug_filename(self, text: str) -> str:
@@ -608,7 +617,10 @@ class MediaFactory:
                     print("❌ Vídeo NÃO gerado — overlay ou áudio inválido.")
             else:
                 print("⚠️ Fallback: Kling indisponível — gerando vídeo com imagem estática + overlay Guardian...")
-                self._generate_gemini_image(publicidade_prompt, base_image_path)
+                self._generate_gemini_image(
+                    publicidade_prompt, base_image_path,
+                    creative_data=creative_data, basename=names["basename"],
+                )
                 self._apply_pillow_layout(
                     base_image_path, final_design_path,
                     headline, alerta_texto, solucao_texto, cta_texto, url_conversao, frases_destaque,
@@ -628,7 +640,10 @@ class MediaFactory:
             }
 
         print("🖼️ Fluxo de imagem estática...")
-        self._generate_gemini_image(publicidade_prompt, base_image_path)
+        self._generate_gemini_image(
+            publicidade_prompt, base_image_path,
+            creative_data=creative_data, basename=names["basename"],
+        )
         self._apply_pillow_layout(
             base_image_path, final_design_path,
             headline, alerta_texto, solucao_texto, cta_texto, url_conversao, frases_destaque,
@@ -862,28 +877,59 @@ class MediaFactory:
         print(f"⚠️ Mix falhou, usando narração pura: {result.stderr[-200:]}")
         return voz_path
 
-    def _generate_gemini_image(self, prompt: str, output_path: str):
+    def _generate_gemini_image(
+        self,
+        prompt: str,
+        output_path: str,
+        creative_data: dict | None = None,
+        basename: str = "",
+    ):
+        if os.path.isfile(output_path):
+            os.remove(output_path)
+
+        full_prompt = prompt
+        retry_suffixes = [
+            "",
+            " Alternative composition: different person (age, gender, hair, clothes), different camera angle.",
+            " Second attempt: new unique face, new background layout, new color palette — avoid kitchen cliché.",
+        ]
+
         print(f"🎨 Gerando imagem ({self.model_imagem})...")
-        try:
-            response = self.client.models.generate_content(
-                model=self.model_imagem,
-                contents=prompt,
-                config=types.GenerateContentConfig(response_modalities=["IMAGE"]),
-            )
-            for part in response.candidates[0].content.parts:
-                if part.inline_data and part.inline_data.data:
-                    with open(output_path, "wb") as f:
-                        f.write(part.inline_data.data)
-                    print(f"✅ Imagem: {output_path}")
-                    return
-        except Exception as e:
-            print(f"❌ Imagem falhou: {e}")
+        for attempt, suffix in enumerate(retry_suffixes[:2]):
+            attempt_prompt = full_prompt + suffix
+            if attempt > 0:
+                print(f"🔁 Tentativa {attempt + 1} com prompt alternativo (diversidade visual)...")
+            try:
+                response = self.client.models.generate_content(
+                    model=self.model_imagem,
+                    contents=attempt_prompt,
+                    config=types.GenerateContentConfig(response_modalities=["IMAGE"]),
+                )
+                for part in response.candidates[0].content.parts:
+                    if part.inline_data and part.inline_data.data:
+                        with open(output_path, "wb") as f:
+                            f.write(part.inline_data.data)
+                        print(f"✅ Imagem: {output_path}")
+                        self.visual_variety.register_generated(attempt_prompt, basename)
+                        return
+            except Exception as e:
+                print(f"❌ Imagem falhou (tentativa {attempt + 1}): {e}")
+
+        print("❌ Não foi possível gerar imagem após tentativas.")
 
     def _compile_still_video(self, image_path: str, audio_path: str, output_video_path: str):
         duration = self._get_audio_duration(audio_path)
+        fps = 25
+        total_frames = max(int(duration * fps), fps * 3)
+        zoom_filter = (
+            f"scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,"
+            f"zoompan=z='min(zoom+0.0010,1.06)':d={total_frames}:"
+            f"x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':s=1080x1920:fps={fps}"
+        )
         cmd = [
             "ffmpeg", "-y", "-loop", "1", "-i", image_path, "-i", audio_path,
             "-map", "0:v:0", "-map", "1:a:0",
+            "-vf", zoom_filter,
             "-c:v", "libx264", "-tune", "stillimage", "-c:a", "aac", "-b:a", "192k",
             "-pix_fmt", "yuv420p", "-t", f"{duration:.2f}",
             output_video_path,

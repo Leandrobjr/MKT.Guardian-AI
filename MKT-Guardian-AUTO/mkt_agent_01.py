@@ -68,6 +68,7 @@ class MediaFactory:
             "GUARDIAN_URL_FALADA",
             "guardian traço a i ponto a p p",
         )
+        self.card_body_font_size = 22
 
     def _load_font(self, size: int, bold: bool = True) -> ImageFont.FreeTypeFont | ImageFont.ImageFont:
         candidates = self.FONT_CANDIDATES if bold else self.FONT_CANDIDATES[1:]
@@ -279,7 +280,7 @@ class MediaFactory:
         x0, y0, x1, y1 = box
         draw.rounded_rectangle(box, radius=20, fill=self.BRAND_CARD, outline=self.BRAND_CARD_BORDER, width=2)
         font_title = self._load_font(20, bold=True)
-        font_body = self._load_font(22, bold=True)
+        font_body = self._load_font(self.card_body_font_size, bold=True)
         draw.text((x0 + 20, y0 + 14), title, font=font_title, fill=title_color)
         body_box = (x0, y0 + 46, x1, y1 - 10)
         max_body_lines = max(2, (body_box[3] - body_box[1] - 8) // 30)
@@ -448,7 +449,90 @@ class MediaFactory:
     def _audio_ok(self, path: str, min_bytes: int = 5000) -> bool:
         return os.path.isfile(path) and os.path.getsize(path) >= min_bytes
 
+    def _overlay_from_creative(self, creative_data: dict) -> dict:
+        frases: list[str] = []
+        if creative_data.get("frase_destaque_golpista"):
+            frases.append(creative_data["frase_destaque_golpista"])
+        frases.extend(creative_data.get("frases_destaque_extra", []))
+        return {
+            "headline": creative_data.get("gancho_atencao_inicial", ""),
+            "alerta": creative_data.get("texto_card_notificacao", ""),
+            "solucao": creative_data.get(
+                "texto_card_solucao",
+                "Guardian AI monitora seu WhatsApp 24h, detecta golpes e bloqueia antes do prejuízo.",
+            ),
+            "cta": creative_data.get(
+                "texto_botao_conversao",
+                creative_data.get("chamada_para_acao_cta", "TESTE GRÁTIS — PROTEJA SEU WHATSAPP AGORA!"),
+            ),
+            "url": creative_data.get("link_conversao", self.url_conversao),
+            "frases_destaque": frases,
+        }
+
+    def reapply_overlay_only(self, creative_data: dict, prior_assets: dict) -> dict:
+        """Recompõe cards/overlay mantendo áudio e mídia base — para correções de layout."""
+        print("\n🔄 [Fábrica v15.4] Recompondo overlay (layout — sem regerar copy/áudio/Kling)...")
+
+        self.card_body_font_size = int(creative_data.get("overlay_card_font_size", 20))
+        ov = self._overlay_from_creative(creative_data)
+
+        audio_path = prior_assets.get("audio_file", "")
+        video_path = prior_assets.get("commercial_video_file", "")
+        final_image = prior_assets.get("static_image_file", "")
+        kling_raw = prior_assets.get("kling_raw_file", "")
+        base_image = prior_assets.get("base_image_file", "")
+
+        if isinstance(final_image, str) and final_image in ("N/A", "Não solicitada", "Não solicitado"):
+            final_image = ""
+        if isinstance(base_image, str) and base_image in ("N/A", "Não solicitada", "Não solicitado"):
+            base_image = ""
+
+        os.makedirs(self.frames_finais_dir, exist_ok=True)
+
+        recomposed = False
+        if kling_raw and os.path.isfile(kling_raw):
+            print(f"🎞️ Reutilizando clipe Kling: {os.path.basename(kling_raw)}")
+            self._extract_frames(kling_raw)
+            recomposed = self._compose_all_frames(
+                ov["headline"], ov["alerta"], ov["solucao"], ov["cta"], ov["url"], ov["frases_destaque"],
+            )
+            if recomposed and self._audio_ok(audio_path) and video_path:
+                self._compile_processed_video(audio_path, video_path, keep_frames=True)
+        elif base_image and os.path.isfile(base_image):
+            print(f"🖼️ Reutilizando imagem base: {os.path.basename(base_image)}")
+            out_img = final_image or base_image.replace("_base.", ".")
+            self._apply_pillow_layout(
+                base_image, out_img,
+                ov["headline"], ov["alerta"], ov["solucao"], ov["cta"], ov["url"], ov["frases_destaque"],
+            )
+            if self._audio_ok(audio_path) and video_path and os.path.isfile(out_img):
+                self._compile_still_video(out_img, audio_path, video_path)
+            recomposed = os.path.isfile(out_img)
+            final_image = out_img
+        else:
+            bruts = [f for f in os.listdir(self.frames_brutos_dir) if f.endswith(".jpg")]
+            if bruts:
+                print(f"🎞️ Reutilizando {len(bruts)} frames em cache...")
+                recomposed = self._compose_all_frames(
+                    ov["headline"], ov["alerta"], ov["solucao"], ov["cta"], ov["url"], ov["frases_destaque"],
+                )
+                if recomposed and self._audio_ok(audio_path) and video_path:
+                    self._compile_processed_video(audio_path, video_path, keep_frames=True)
+
+        if not recomposed:
+            print("⚠️ Não foi possível recompor — será necessário regerar mídia completa.")
+            return prior_assets
+
+        print("✅ Overlay recomposto com quebra de texto nos cards.")
+        return {
+            **prior_assets,
+            "static_image_file": final_image or prior_assets.get("static_image_file"),
+            "commercial_video_file": video_path if os.path.isfile(str(video_path)) else prior_assets.get("commercial_video_file"),
+            "recomposed": True,
+        }
+
     def generate_campaign_assets(self, creative_data: dict) -> dict:
+        self.card_body_font_size = int(creative_data.get("overlay_card_font_size", 22))
         print("\n🏭 [Fábrica de Mídia v15.4] Compositor Pillow + FFmpeg...")
         print(f"📁 Diretório de saída: {self.output_dir}")
         print(f"🎨 Modelo de imagem: {self.model_imagem}")
@@ -539,6 +623,8 @@ class MediaFactory:
                 "static_image_file": (
                     final_design_path if os.path.exists(final_design_path) else "Não solicitada"
                 ),
+                "kling_raw_file": video_bruto_path if video_bruto_path and os.path.exists(video_bruto_path) else "",
+                "base_image_file": base_image_path if os.path.exists(base_image_path) else "",
             }
 
         print("🖼️ Fluxo de imagem estática...")
@@ -552,6 +638,8 @@ class MediaFactory:
             "audio_file": audio_final_path,
             "static_image_file": final_design_path,
             "commercial_video_file": "Não solicitado",
+            "kling_raw_file": "",
+            "base_image_file": base_image_path if os.path.exists(base_image_path) else "",
         }
 
     def _generate_kling_video(self, prompt: str, raw_output_path: str) -> str:
@@ -644,7 +732,7 @@ class MediaFactory:
             )
         return needed
 
-    def _compile_processed_video(self, audio_path: str, output_path: str):
+    def _compile_processed_video(self, audio_path: str, output_path: str, keep_frames: bool = False):
         frames = sorted(f for f in os.listdir(self.frames_finais_dir) if f.endswith(".jpg"))
         if not frames:
             print("❌ Sem frames finais.")
@@ -667,7 +755,8 @@ class MediaFactory:
             print(f"❌ FFmpeg compile erro: {result.stderr[-400:]}")
             return
         print(f"✅ Vídeo final: {output_path} ({os.path.getsize(output_path) // 1024} KB)")
-        self._cleanup_frame_cache()
+        if not keep_frames:
+            self._cleanup_frame_cache()
 
     def _cleanup_frame_cache(self):
         for pasta in (self.frames_brutos_dir, self.frames_finais_dir, self.frames_loop_dir):

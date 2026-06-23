@@ -149,7 +149,12 @@ class TelegramApproval:
                             awaiting_text = True
                             await self._post(
                                 session, "sendMessage", chat_id=self.chat_id,
-                                text="Descreva as melhorias desejadas (responda em texto):",
+                                text=(
+                                    "Descreva a melhoria (responda em texto):\n\n"
+                                    "• Layout/card (texto cortado): ex. quebrar texto do card\n"
+                                    "• Copy (headline, roteiro): ex. headline mais urgente\n"
+                                    "• Imagem/cena: ex. trocar cozinha por loja"
+                                ),
                             )
 
                     elif awaiting_text and (msg := upd.get("message")):

@@ -10,6 +10,7 @@ from dotenv import load_dotenv
 from mkt_agent_01 import MediaFactory
 from traffic_manager import TrafficManager
 from agent_memory import AgentMemory
+from feedback_router import classify_improvement, describe_plan
 
 try:
     from telegram_approval import TelegramApproval
@@ -618,19 +619,24 @@ class CampaignOrchestrator:
         assets_resultado = {}
         creative_data = {}
         aprovado = False
+        recompose_next = False
 
         for revisao in range(self.max_revisoes + 1):
-            if revisao > 0:
-                print(f"\n🔄 Revisão {revisao}/{self.max_revisoes} — aplicando feedback do admin...")
-
-            print("\n🧠 [Agente Redator Sênior] Escrevendo copies de alta conversão...")
-            creative_data = self._generate_creative_data(config, golpe_obj, instrucoes_melhoria)
-            if not creative_data:
-                print("❌ Falha crítica: impossível gerar roteiro.")
-                return
-
-            self._print_creative_summary(creative_data)
-            assets_resultado = self.media_factory.generate_campaign_assets(creative_data)
+            if recompose_next:
+                print(f"\n🔧 Recompondo overlay (feedback de layout — revisão {revisao})...")
+                creative_data["overlay_card_font_size"] = 20
+                assets_resultado = self.media_factory.reapply_overlay_only(creative_data, assets_resultado)
+                recompose_next = False
+            else:
+                if revisao > 0:
+                    print(f"\n🔄 Revisão {revisao}/{self.max_revisoes} — regerando campanha...")
+                print("\n🧠 [Agente Redator Sênior] Escrevendo copies de alta conversão...")
+                creative_data = self._generate_creative_data(config, golpe_obj, instrucoes_melhoria)
+                if not creative_data:
+                    print("❌ Falha crítica: impossível gerar roteiro.")
+                    return
+                self._print_creative_summary(creative_data)
+                assets_resultado = self.media_factory.generate_campaign_assets(creative_data)
 
             if not config.get("aprovacao_telegram") or not self.telegram:
                 aprovado = True
@@ -667,13 +673,33 @@ class CampaignOrchestrator:
                     print(f"❌ Limite de {self.max_revisoes} revisões atingido.")
                     return
                 feedback = acao.get("prompt", "")
+                plan = classify_improvement(feedback)
+                print(f"🔧 Plano de correção: {describe_plan(plan)}")
+
                 self.memory.registrar_correcao(
                     config.get("publico_slug", ""),
                     config.get("golpe_id", ""),
-                    feedback,
+                    f"[{describe_plan(plan)}] {feedback}",
                     assets_resultado.get("basename", ""),
                     revisao,
                 )
+
+                if plan["recompose_only"] or (
+                    plan["layout"] and not plan["regenerate_copy"] and not plan["regenerate_visual"]
+                ):
+                    if self.telegram:
+                        self.telegram.notificar_sync(
+                            "🔧 *Layout detectado* — recompõe cards/quebra de texto "
+                            "(sem regerar copy). Aguarde o novo preview..."
+                        )
+                    recompose_next = True
+                    instrucoes_melhoria = ""
+                    continue
+
+                if self.telegram:
+                    self.telegram.notificar_sync(
+                        f"📝 Regerando *{describe_plan(plan)}* com suas instruções..."
+                    )
                 instrucoes_melhoria = feedback
                 continue
 

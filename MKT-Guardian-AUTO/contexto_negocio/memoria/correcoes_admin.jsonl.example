@@ -1,0 +1,2 @@
+{"tipo":"correcao_admin","publico":"empresarios","golpe":"pix_fantasma","feedback":"Empresário em ambiente comercial, nunca cozinha doméstica.","status":"exemplo"}
+{"tipo":"correcao_admin","publico":"geral","golpe":"geral","feedback":"[layout/overlay] Quebra de texto no card — usar reapply_overlay.","status":"exemplo"}

@@ -88,7 +88,26 @@ class MediaFactory:
         lines: list[str] = []
         current: list[str] = []
         for word in words:
-            trial = " ".join(current + [word])
+            if self._text_width(draw, word, font) > max_width:
+                if current:
+                    lines.append(" ".join(current))
+                    current = []
+                chunk = ""
+                for ch in word:
+                    trial = chunk + ch
+                    if self._text_width(draw, trial, font) <= max_width:
+                        chunk = trial
+                    else:
+                        if chunk:
+                            lines.append(chunk)
+                        chunk = ch
+                if chunk:
+                    if current:
+                        lines.append(" ".join(current))
+                        current = []
+                    current = [chunk]
+                continue
+            trial = " ".join(current + [word]) if current else word
             if self._text_width(draw, trial, font) <= max_width:
                 current.append(word)
             else:
@@ -97,6 +116,71 @@ class MediaFactory:
                 current = [word]
         if current:
             lines.append(" ".join(current))
+        return lines[:max_lines]
+
+    def _parse_highlight_spans(self, text: str, highlight_phrases: list[str]) -> list[tuple[str, bool]]:
+        if not highlight_phrases or not text:
+            return [(text, False)]
+        work = text
+        spans: list[tuple[str, bool]] = []
+        while work:
+            best = None
+            for hp in highlight_phrases:
+                variants = [
+                    hp,
+                    hp.strip('"').strip("'"),
+                    hp.strip('"').strip("'").rstrip("!"),
+                ]
+                for variant in variants:
+                    if not variant:
+                        continue
+                    idx = work.lower().find(variant.lower())
+                    if idx != -1 and (best is None or idx < best[0]):
+                        best = (idx, idx + len(variant), True)
+            if best is None:
+                spans.append((work, False))
+                break
+            idx, end, is_hi = best
+            if idx > 0:
+                spans.append((work[:idx], False))
+            spans.append((work[idx:end], is_hi))
+            work = work[end:]
+        return spans
+
+    def _flow_words_to_lines(
+        self,
+        draw: ImageDraw.ImageDraw,
+        spans: list[tuple[str, bool]],
+        font,
+        max_width: int,
+        max_lines: int,
+    ) -> list[list[tuple[str, bool]]]:
+        lines: list[list[tuple[str, bool]]] = [[]]
+        line_widths = [0]
+
+        def append_word(word: str, is_hi: bool) -> bool:
+            prefix = " " if lines[-1] else ""
+            trial = prefix + word
+            w = self._text_width(draw, trial, font)
+            if line_widths[-1] + w > max_width and lines[-1]:
+                if len(lines) >= max_lines:
+                    return False
+                lines.append([])
+                line_widths.append(0)
+                prefix = ""
+                trial = word
+                w = self._text_width(draw, trial, font)
+            lines[-1].append((word, is_hi))
+            line_widths[-1] += w
+            return True
+
+        for seg, is_hi in spans:
+            words = seg.split()
+            if not words and seg:
+                words = [seg]
+            for word in words:
+                if not append_word(word, is_hi):
+                    return lines[:max_lines]
         return lines[:max_lines]
 
     def _draw_text_with_shadow(
@@ -123,44 +207,25 @@ class MediaFactory:
         highlight_phrases: list[str],
         highlight_color: tuple,
     ):
-        x0, y0, x1, _y1 = box
+        x0, y0, x1, y1 = box
         max_w = x1 - x0 - 40
-        lines = self._wrap_text(draw, text, font, max_w, max_lines=5)
-        y = y0
-        for line in lines:
-            x = x0 + 20
-            lower_line = line.lower()
-            segments: list[tuple[str, bool]] = []
-            if highlight_phrases:
-                work = line
-                while work:
-                    best = None
-                    for hp in highlight_phrases:
-                        hp_fmt = self._format_highlight_phrase(hp).strip('"').rstrip("!").lower()
-                        idx = work.lower().find(hp_fmt)
-                        if idx == -1:
-                            for variant in (hp.lower(), hp_fmt):
-                                idx = work.lower().find(variant)
-                                if idx != -1:
-                                    break
-                        if idx != -1 and (best is None or idx < best[0]):
-                            best = (idx, idx + len(hp_fmt), hp)
-                    if best is None:
-                        segments.append((work, False))
-                        break
-                    idx, end, hp = best
-                    if idx > 0:
-                        segments.append((work[:idx], False))
-                    segments.append((self._format_highlight_phrase(hp), True))
-                    work = work[end:]
-            else:
-                segments = [(line, False)]
+        line_h = 30
+        max_lines = max(1, (y1 - y0 - 8) // line_h)
 
-            for seg, is_hi in segments:
+        spans = self._parse_highlight_spans(text, highlight_phrases)
+        word_lines = self._flow_words_to_lines(draw, spans, font, max_w, max_lines)
+
+        y = y0
+        for word_line in word_lines:
+            if y + line_h > y1:
+                break
+            x = x0 + 20
+            for i, (word, is_hi) in enumerate(word_line):
+                chunk = (" " if i > 0 else "") + word
                 color = highlight_color if is_hi else default_color
-                draw.text((x, y), seg, font=font, fill=color)
-                x += self._text_width(draw, seg, font)
-            y += 34
+                draw.text((x, y), chunk, font=font, fill=color)
+                x += self._text_width(draw, chunk, font)
+            y += line_h
 
     def _split_line_by_highlights(self, line: str, highlight_phrases: list[str]) -> list[tuple[str, bool]]:
         if not highlight_phrases or not line:
@@ -214,20 +279,23 @@ class MediaFactory:
         x0, y0, x1, y1 = box
         draw.rounded_rectangle(box, radius=20, fill=self.BRAND_CARD, outline=self.BRAND_CARD_BORDER, width=2)
         font_title = self._load_font(20, bold=True)
-        font_body = self._load_font(26, bold=True)
+        font_body = self._load_font(22, bold=True)
         draw.text((x0 + 20, y0 + 14), title, font=font_title, fill=title_color)
         body_box = (x0, y0 + 46, x1, y1 - 10)
+        max_body_lines = max(2, (body_box[3] - body_box[1] - 8) // 30)
         if highlight_phrases:
             self._draw_rich_text_block(
                 draw, body_box, body, font_body, body_color,
                 highlight_phrases, highlight_color or self.BRAND_HIGHLIGHT,
             )
         else:
-            lines = self._wrap_text(draw, body, font_body, (x1 - x0) - 40, max_lines=4)
+            lines = self._wrap_text(draw, body, font_body, (x1 - x0) - 40, max_lines=max_body_lines)
             y = y0 + 48
             for line in lines:
+                if y + 30 > body_box[3]:
+                    break
                 draw.text((x0 + 20, y), line, font=font_body, fill=body_color)
-                y += 34
+                y += 30
 
     def _draw_cta_button(self, draw: ImageDraw.ImageDraw, box: tuple[int, int, int, int], main_text: str, url: str):
         draw.rounded_rectangle(box, radius=36, fill=self.BRAND_GREEN, outline=self.BRAND_GREEN_DARK, width=3)
@@ -381,7 +449,7 @@ class MediaFactory:
         return os.path.isfile(path) and os.path.getsize(path) >= min_bytes
 
     def generate_campaign_assets(self, creative_data: dict) -> dict:
-        print("\n🏭 [Fábrica de Mídia v15.3] Compositor Pillow + FFmpeg...")
+        print("\n🏭 [Fábrica de Mídia v15.4] Compositor Pillow + FFmpeg...")
         print(f"📁 Diretório de saída: {self.output_dir}")
         print(f"🎨 Modelo de imagem: {self.model_imagem}")
 

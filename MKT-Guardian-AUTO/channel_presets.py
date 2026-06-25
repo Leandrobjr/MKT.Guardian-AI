@@ -69,22 +69,24 @@ def resolve_channel_preset(canal: str, midia: str) -> dict:
         "height": 1920,
         "aspect_ratio": "9:16",
         "visual_ratio_hint": "Vertical 9:16 dynamic composition for TikTok/Shorts, energetic framing.",
-        "copy_duration": "15-22 segundos de narração. Copy curta e impactante.",
+        "copy_duration": "12-18 segundos de narração. Copy curta e impactante.",
         "copy_tone": (
             "Tom urgente, ritmo acelerado, frases curtas e punchy. "
-            "Ganchos fortes nos primeiros 3 segundos. Linguagem direta estilo viral."
+            "Máximo 3 frases no roteiro. Ganchos fortes nos primeiros 3 segundos."
         ),
-        "eleven_speed": 1.08,
-        "eleven_stability": 0.35,
-        "eleven_style": 0.58,
+        "eleven_speed": 1.18,
+        "eleven_stability": 0.32,
+        "eleven_style": 0.62,
         "trilha_tipo": "suspense",
         "voice_volume": "1.50",
         "track_volume_db": "-5dB",
         "track_weight": "0.50",
         "kling_duration": 5,
         "kling_resolution": "720p",
-        "copy_max_chars": 300,
-        "target_narration_seconds": 22,
+        "copy_max_chars": 250,
+        "target_narration_seconds": 18,
+        "auto_fit_narration": True,
+        "max_audio_speedup": 1.4,
         "video_slowdown": 1.45,
     }
 

@@ -709,6 +709,7 @@ class MediaFactory:
         voz_pura_path = self._generate_audio(texto_audio_tts, names["voice_raw"], self.preset_midia)
         if not self._audio_ok(voz_pura_path):
             print("❌ CRÍTICO: Narração não gerada — verifique ELEVENLABS_API_KEY e créditos.")
+        voz_pura_path = self._fit_narration_to_preset(voz_pura_path, names["voice_raw"])
         audio_final_path = self._mix_background_track(
             voz_pura_path, canal_veiculacao, names["audio"], self.preset_midia,
         )
@@ -1045,6 +1046,51 @@ class MediaFactory:
         for padrao in padroes:
             resultado = re.sub(padrao, falado, resultado, flags=re.IGNORECASE)
         return resultado
+
+    def _fit_narration_to_preset(self, audio_path: str, base_path: str) -> str:
+        """Acelera narração via FFmpeg (local) quando excede o alvo do canal — sem API extra."""
+        preset = self.preset_midia or {}
+        if not preset.get("auto_fit_narration") or not self._audio_ok(audio_path):
+            return audio_path
+        target = float(preset.get("target_narration_seconds") or 0)
+        if target <= 0:
+            return audio_path
+
+        dur = self._get_audio_duration(audio_path)
+        if dur <= target + 0.5:
+            return audio_path
+
+        factor = min(dur / target, float(preset.get("max_audio_speedup", 1.35)))
+        if factor < 1.03:
+            return audio_path
+
+        out_path = base_path.replace("_voz.mp3", "_voz_fit.mp3")
+        if out_path == base_path:
+            out_path = audio_path.replace(".mp3", "_fit.mp3")
+
+        atempo_filters: list[str] = []
+        remaining = factor
+        while remaining > 1.005:
+            step = min(remaining, 1.35)
+            atempo_filters.append(f"atempo={step:.4f}")
+            remaining /= step
+        filter_str = ",".join(atempo_filters)
+
+        cmd = [
+            "ffmpeg", "-y", "-i", audio_path,
+            "-filter:a", filter_str,
+            "-c:a", "libmp3lame", "-b:a", "192k", out_path,
+        ]
+        result = subprocess.run(cmd, capture_output=True, text=True)
+        if result.returncode == 0 and self._audio_ok(out_path):
+            new_dur = self._get_audio_duration(out_path)
+            print(
+                f"⚡ Narração acelerada {dur:.1f}s → {new_dur:.1f}s "
+                f"(atempo total ~{factor:.2f}x | alvo TikTok {target:.0f}s)"
+            )
+            return out_path
+        print(f"⚠️ Ajuste de velocidade falhou — usando narração original: {result.stderr[-120:]}")
+        return audio_path
 
     def _generate_audio(self, text: str, output_path: str | None = None, preset: dict | None = None) -> str:
         path = output_path or os.path.join(self.work_dir, "voz_pura.mp3")

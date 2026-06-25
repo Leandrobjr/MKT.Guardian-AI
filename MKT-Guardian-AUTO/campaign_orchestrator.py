@@ -13,6 +13,7 @@ from traffic_manager import TrafficManager
 from agent_memory import AgentMemory
 from feedback_router import classify_improvement, describe_plan
 from visual_variety import VisualVarietyEngine
+from channel_presets import resolve_channel_preset, format_preset_summary
 
 try:
     from telegram_approval import TelegramApproval
@@ -446,6 +447,8 @@ class CampaignOrchestrator:
         )
         creative_data["publico_id"] = config.get("publico_id", "massa")
         creative_data["publico_slug"] = config.get("publico_slug", creative_data["publico_id"])
+        preset = resolve_channel_preset(config.get("canal", ""), config.get("midia", ""))
+        creative_data["preset_midia"] = preset
         return creative_data
 
     def _generate_creative_data(
@@ -461,6 +464,7 @@ class CampaignOrchestrator:
         )
 
         memoria_txt = self.memory.format_for_prompt()
+        preset = resolve_channel_preset(config.get("canal", ""), config.get("midia", ""))
         contexto_injetado = (
             f"DIRETRIZES DE CAMPANHA SELECIONADAS:\n"
             f"- Público-Alvo: {config['publico']}\n"
@@ -469,6 +473,9 @@ class CampaignOrchestrator:
             f"- Ganchos de referência (inspire-se, não copie literalmente): {' | '.join(ganchos_ref)}\n"
             f"- Canal de Distribuição: {config['canal']}\n"
             f"- Tipo de Mídia: {config['midia']}\n"
+            f"- Preset técnico: {preset['label']}\n"
+            f"- Duração alvo da narração: {preset['copy_duration']}\n"
+            f"- Tom de voz do roteiro: {preset['copy_tone']}\n"
             f"- Objetivo de Conversão: {config['objetivo']}\n\n"
             f"FOCO DO PRODUTO (OBRIGATÓRIO):\n"
             f"- {foco_whatsapp}\n"
@@ -501,7 +508,8 @@ class CampaignOrchestrator:
             + (f"ESTRUTURA DO ROTEIRO DE NARRAÇÃO:\n{roteiro_txt}\n\n" if roteiro_txt else "")
             + "REGRAS OBRIGATÓRIAS DE OUTPUT (JSON estrito):\n"
             "1. gancho_atencao_inicial: MANCHETE visceral em MAIÚSCULAS, máx 10 palavras.\n"
-            "2. desenvolvimento_copy: Roteiro 20-27s PAS. Termine convidando a baixar GRÁTIS em guardian-ai.app.\n"
+            f"2. desenvolvimento_copy: Roteiro PAS com {preset['copy_duration']}. "
+            f"Tom: {preset['copy_tone']} Termine convidando a baixar GRÁTIS em guardian-ai.app.\n"
             "3. chamada_para_acao_cta: Comando curto em MAIÚSCULAS.\n"
             "4. texto_card_notificacao: APENAS a mensagem REAL do golpista no WhatsApp.\n"
             "5. frase_destaque_golpista: Frase-chave do golpista para destacar no card.\n"
@@ -687,6 +695,8 @@ class CampaignOrchestrator:
             (g for g in self.context_data.get("TIPOS_DE_GOLPE", []) if g.get("id") == config.get("golpe_id")),
             {},
         )
+        preset = resolve_channel_preset(config.get("canal", ""), config.get("midia", ""))
+        print(f"📐 Preset de produção: {format_preset_summary(preset)}")
 
         if config.get("aprovacao_telegram"):
             self._init_telegram()

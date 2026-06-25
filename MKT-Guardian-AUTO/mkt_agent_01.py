@@ -12,6 +12,7 @@ from google.genai import types
 from dotenv import load_dotenv
 
 from visual_variety import VisualVarietyEngine
+from channel_presets import resolve_channel_preset, format_preset_summary
 from kling_client import (
     KLING_BASE_URL,
     explain_balance_error,
@@ -80,6 +81,9 @@ class MediaFactory:
         )
         self.card_body_font_size = 22
         self.visual_variety = VisualVarietyEngine(self.BASE_DIR)
+        self.canvas_width = 1080
+        self.canvas_height = 1920
+        self.preset_midia: dict = {}
 
     def _load_font(self, size: int, bold: bool = True) -> ImageFont.FreeTypeFont | ImageFont.ImageFont:
         candidates = self.FONT_CANDIDATES if bold else self.FONT_CANDIDATES[1:]
@@ -261,21 +265,35 @@ class MediaFactory:
             work = work[end:]
         return segments
 
+    def _scale_box(self, box: tuple[int, int, int, int]) -> tuple[int, int, int, int]:
+        """Escala coordenadas de layout desenhadas para 1080x1920."""
+        ref_w, ref_h = 1080, 1920
+        x0, y0, x1, y1 = box
+        sx = self.canvas_width / ref_w
+        sy = self.canvas_height / ref_h
+        return (
+            int(x0 * sx), int(y0 * sy),
+            int(x1 * sx), int(y1 * sy),
+        )
+
     def _draw_headline_branded(
         self, draw: ImageDraw.ImageDraw, headline: str, highlight_phrases: list[str]
     ):
         font = self._load_font(42, bold=True)
-        lines = self._wrap_text(draw, headline.upper(), font, 980, max_lines=3)
-        y = 56
+        max_w = self.canvas_width - 100
+        lines = self._wrap_text(draw, headline.upper(), font, max_w, max_lines=3)
+        y = int(56 * self.canvas_height / 1920)
+        line_h = int(50 * self.canvas_height / 1920)
+        center_x = self.canvas_width // 2
         for line in lines:
             segments = self._split_line_by_highlights(line, highlight_phrases)
             total_w = sum(self._text_width(draw, seg, font) for seg, _ in segments)
-            x = 540 - total_w // 2
+            x = center_x - total_w // 2
             for seg, is_hi in segments:
                 color = self.BRAND_GREEN if is_hi else self.BRAND_TEXT
                 self._draw_text_with_shadow(draw, (x, y), seg, font, color)
                 x += self._text_width(draw, seg, font)
-            y += 50
+            y += line_h
 
     def _draw_brand_card(
         self,
@@ -335,27 +353,27 @@ class MediaFactory:
         frases_destaque: list[str] | None = None,
     ):
         img = Image.open(frame_path).convert("RGB")
-        img = img.resize((1080, 1920), Image.Resampling.LANCZOS)
+        img = img.resize((self.canvas_width, self.canvas_height), Image.Resampling.LANCZOS)
         draw = ImageDraw.Draw(img)
         highlights = frases_destaque or []
 
         self._draw_headline_branded(draw, headline, highlights)
 
         self._draw_brand_card(
-            draw, (36, 1050, 1044, 1240),
+            draw, self._scale_box((36, 1050, 1044, 1240)),
             "MENSAGEM SUSPEITA NO WHATSAPP",
             alerta,
             self.WHATSAPP_GREEN, self.BRAND_TEXT,
             highlight_phrases=highlights, highlight_color=self.BRAND_HIGHLIGHT,
         )
         self._draw_brand_card(
-            draw, (36, 1260, 1044, 1440),
+            draw, self._scale_box((36, 1260, 1044, 1440)),
             "GUARDIAN AI — PROTECAO WHATSAPP",
             solucao,
             self.BRAND_GREEN, self.BRAND_TEXT,
         )
         self._draw_cta_button(
-            draw, (36, 1470, 1044, 1600),
+            draw, self._scale_box((36, 1470, 1044, 1600)),
             cta,
             url,
         )
@@ -404,10 +422,15 @@ class MediaFactory:
             partes.append("MANDATORY: " + " ".join(obrigatorias))
         if proibicoes:
             partes.append("FORBIDDEN: " + " ".join(proibicoes))
-        partes.append(
-            "Vertical 9:16 composition, all subjects fully visible without crop, "
-            "clean image with no text overlays (text added later in post-production)."
-        )
+        preset = creative_data.get("preset_midia") or {}
+        ratio_hint = preset.get("visual_ratio_hint")
+        if ratio_hint:
+            partes.append(ratio_hint)
+        else:
+            partes.append(
+                "Vertical 9:16 composition, all subjects fully visible without crop, "
+                "clean image with no text overlays (text added later in post-production)."
+            )
         vid = creative_data.get("visual_variation_id")
         if vid:
             partes.append(
@@ -550,9 +573,17 @@ class MediaFactory:
 
     def generate_campaign_assets(self, creative_data: dict) -> dict:
         self.card_body_font_size = int(creative_data.get("overlay_card_font_size", 22))
-        print("\n🏭 [Fábrica de Mídia v15.4] Compositor Pillow + FFmpeg...")
+        self.preset_midia = creative_data.get("preset_midia") or resolve_channel_preset(
+            creative_data.get("canal_veiculacao_selecionado", ""),
+            creative_data.get("tipo_midia_selecionada", ""),
+        )
+        self.canvas_width = int(self.preset_midia.get("width", 1080))
+        self.canvas_height = int(self.preset_midia.get("height", 1920))
+
+        print("\n🏭 [Fábrica de Mídia v15.5] Compositor Pillow + FFmpeg...")
         print(f"📁 Diretório de saída: {self.output_dir}")
         print(f"🎨 Modelo de imagem: {self.model_imagem}")
+        print(f"📐 Preset ativo: {format_preset_summary(self.preset_midia)}")
 
         os.makedirs(self.output_dir, exist_ok=True)
         os.makedirs(self.work_dir, exist_ok=True)
@@ -575,10 +606,12 @@ class MediaFactory:
         texto_audio_tts = self._prepare_narration_text_for_tts(texto_audio)
         if texto_audio_tts != texto_audio:
             print(f"🔊 Site na narração (PT): {self.url_falada_pt}")
-        voz_pura_path = self._generate_audio(texto_audio_tts, names["voice_raw"])
+        voz_pura_path = self._generate_audio(texto_audio_tts, names["voice_raw"], self.preset_midia)
         if not self._audio_ok(voz_pura_path):
             print("❌ CRÍTICO: Narração não gerada — verifique ELEVENLABS_API_KEY e créditos.")
-        audio_final_path = self._mix_background_track(voz_pura_path, canal_veiculacao, names["audio"])
+        audio_final_path = self._mix_background_track(
+            voz_pura_path, canal_veiculacao, names["audio"], self.preset_midia,
+        )
 
         alerta_texto = creative_data.get("texto_card_notificacao", "")
         solucao_texto = creative_data.get(
@@ -683,7 +716,15 @@ class MediaFactory:
             print(f"⚠️ Não foi possível consultar saldo Kling: {balance.get('message') or balance.get('error')}")
 
         headers = kling_headers()
-        payload = {"prompt": prompt, "settings": {"duration": 5, "resolution": "720p", "aspect_ratio": "9:16"}}
+        preset = self.preset_midia or {}
+        payload = {
+            "prompt": prompt,
+            "settings": {
+                "duration": preset.get("kling_duration", 5),
+                "resolution": preset.get("kling_resolution", "720p"),
+                "aspect_ratio": preset.get("aspect_ratio", "9:16"),
+            },
+        }
         inicio = time.time()
         try:
             res = requests.post(
@@ -855,19 +896,28 @@ class MediaFactory:
             resultado = re.sub(padrao, falado, resultado, flags=re.IGNORECASE)
         return resultado
 
-    def _generate_audio(self, text: str, output_path: str | None = None) -> str:
+    def _generate_audio(self, text: str, output_path: str | None = None, preset: dict | None = None) -> str:
         path = output_path or os.path.join(self.work_dir, "voz_pura.mp3")
         os.makedirs(os.path.dirname(path), exist_ok=True)
         if not self.elevenlabs_key:
             print("❌ Chave ElevenLabs ausente no .env. Use ELEVENLABS_API_KEY (ou ELEVEN_LABS_API_KEY).")
             return path
-        print(f"🎙️ Gerando narração ({len(text)} chars)...")
+        preset = preset or self.preset_midia or {}
+        speed = float(preset.get("eleven_speed", 1.0))
+        stability = float(preset.get("eleven_stability", 0.4))
+        style = float(preset.get("eleven_style", 0.45))
+        print(f"🎙️ Gerando narração ({len(text)} chars, velocidade {speed}x)...")
         url = f"https://api.elevenlabs.io/v1/text-to-speech/{self.voice_id}"
         headers = {"Accept": "audio/mpeg", "Content-Type": "application/json", "xi-api-key": self.elevenlabs_key}
         data = {
             "text": text,
             "model_id": "eleven_multilingual_v2",
-            "voice_settings": {"stability": 0.4, "similarity_boost": 0.9, "style": 0.45},
+            "voice_settings": {
+                "stability": stability,
+                "similarity_boost": 0.9,
+                "style": style,
+                "speed": speed,
+            },
         }
         try:
             response = requests.post(url, json=data, headers=headers, timeout=120)
@@ -881,29 +931,43 @@ class MediaFactory:
             print(f"❌ ElevenLabs erro: {e}")
         return path
 
-    def _mix_background_track(self, voz_path: str, canal: str, output_path: str | None = None) -> str:
+    def _mix_background_track(
+        self,
+        voz_path: str,
+        canal: str,
+        output_path: str | None = None,
+        preset: dict | None = None,
+    ) -> str:
         mixed_path = output_path or os.path.join(self.output_dir, "anuncio_audio_final.mp3")
         os.makedirs(os.path.dirname(mixed_path), exist_ok=True)
         if not self._audio_ok(voz_path):
             print("❌ Sem narração válida — mixagem abortada.")
             return voz_path
 
-        pasta_alvo = self.dir_corporativo if "Meta" in canal else self.dir_suspense
+        preset = preset or self.preset_midia or {}
+        trilha_tipo = preset.get("trilha_tipo", "corporativo" if "Meta" in canal else "suspense")
+        pasta_alvo = self.dir_corporativo if trilha_tipo == "corporativo" else self.dir_suspense
         trilhas = []
         if os.path.isdir(pasta_alvo):
             trilhas = [f for f in os.listdir(pasta_alvo) if f.lower().endswith(".mp3")]
         if not trilhas:
-            print("⚠️ Sem trilha em trilhas_sonoras/ — usando só narração.")
+            print(f"⚠️ Sem trilha em {os.path.basename(pasta_alvo)}/ — usando só narração.")
             return voz_path
 
         trilha_path = os.path.join(pasta_alvo, random.choice(trilhas))
-        print(f"🎵 Mixando narração + trilha ({os.path.basename(trilha_path)})...")
+        voice_vol = preset.get("voice_volume", "1.5")
+        track_db = preset.get("track_volume_db", "-6dB")
+        track_weight = preset.get("track_weight", "0.45")
+        print(
+            f"🎵 Mix ({trilha_tipo}): narração + {os.path.basename(trilha_path)} "
+            f"[voz {voice_vol}x | trilha {track_db}]..."
+        )
         cmd = [
             "ffmpeg", "-y", "-i", voz_path, "-stream_loop", "-1", "-i", trilha_path,
             "-filter_complex",
-            "[0:a]volume=1.5,highpass=f=80[voz];"
-            "[1:a]volume=-6dB[trilha];"
-            "[voz][trilha]amix=inputs=2:duration=first:dropout_transition=2:weights=1 0.45[a]",
+            f"[0:a]volume={voice_vol},highpass=f=80[voz];"
+            f"[1:a]volume={track_db}[trilha];"
+            f"[voz][trilha]amix=inputs=2:duration=first:dropout_transition=2:weights=1 {track_weight}[a]",
             "-map", "[a]", "-c:a", "libmp3lame", "-b:a", "192k", mixed_path,
         ]
         result = subprocess.run(cmd, capture_output=True, text=True)
@@ -957,10 +1021,11 @@ class MediaFactory:
         duration = self._get_audio_duration(audio_path)
         fps = 25
         total_frames = max(int(duration * fps), fps * 3)
+        w, h = self.canvas_width, self.canvas_height
         zoom_filter = (
-            f"scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,"
+            f"scale={w}:{h}:force_original_aspect_ratio=increase,crop={w}:{h},"
             f"zoompan=z='min(zoom+0.0010,1.06)':d={total_frames}:"
-            f"x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':s=1080x1920:fps={fps}"
+            f"x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':s={w}x{h}:fps={fps}"
         )
         cmd = [
             "ffmpeg", "-y", "-loop", "1", "-i", image_path, "-i", audio_path,

@@ -35,10 +35,6 @@ def build_boomerang_video(
     slowdown: float = 1.35,
     fps: int = 24,
 ) -> bool:
-    """
-    Normaliza o clipe Kling, desacelera levemente e concatena ida+volta (boomerang).
-    Tudo local — sem API.
-    """
     vf = (
         f"scale={width}:{height}:force_original_aspect_ratio=increase,"
         f"crop={width}:{height},fps={fps},setpts={slowdown}*PTS,"
@@ -133,13 +129,15 @@ def compile_kling_pipeline(
     width: int,
     height: int,
     target_duration: float,
+    slowdown: float = 1.35,
 ) -> bool:
-    boom_dur = probe_duration(kling_raw) * 2 * 1.35
+    src_dur = probe_duration(kling_raw)
+    boom_dur = src_dur * 2 * slowdown
     print(
-        f"🎬 Pipeline FFmpeg nativo: boomerang ~{boom_dur:.1f}s/ciclo → "
-        f"destino {target_duration:.1f}s (sem extração JPEG)"
+        f"🎬 Pipeline FFmpeg nativo ATIVO: boomerang ~{boom_dur:.1f}s/ciclo "
+        f"(slowdown {slowdown}x) → destino {target_duration:.1f}s | sem JPEG"
     )
-    if not build_boomerang_video(kling_raw, boom_mp4, width, height):
+    if not build_boomerang_video(kling_raw, boom_mp4, width, height, slowdown=slowdown):
         return False
     return compose_video_with_overlay(
         boom_mp4, overlay_png, audio_mp3, output_mp4,

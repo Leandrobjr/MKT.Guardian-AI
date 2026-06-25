@@ -14,6 +14,7 @@ from agent_memory import AgentMemory
 from feedback_router import classify_improvement, describe_plan
 from visual_variety import VisualVarietyEngine
 from channel_presets import resolve_channel_preset, format_preset_summary
+from build_info import ORCHESTRATOR_VERSION, print_build_banner
 
 try:
     from telegram_approval import TelegramApproval
@@ -497,6 +498,11 @@ class CampaignOrchestrator:
 
         roteiro = framework.get("roteiro_narracao_modelo", {})
         roteiro_txt = "\n".join(f"   - {k}: {v}" for k, v in roteiro.items())
+        limite_chars = preset.get("copy_max_chars")
+        regra_chars = (
+            f" MÁXIMO {limite_chars} caracteres no desenvolvimento_copy (contando espaços)."
+            if limite_chars else ""
+        )
 
         system_instruction = (
             "Você é o Maior Copywriter de Resposta Direta do Brasil, especialista em anúncios de alta "
@@ -509,7 +515,8 @@ class CampaignOrchestrator:
             + "REGRAS OBRIGATÓRIAS DE OUTPUT (JSON estrito):\n"
             "1. gancho_atencao_inicial: MANCHETE visceral em MAIÚSCULAS, máx 10 palavras.\n"
             f"2. desenvolvimento_copy: Roteiro PAS com {preset['copy_duration']}. "
-            f"Tom: {preset['copy_tone']} Termine convidando a baixar GRÁTIS em guardian-ai.app.\n"
+            f"Tom: {preset['copy_tone']}.{regra_chars} "
+            f"Termine convidando a baixar GRÁTIS em guardian-ai.app.\n"
             "3. chamada_para_acao_cta: Comando curto em MAIÚSCULAS.\n"
             "4. texto_card_notificacao: APENAS a mensagem REAL do golpista no WhatsApp.\n"
             "5. frase_destaque_golpista: Frase-chave do golpista para destacar no card.\n"
@@ -685,10 +692,10 @@ class CampaignOrchestrator:
     def execute_automated_pipeline(self):
         config = self.show_interactive_menu()
 
-        print("\n======================================================================")
-        print("🚀 [MKT GUARDIAN AI - ENGINE ORQUESTRAÇÃO v4.0] Iniciando Esteira...")
+        print(f"🚀 [MKT GUARDIAN AI - ENGINE ORQUESTRAÇÃO v{ORCHESTRATOR_VERSION}] Iniciando Esteira...")
         print(f"📁 Diretório de trabalho: {self.BASE_DIR}")
         print(f"🧠 Modelo de copy: {self.model_name}")
+        print_build_banner(self.BASE_DIR)
         print("======================================================================")
 
         golpe_obj = next(

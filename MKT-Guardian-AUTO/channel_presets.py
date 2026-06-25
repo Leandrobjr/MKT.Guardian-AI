@@ -57,6 +57,9 @@ def resolve_channel_preset(canal: str, midia: str) -> dict:
             "track_weight": "0.30",
             "kling_duration": 10,
             "kling_resolution": "720p",
+            "copy_max_chars": 520,
+            "target_narration_seconds": 32,
+            "video_slowdown": 1.35,
         }
 
     return {
@@ -71,15 +74,18 @@ def resolve_channel_preset(canal: str, midia: str) -> dict:
             "Tom urgente, ritmo acelerado, frases curtas e punchy. "
             "Ganchos fortes nos primeiros 3 segundos. Linguagem direta estilo viral."
         ),
-        "eleven_speed": 1.12,
-        "eleven_stability": 0.32,
-        "eleven_style": 0.62,
+        "eleven_speed": 1.08,
+        "eleven_stability": 0.35,
+        "eleven_style": 0.58,
         "trilha_tipo": "suspense",
-        "voice_volume": "1.55",
-        "track_volume_db": "-4dB",
-        "track_weight": "0.55",
+        "voice_volume": "1.50",
+        "track_volume_db": "-5dB",
+        "track_weight": "0.50",
         "kling_duration": 5,
         "kling_resolution": "720p",
+        "copy_max_chars": 300,
+        "target_narration_seconds": 22,
+        "video_slowdown": 1.45,
     }
 
 

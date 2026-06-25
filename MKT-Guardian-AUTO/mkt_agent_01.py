@@ -13,6 +13,7 @@ from dotenv import load_dotenv
 
 from visual_variety import VisualVarietyEngine
 from channel_presets import resolve_channel_preset, format_preset_summary
+from build_info import MEDIA_FACTORY_VERSION, print_build_banner
 from video_motion import build_natural_frame_sequence, motion_prompt_suffix, still_video_zoom_filter
 from video_compositor import compile_kling_pipeline, compose_still_with_overlay
 from kling_client import (
@@ -428,10 +429,23 @@ class MediaFactory:
         boom_path: str,
     ) -> bool:
         duration = self._get_audio_duration(audio_path)
+        slowdown = float(self.preset_midia.get("video_slowdown", 1.35))
         return compile_kling_pipeline(
             kling_raw, overlay_png, audio_path, output_path, boom_path,
-            self.canvas_width, self.canvas_height, duration,
+            self.canvas_width, self.canvas_height, duration, slowdown=slowdown,
         )
+
+    def _warn_narration_duration(self, audio_path: str) -> None:
+        preset = self.preset_midia or {}
+        target = preset.get("target_narration_seconds")
+        if not target:
+            return
+        dur = self._get_audio_duration(audio_path)
+        if dur > float(target) + 3:
+            print(
+                f"⚠️ Narração {dur:.0f}s — acima do alvo {target}s para "
+                f"{preset.get('label', 'canal')}. Prefira copy mais curta na Etapa 4."
+            )
 
     def _compile_legacy_frames(self, audio_path: str, output_path: str) -> bool:
         """Fallback: pipeline antigo JPEG + ping-pong se FFmpeg nativo falhar."""
@@ -576,7 +590,7 @@ class MediaFactory:
 
     def reapply_overlay_only(self, creative_data: dict, prior_assets: dict) -> dict:
         """Recompõe cards/overlay mantendo áudio e mídia base — para correções de layout."""
-        print("\n🔄 [Fábrica v15.7] Recompondo overlay (layout — sem regerar copy/áudio/Kling)...")
+        print(f"\n🔄 [Fábrica v{MEDIA_FACTORY_VERSION}] Recompondo overlay (layout — sem regerar copy/áudio/Kling)...")
 
         self.card_body_font_size = int(creative_data.get("overlay_card_font_size", 20))
         self.preset_midia = creative_data.get("preset_midia") or resolve_channel_preset(
@@ -666,7 +680,7 @@ class MediaFactory:
         self.canvas_width = int(self.preset_midia.get("width", 1080))
         self.canvas_height = int(self.preset_midia.get("height", 1920))
 
-        print("\n🏭 [Fábrica de Mídia v15.7] Compositor FFmpeg nativo + Pillow...")
+        print(f"\n🏭 [Fábrica de Mídia v{MEDIA_FACTORY_VERSION}] Compositor FFmpeg nativo + Pillow...")
         print(f"📁 Diretório de saída: {self.output_dir}")
         print(f"🎨 Modelo de imagem: {self.model_imagem}")
         print(f"📐 Preset ativo: {format_preset_summary(self.preset_midia)}")
@@ -698,6 +712,7 @@ class MediaFactory:
         audio_final_path = self._mix_background_track(
             voz_pura_path, canal_veiculacao, names["audio"], self.preset_midia,
         )
+        self._warn_narration_duration(audio_final_path)
 
         alerta_texto = creative_data.get("texto_card_notificacao", "")
         solucao_texto = creative_data.get(

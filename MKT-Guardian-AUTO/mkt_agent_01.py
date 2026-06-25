@@ -13,6 +13,7 @@ from dotenv import load_dotenv
 
 from visual_variety import VisualVarietyEngine
 from channel_presets import resolve_channel_preset, format_preset_summary
+from video_motion import build_natural_frame_sequence, motion_prompt_suffix, still_video_zoom_filter
 from kling_client import (
     KLING_BASE_URL,
     explain_balance_error,
@@ -434,9 +435,11 @@ class MediaFactory:
         vid = creative_data.get("visual_variation_id")
         if vid:
             partes.append(
-                f"MANDATORY UNIQUENESS: Campaign visual ID {vid}. "
+                f"MANDATORY UNIQUENESS: Campaign visual {vid}. "
                 "Distinct individual face, outfit and room — never repeat generic stock look."
             )
+        if "Vídeo" in creative_data.get("tipo_midia_selecionada", ""):
+            partes.append(motion_prompt_suffix())
         return " ".join(partes)
 
     def _slug_filename(self, text: str) -> str:
@@ -580,7 +583,7 @@ class MediaFactory:
         self.canvas_width = int(self.preset_midia.get("width", 1080))
         self.canvas_height = int(self.preset_midia.get("height", 1920))
 
-        print("\n🏭 [Fábrica de Mídia v15.5] Compositor Pillow + FFmpeg...")
+        print("\n🏭 [Fábrica de Mídia v15.6] Compositor Pillow + FFmpeg...")
         print(f"📁 Diretório de saída: {self.output_dir}")
         print(f"🎨 Modelo de imagem: {self.model_imagem}")
         print(f"📐 Preset ativo: {format_preset_summary(self.preset_midia)}")
@@ -717,8 +720,9 @@ class MediaFactory:
 
         headers = kling_headers()
         preset = self.preset_midia or {}
+        kling_prompt = f"{prompt} {motion_prompt_suffix()}"
         payload = {
-            "prompt": prompt,
+            "prompt": kling_prompt,
             "settings": {
                 "duration": preset.get("kling_duration", 5),
                 "resolution": preset.get("kling_resolution", "720p"),
@@ -793,11 +797,12 @@ class MediaFactory:
                 os.remove(os.path.join(self.frames_brutos_dir, f))
         cmd = [
             "ffmpeg", "-y", "-an", "-i", video_path,
+            "-vf", "fps=12",
             "-q:v", "2", os.path.join(self.frames_brutos_dir, "frame_%04d.jpg"),
         ]
         result = subprocess.run(cmd, capture_output=True, text=True)
         count = len([f for f in os.listdir(self.frames_brutos_dir) if f.endswith(".jpg")])
-        print(f"🎞️ {count} frames extraídos (áudio Kling descartado).")
+        print(f"🎞️ {count} frames extraídos @12fps (movimento suavizado, áudio Kling descartado).")
         if count == 0:
             print(f"❌ FFmpeg extract erro: {result.stderr[-300:]}")
 
@@ -816,12 +821,16 @@ class MediaFactory:
         shutil.rmtree(self.frames_loop_dir, ignore_errors=True)
         os.makedirs(self.frames_loop_dir)
         needed = int(duration * fps) + 2
-        for i in range(needed):
-            src_name = frames[i % len(frames)]
+        seed = hash(tuple(frames)) & 0xFFFFFFFF
+        sequence = build_natural_frame_sequence(len(frames), needed, seed=seed)
+        for i, frame_idx in enumerate(sequence):
+            src_name = frames[frame_idx]
             shutil.copy2(
                 os.path.join(self.frames_finais_dir, src_name),
                 os.path.join(self.frames_loop_dir, f"frame_{i + 1:04d}.jpg"),
             )
+        cycles = max(1, needed // max(len(frames) * 2, 1))
+        print(f"🔄 Sequência ping-pong: {len(frames)} frames → {needed} (@{fps}fps, ~{cycles} ciclos suaves)")
         return needed
 
     def _compile_processed_video(self, audio_path: str, output_path: str, keep_frames: bool = False):
@@ -831,7 +840,7 @@ class MediaFactory:
             return
         duration = self._get_audio_duration(audio_path)
         total = self._prepare_looped_frames(frames, duration)
-        print(f"🎬 Compilando {total} frames ({duration:.1f}s) + narração...")
+        print(f"🎬 Compilando {total} frames ({duration:.1f}s) + narração [ping-pong]...")
         cmd = [
             "ffmpeg", "-y", "-framerate", "25",
             "-i", os.path.join(self.frames_loop_dir, "frame_%04d.jpg"),
@@ -1022,11 +1031,8 @@ class MediaFactory:
         fps = 25
         total_frames = max(int(duration * fps), fps * 3)
         w, h = self.canvas_width, self.canvas_height
-        zoom_filter = (
-            f"scale={w}:{h}:force_original_aspect_ratio=increase,crop={w}:{h},"
-            f"zoompan=z='min(zoom+0.0010,1.06)':d={total_frames}:"
-            f"x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':s={w}x{h}:fps={fps}"
-        )
+        zoom_filter = still_video_zoom_filter(w, h, total_frames, fps)
+        print(f"🎬 Vídeo still com movimento orgânico ({w}x{h}, {duration:.1f}s)...")
         cmd = [
             "ffmpeg", "-y", "-loop", "1", "-i", image_path, "-i", audio_path,
             "-map", "0:v:0", "-map", "1:a:0",

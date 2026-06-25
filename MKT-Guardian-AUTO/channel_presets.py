@@ -55,7 +55,7 @@ def resolve_channel_preset(canal: str, midia: str) -> dict:
             "voice_volume": "1.40",
             "track_volume_db": "-10dB",
             "track_weight": "0.30",
-            "kling_duration": 5,
+            "kling_duration": 10,
             "kling_resolution": "720p",
         }
 

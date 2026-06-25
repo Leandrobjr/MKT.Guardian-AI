@@ -15,4 +15,5 @@ aiohttp>=3.9.0
 # Biblioteca oficial da Meta para futura integração direta de tráfego (Opcional para Dry-Run)
 facebook-business>=19.0.0
 python-dotenv>=1.0.1
+PyJWT>=2.8.0
 

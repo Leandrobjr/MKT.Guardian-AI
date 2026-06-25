@@ -12,6 +12,14 @@ from google.genai import types
 from dotenv import load_dotenv
 
 from visual_variety import VisualVarietyEngine
+from kling_client import (
+    KLING_BASE_URL,
+    explain_balance_error,
+    fetch_resource_packages,
+    format_balance_report,
+    kling_headers,
+    parse_kling_response,
+)
 
 
 class MediaFactory:
@@ -55,7 +63,7 @@ class MediaFactory:
             or "21m00Tcm4TlvDq8ikWAM"
         )
 
-        self.kling_base_url = "https://api-singapore.klingai.com"
+        self.kling_base_url = KLING_BASE_URL
 
         self.output_dir = os.path.join(self.BASE_DIR, "output_campanha")
         self.work_dir = os.path.join(self.output_dir, "_work")
@@ -602,7 +610,7 @@ class MediaFactory:
             print("🎬 Solicitando clipe Kling AI...")
             video_bruto_path = (
                 self._generate_kling_video(publicidade_prompt, names["kling_raw"])
-                if self.kling_key
+                if (self.kling_key or os.getenv("KLING_ACCESS_KEY"))
                 else ""
             )
 
@@ -658,7 +666,23 @@ class MediaFactory:
         }
 
     def _generate_kling_video(self, prompt: str, raw_output_path: str) -> str:
-        headers = {"Authorization": f"Bearer {self.kling_key}", "Content-Type": "application/json"}
+        if not self.kling_key and not os.getenv("KLING_ACCESS_KEY"):
+            print("❌ Kling: KLING_API_KEY ausente no .env")
+            return ""
+
+        balance = fetch_resource_packages(days=30)
+        if balance.get("ok"):
+            remaining = balance.get("total_remaining", 0)
+            if remaining <= 0 and not balance.get("pending_packs"):
+                print(format_balance_report(balance))
+                print("❌ Kling: saldo API zerado — usando fallback Gemini.")
+                return ""
+            if remaining > 0:
+                print(f"💳 Kling API: ~{remaining:.1f} unidades disponíveis (pacotes online)")
+        else:
+            print(f"⚠️ Não foi possível consultar saldo Kling: {balance.get('message') or balance.get('error')}")
+
+        headers = kling_headers()
         payload = {"prompt": prompt, "settings": {"duration": 5, "resolution": "720p", "aspect_ratio": "9:16"}}
         inicio = time.time()
         try:
@@ -667,7 +691,13 @@ class MediaFactory:
                 headers=headers, json=payload, timeout=60,
             )
             if res.status_code != 200:
-                print(f"❌ Kling HTTP {res.status_code}: {res.text[:300]}")
+                parsed = parse_kling_response(res)
+                print(f"❌ Kling HTTP {parsed['http_status']} | code={parsed.get('code')} | {parsed.get('message')}")
+                if parsed.get("hint"):
+                    print(f"   → {parsed['hint']}")
+                extra = explain_balance_error(str(parsed.get("message", "")))
+                if extra:
+                    print(f"   → {extra}")
                 return ""
             body = res.json()
             task_id = body.get("data", {}).get("id")
@@ -685,7 +715,8 @@ class MediaFactory:
                     headers=headers, timeout=30,
                 )
                 if status_res.status_code != 200:
-                    print(f"⚠️ Kling status HTTP {status_res.status_code}")
+                    parsed = parse_kling_response(status_res)
+                    print(f"⚠️ Kling status HTTP {parsed['http_status']}: {parsed.get('message')}")
                     continue
                 tasks = status_res.json().get("data", [])
                 if not tasks:
@@ -703,7 +734,12 @@ class MediaFactory:
                     print("❌ Kling succeeded mas sem URL de vídeo.")
                     return ""
                 if status in ("failed", "cancelled"):
-                    print(f"❌ Kling {status}: {task.get('message') or task.get('error') or task}")
+                    err_msg = task.get("message") or task.get("error") or str(task)
+                    print(f"❌ Kling {status}: {err_msg}")
+                    extra = explain_balance_error(str(err_msg))
+                    if extra:
+                        print(f"   → {extra}")
+                    print("   → Rode: python3 kling_diagnostico.py  (para ver saldo real da API)")
                     return ""
             print(f"❌ Kling timeout após {int(time.time() - inicio)}s (fila cheia — usando fallback estático).")
         except Exception as e:

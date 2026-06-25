@@ -14,6 +14,7 @@ from dotenv import load_dotenv
 from visual_variety import VisualVarietyEngine
 from channel_presets import resolve_channel_preset, format_preset_summary
 from video_motion import build_natural_frame_sequence, motion_prompt_suffix, still_video_zoom_filter
+from video_compositor import compile_kling_pipeline, compose_still_with_overlay
 from kling_client import (
     KLING_BASE_URL,
     explain_balance_error,
@@ -381,6 +382,65 @@ class MediaFactory:
 
         img.save(out_path, "JPEG", quality=95)
 
+    def _compose_overlay_png(
+        self,
+        out_path: str,
+        headline: str,
+        alerta: str,
+        solucao: str,
+        cta: str,
+        url: str,
+        frases_destaque: list[str] | None = None,
+    ):
+        """Camada PNG transparente (cards/headline) — aplicada uma vez sobre o vídeo Kling."""
+        img = Image.new("RGBA", (self.canvas_width, self.canvas_height), (0, 0, 0, 0))
+        draw = ImageDraw.Draw(img)
+        highlights = frases_destaque or []
+
+        self._draw_headline_branded(draw, headline, highlights)
+        self._draw_brand_card(
+            draw, self._scale_box((36, 1050, 1044, 1240)),
+            "MENSAGEM SUSPEITA NO WHATSAPP",
+            alerta,
+            self.WHATSAPP_GREEN, self.BRAND_TEXT,
+            highlight_phrases=highlights, highlight_color=self.BRAND_HIGHLIGHT,
+        )
+        self._draw_brand_card(
+            draw, self._scale_box((36, 1260, 1044, 1440)),
+            "GUARDIAN AI — PROTECAO WHATSAPP",
+            solucao,
+            self.BRAND_GREEN, self.BRAND_TEXT,
+        )
+        self._draw_cta_button(
+            draw, self._scale_box((36, 1470, 1044, 1600)),
+            cta,
+            url,
+        )
+        os.makedirs(os.path.dirname(out_path), exist_ok=True)
+        img.save(out_path, "PNG")
+
+    def _compile_kling_native(
+        self,
+        kling_raw: str,
+        overlay_png: str,
+        audio_path: str,
+        output_path: str,
+        boom_path: str,
+    ) -> bool:
+        duration = self._get_audio_duration(audio_path)
+        return compile_kling_pipeline(
+            kling_raw, overlay_png, audio_path, output_path, boom_path,
+            self.canvas_width, self.canvas_height, duration,
+        )
+
+    def _compile_legacy_frames(self, audio_path: str, output_path: str) -> bool:
+        """Fallback: pipeline antigo JPEG + ping-pong se FFmpeg nativo falhar."""
+        frames = sorted(f for f in os.listdir(self.frames_finais_dir) if f.endswith(".jpg"))
+        if not frames:
+            return False
+        self._compile_processed_video(audio_path, output_path)
+        return os.path.isfile(output_path)
+
     def _compose_all_frames(
         self, headline: str, alerta: str, solucao: str, cta: str, url: str,
         frases_destaque: list[str] | None = None,
@@ -487,6 +547,8 @@ class MediaFactory:
             "audio": os.path.join(self.output_dir, f"{basename}.mp3"),
             "voice_raw": os.path.join(self.work_dir, f"{basename}_voz.mp3"),
             "kling_raw": os.path.join(self.work_dir, f"{basename}_kling_raw.mp4"),
+            "overlay_png": os.path.join(self.work_dir, f"{basename}_overlay.png"),
+            "boomerang": os.path.join(self.work_dir, f"{basename}_boomerang.mp4"),
         }
 
     def _audio_ok(self, path: str, min_bytes: int = 5000) -> bool:
@@ -514,9 +576,15 @@ class MediaFactory:
 
     def reapply_overlay_only(self, creative_data: dict, prior_assets: dict) -> dict:
         """Recompõe cards/overlay mantendo áudio e mídia base — para correções de layout."""
-        print("\n🔄 [Fábrica v15.4] Recompondo overlay (layout — sem regerar copy/áudio/Kling)...")
+        print("\n🔄 [Fábrica v15.7] Recompondo overlay (layout — sem regerar copy/áudio/Kling)...")
 
         self.card_body_font_size = int(creative_data.get("overlay_card_font_size", 20))
+        self.preset_midia = creative_data.get("preset_midia") or resolve_channel_preset(
+            creative_data.get("canal_veiculacao_selecionado", ""),
+            creative_data.get("tipo_midia_selecionada", ""),
+        )
+        self.canvas_width = int(self.preset_midia.get("width", 1080))
+        self.canvas_height = int(self.preset_midia.get("height", 1920))
         ov = self._overlay_from_creative(creative_data)
 
         audio_path = prior_assets.get("audio_file", "")
@@ -533,24 +601,39 @@ class MediaFactory:
         os.makedirs(self.frames_finais_dir, exist_ok=True)
 
         recomposed = False
+        overlay_png = os.path.join(self.work_dir, f"{prior_assets.get('basename', 'camp')}_overlay.png")
+        self._compose_overlay_png(
+            overlay_png, ov["headline"], ov["alerta"], ov["solucao"], ov["cta"], ov["url"], ov["frases_destaque"],
+        )
+
         if kling_raw and os.path.isfile(kling_raw):
-            print(f"🎞️ Reutilizando clipe Kling: {os.path.basename(kling_raw)}")
-            self._extract_frames(kling_raw)
-            recomposed = self._compose_all_frames(
-                ov["headline"], ov["alerta"], ov["solucao"], ov["cta"], ov["url"], ov["frases_destaque"],
-            )
-            if recomposed and self._audio_ok(audio_path) and video_path:
-                self._compile_processed_video(audio_path, video_path, keep_frames=True)
+            print(f"🎞️ Recompondo via FFmpeg nativo: {os.path.basename(kling_raw)}")
+            boom_path = os.path.join(self.work_dir, f"{prior_assets.get('basename', 'camp')}_boomerang.mp4")
+            if self._audio_ok(audio_path) and video_path:
+                recomposed = self._compile_kling_native(kling_raw, overlay_png, audio_path, video_path, boom_path)
+            if not recomposed:
+                print("⚠️ FFmpeg nativo falhou — tentando fallback JPEG...")
+                self._extract_frames(kling_raw)
+                recomposed = self._compose_all_frames(
+                    ov["headline"], ov["alerta"], ov["solucao"], ov["cta"], ov["url"], ov["frases_destaque"],
+                )
+                if recomposed and self._audio_ok(audio_path) and video_path:
+                    self._compile_legacy_frames(audio_path, video_path)
         elif base_image and os.path.isfile(base_image):
             print(f"🖼️ Reutilizando imagem base: {os.path.basename(base_image)}")
+            if self._audio_ok(audio_path) and video_path and os.path.isfile(base_image):
+                duration = self._get_audio_duration(audio_path)
+                zoom = still_video_zoom_filter(self.canvas_width, self.canvas_height, int(duration * 25), 25)
+                recomposed = compose_still_with_overlay(
+                    base_image, overlay_png, audio_path, video_path,
+                    duration, self.canvas_width, self.canvas_height, zoom,
+                )
             out_img = final_image or base_image.replace("_base.", ".")
             self._apply_pillow_layout(
                 base_image, out_img,
                 ov["headline"], ov["alerta"], ov["solucao"], ov["cta"], ov["url"], ov["frases_destaque"],
             )
-            if self._audio_ok(audio_path) and video_path and os.path.isfile(out_img):
-                self._compile_still_video(out_img, audio_path, video_path)
-            recomposed = os.path.isfile(out_img)
+            recomposed = recomposed or os.path.isfile(out_img)
             final_image = out_img
         else:
             bruts = [f for f in os.listdir(self.frames_brutos_dir) if f.endswith(".jpg")]
@@ -583,7 +666,7 @@ class MediaFactory:
         self.canvas_width = int(self.preset_midia.get("width", 1080))
         self.canvas_height = int(self.preset_midia.get("height", 1920))
 
-        print("\n🏭 [Fábrica de Mídia v15.6] Compositor Pillow + FFmpeg...")
+        print("\n🏭 [Fábrica de Mídia v15.7] Compositor FFmpeg nativo + Pillow...")
         print(f"📁 Diretório de saída: {self.output_dir}")
         print(f"🎨 Modelo de imagem: {self.model_imagem}")
         print(f"📐 Preset ativo: {format_preset_summary(self.preset_midia)}")
@@ -641,6 +724,11 @@ class MediaFactory:
         video_output_path = names["video"]
 
         publicidade_prompt = self._build_visual_prompt(creative_data)
+        overlay_png = names["overlay_png"]
+        self._compose_overlay_png(
+            overlay_png,
+            headline, alerta_texto, solucao_texto, cta_texto, url_conversao, frases_destaque,
+        )
 
         if "Vídeo" in formato_midia:
             print("🎬 Solicitando clipe Kling AI...")
@@ -651,26 +739,52 @@ class MediaFactory:
             )
 
             if video_bruto_path and os.path.exists(video_bruto_path):
-                self._extract_frames(video_bruto_path)
-                overlay_ok = self._compose_all_frames(
-                    headline, alerta_texto, solucao_texto, cta_texto, url_conversao, frases_destaque,
-                )
-                if overlay_ok and self._audio_ok(audio_final_path):
-                    self._compile_processed_video(audio_final_path, video_output_path)
+                native_ok = False
+                if self._audio_ok(audio_final_path):
+                    native_ok = self._compile_kling_native(
+                        video_bruto_path, overlay_png, audio_final_path,
+                        video_output_path, names["boomerang"],
+                    )
+                if native_ok:
+                    print("✅ Vídeo Kling + overlay (movimento nativo preservado).")
+                    self._apply_pillow_layout(
+                        self._extract_poster_frame(video_bruto_path, names["base_image"]),
+                        final_design_path,
+                        headline, alerta_texto, solucao_texto, cta_texto, url_conversao, frases_destaque,
+                    )
                 else:
-                    print("❌ Vídeo NÃO gerado — overlay ou áudio inválido.")
+                    print("⚠️ Pipeline FFmpeg nativo falhou — fallback JPEG ping-pong...")
+                    self._extract_frames(video_bruto_path)
+                    overlay_ok = self._compose_all_frames(
+                        headline, alerta_texto, solucao_texto, cta_texto, url_conversao, frases_destaque,
+                    )
+                    if overlay_ok and self._audio_ok(audio_final_path):
+                        self._compile_legacy_frames(audio_final_path, video_output_path)
+                    else:
+                        print("❌ Vídeo NÃO gerado — overlay ou áudio inválido.")
             else:
                 print("⚠️ Fallback: Kling indisponível — gerando vídeo com imagem estática + overlay Guardian...")
                 self._generate_gemini_image(
                     publicidade_prompt, base_image_path,
                     creative_data=creative_data, basename=names["basename"],
                 )
+                if self._audio_ok(audio_final_path):
+                    duration = self._get_audio_duration(audio_final_path)
+                    zoom = still_video_zoom_filter(self.canvas_width, self.canvas_height, int(duration * 25), 25)
+                    still_ok = compose_still_with_overlay(
+                        base_image_path, overlay_png, audio_final_path, video_output_path,
+                        duration, self.canvas_width, self.canvas_height, zoom,
+                    )
+                    if not still_ok:
+                        self._apply_pillow_layout(
+                            base_image_path, final_design_path,
+                            headline, alerta_texto, solucao_texto, cta_texto, url_conversao, frases_destaque,
+                        )
+                        self._compile_still_video(final_design_path, audio_final_path, video_output_path)
                 self._apply_pillow_layout(
                     base_image_path, final_design_path,
                     headline, alerta_texto, solucao_texto, cta_texto, url_conversao, frases_destaque,
                 )
-                if self._audio_ok(audio_final_path):
-                    self._compile_still_video(final_design_path, audio_final_path, video_output_path)
 
             return {
                 "basename": names["basename"],
@@ -790,6 +904,18 @@ class MediaFactory:
         except Exception as e:
             print(f"❌ Erro Kling: {e}")
         return ""
+
+    def _extract_poster_frame(self, video_path: str, output_path: str) -> str:
+        """Extrai um frame do clipe Kling para thumbnail JPG (local, sem API)."""
+        os.makedirs(os.path.dirname(output_path), exist_ok=True)
+        cmd = [
+            "ffmpeg", "-y", "-ss", "00:00:00.5", "-i", video_path,
+            "-frames:v", "1", "-q:v", "2", output_path,
+        ]
+        result = subprocess.run(cmd, capture_output=True, text=True)
+        if result.returncode == 0 and os.path.isfile(output_path):
+            return output_path
+        return video_path
 
     def _extract_frames(self, video_path: str):
         for f in os.listdir(self.frames_brutos_dir):

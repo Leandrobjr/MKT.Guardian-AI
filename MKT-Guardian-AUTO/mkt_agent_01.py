@@ -1048,6 +1048,19 @@ class MediaFactory:
             resultado = re.sub(padrao, falado, resultado, flags=re.IGNORECASE)
         return resultado
 
+    def _trim_narration_for_preset(self, text: str, preset: dict | None) -> str:
+        """Corta roteiro longo antes do TTS — evita vídeos de 27s+ no TikTok."""
+        preset = preset or {}
+        max_chars = preset.get("copy_max_chars")
+        if not max_chars or len(text) <= int(max_chars):
+            return text
+        limite = int(max_chars)
+        cortado = text[:limite].rsplit(" ", 1)[0].rstrip(".,; ")
+        if not cortado.endswith("."):
+            cortado += "."
+        print(f"✂️ Roteiro encurtado: {len(text)} → {len(cortado)} chars (limite {limite} TikTok/Shorts)")
+        return cortado
+
     def _fit_narration_to_preset(self, audio_path: str, base_path: str) -> str:
         """Acelera narração via FFmpeg (local) quando excede o alvo do canal — sem API extra."""
         preset = self.preset_midia or {}
@@ -1061,7 +1074,7 @@ class MediaFactory:
         if dur <= target + 0.5:
             return audio_path
 
-        factor = min(dur / target, float(preset.get("max_audio_speedup", 1.35)))
+        factor = min(dur / target, float(preset.get("max_audio_speedup", 1.4)))
         if factor < 1.03:
             return audio_path
 

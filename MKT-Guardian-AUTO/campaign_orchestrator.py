@@ -14,7 +14,7 @@ from agent_memory import AgentMemory
 from feedback_router import classify_improvement, describe_plan
 from visual_variety import VisualVarietyEngine
 from channel_presets import resolve_channel_preset, format_preset_summary
-from tts_narration import strip_written_site_urls, normalize_card_solucao, NARRATION_CLOSING
+from tts_narration import strip_written_site_urls, card_solucao_text, NARRATION_CLOSING
 from build_info import ORCHESTRATOR_VERSION, print_build_banner
 
 try:
@@ -192,8 +192,7 @@ class CampaignOrchestrator:
                     text = strip_written_site_urls(text)
                 creative_data[field] = self._fix_pt_artifacts(text)
 
-        sol = creative_data.get("texto_card_solucao", "")
-        creative_data["texto_card_solucao"] = normalize_card_solucao(sol)
+        creative_data["texto_card_solucao"] = card_solucao_text()
         return creative_data
 
     def _build_ambiente(self, publico_slug: str) -> str:
@@ -543,8 +542,8 @@ class CampaignOrchestrator:
             "4. texto_card_notificacao: APENAS a mensagem REAL do golpista no WhatsApp.\n"
             "5. frase_destaque_golpista: Frase-chave do golpista para destacar no card.\n"
             "6. genero_personagem_visual: DEVE combinar com o público-alvo da campanha.\n"
-            "7. texto_card_solucao: Guardian AI detectou e enviou um ALERTA imediato ao usuário! "
-            "(NUNCA diga que bloqueou, impediu ou cancelou mensagens.)\n"
+            "7. texto_card_solucao: IGNORE este campo — será substituído automaticamente por: "
+            f"'{card_solucao_text()}'\n"
             "8. publico_alvo_icp: Descrição resumida do público.\n"
             "Retorne JSON estrito."
         )
@@ -607,7 +606,7 @@ class CampaignOrchestrator:
         cta = creative_data.get("chamada_para_acao_cta", "Baixe grátis")
         url = creative_data.get("link_conversao", "https://guardian-ai.app")
         hashtags = "#guardianai #segurancadigital #golpewhatsapp #whatsapp #pix #golpe"
-        return f"{headline}\n\n{copy[:800]}\n\n{cta}\n\n🔗 Assine agora: {url}\n\n{hashtags}"
+        return f"{headline}\n\n{copy[:800]}\n\n{cta} — {url}\n\n{hashtags}"
 
     def _print_creative_summary(self, creative_data: dict) -> None:
         print("\n📝 CAMPANHA ESTRUTURADA PELOS AGENTES:")

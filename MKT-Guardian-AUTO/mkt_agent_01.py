@@ -16,7 +16,7 @@ from channel_presets import resolve_channel_preset, format_preset_summary
 from build_info import MEDIA_FACTORY_VERSION, print_build_banner
 from video_motion import build_natural_frame_sequence, motion_prompt_suffix, still_video_zoom_filter
 from video_compositor import compile_kling_pipeline, compose_still_with_overlay
-from tts_narration import build_narration_script, normalize_card_solucao, NARRATION_CLOSING
+from tts_narration import build_narration_script, card_solucao_text, resolve_overlay_cta, NARRATION_CLOSING
 from kling_client import (
     KLING_BASE_URL,
     explain_balance_error,
@@ -573,11 +573,8 @@ class MediaFactory:
         return {
             "headline": creative_data.get("gancho_atencao_inicial", ""),
             "alerta": creative_data.get("texto_card_notificacao", ""),
-            "solucao": normalize_card_solucao(creative_data.get("texto_card_solucao", "")),
-            "cta": creative_data.get(
-                "texto_botao_conversao",
-                creative_data.get("chamada_para_acao_cta", "TESTE GRÁTIS — PROTEJA SEU WHATSAPP AGORA!"),
-            ),
+            "solucao": card_solucao_text(),
+            "cta": resolve_overlay_cta(creative_data),
             "url": creative_data.get("link_conversao", self.url_conversao),
             "frases_destaque": frases,
         }
@@ -774,12 +771,9 @@ class MediaFactory:
         self._warn_narration_duration(audio_final_path)
 
         alerta_texto = creative_data.get("texto_card_notificacao", "")
-        solucao_texto = normalize_card_solucao(creative_data.get("texto_card_solucao", ""))
+        solucao_texto = card_solucao_text()
         creative_data["texto_card_solucao"] = solucao_texto
-        cta_texto = creative_data.get(
-            "texto_botao_conversao",
-            creative_data.get("chamada_para_acao_cta", "TESTE GRÁTIS — PROTEJA SEU WHATSAPP AGORA!"),
-        )
+        cta_texto = resolve_overlay_cta(creative_data)
         url_conversao = creative_data.get("link_conversao", self.url_conversao)
         headline = creative_data.get("gancho_atencao_inicial", "")
         frases_destaque: list[str] = []

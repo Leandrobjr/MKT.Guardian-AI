@@ -5,7 +5,9 @@ from __future__ import annotations
 import re
 
 NARRATION_CLOSING = "Clique no link abaixo e assine agora!"
+# Texto fixo no card 2 — não depende do Gemini (evita "bloqueou" indevido)
 CARD_SOLUCAO_PADRAO = "Guardian AI detectou e enviou um ALERTA imediato ao usuário!"
+CTA_OVERLAY_FALLBACK = "TESTE GRÁTIS — PROTEJA SEU WHATSAPP AGORA!"
 
 
 def strip_written_site_urls(text: str, domain: str = "guardian-ai.app") -> str:
@@ -67,15 +69,18 @@ def build_narration_script(
     return f"{core}. {closing}."
 
 
-def card_solucao_needs_fix(text: str) -> bool:
-    """True se o card implica bloqueio — capacidade que o app não tem."""
-    if not text:
-        return True
-    lower = text.lower()
-    return any(w in lower for w in ("bloque", "impede", "intercept", "barra ", "cancela a mensagem"))
+def card_solucao_text() -> str:
+    """Sempre o mesmo texto no card Guardian — capacidade real do produto."""
+    return CARD_SOLUCAO_PADRAO
 
 
 def normalize_card_solucao(text: str) -> str:
-    if card_solucao_needs_fix(text):
-        return CARD_SOLUCAO_PADRAO
-    return text.strip()
+    return card_solucao_text()
+
+
+def resolve_overlay_cta(creative_data: dict) -> str:
+    """Botão verde inferior: usa texto_botao_conversao (ICP), nunca CTA genérico do Gemini."""
+    cta = (creative_data.get("texto_botao_conversao") or "").strip()
+    if cta:
+        return cta
+    return CTA_OVERLAY_FALLBACK

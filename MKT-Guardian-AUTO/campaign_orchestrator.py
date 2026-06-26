@@ -719,6 +719,7 @@ class CampaignOrchestrator:
         creative_data = {}
         aprovado = False
         recompose_next = False
+        reapply_audio_next = False
 
         for revisao in range(self.max_revisoes + 1):
             if recompose_next:
@@ -726,6 +727,10 @@ class CampaignOrchestrator:
                 creative_data["overlay_card_font_size"] = 20
                 assets_resultado = self.media_factory.reapply_overlay_only(creative_data, assets_resultado)
                 recompose_next = False
+            elif reapply_audio_next:
+                print(f"\n🔊 Regerando narração (pronúncia do site — revisão {revisao})...")
+                assets_resultado = self.media_factory.reapply_audio_only(creative_data, assets_resultado)
+                reapply_audio_next = False
             else:
                 if revisao > 0:
                     print(f"\n🔄 Revisão {revisao}/{self.max_revisoes} — regerando campanha...")
@@ -792,6 +797,24 @@ class CampaignOrchestrator:
                             "(sem regerar copy). Aguarde o novo preview..."
                         )
                     recompose_next = True
+                    instrucoes_melhoria = ""
+                    continue
+
+                if plan.get("reapply_audio_only") or (
+                    plan["regenerate_audio"]
+                    and not plan["regenerate_copy"]
+                    and not plan["regenerate_visual"]
+                    and not plan["layout"]
+                ):
+                    from tts_narration import extract_url_falada_from_feedback
+
+                    creative_data["tts_url_falada_override"] = extract_url_falada_from_feedback(feedback)
+                    if self.telegram:
+                        self.telegram.notificar_sync(
+                            "🔊 *Pronúncia do site* — regerando narração "
+                            "(soletração a, P, P — sem regerar copy/Kling). Aguarde..."
+                        )
+                    reapply_audio_next = True
                     instrucoes_melhoria = ""
                     continue
 

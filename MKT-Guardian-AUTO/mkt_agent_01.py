@@ -16,6 +16,7 @@ from channel_presets import resolve_channel_preset, format_preset_summary
 from build_info import MEDIA_FACTORY_VERSION, print_build_banner
 from video_motion import build_natural_frame_sequence, motion_prompt_suffix, still_video_zoom_filter
 from video_compositor import compile_kling_pipeline, compose_still_with_overlay
+from tts_narration import build_narration_script
 from kling_client import (
     KLING_BASE_URL,
     explain_balance_error,
@@ -80,7 +81,7 @@ class MediaFactory:
         self.url_conversao = os.getenv("GUARDIAN_URL_CONVERSAO", "https://guardian-ai.app")
         self.url_falada_pt = os.getenv(
             "GUARDIAN_URL_FALADA",
-            "guardian traço a i ponto a p p",
+            "guardian traço a i ponto a, P, P",
         )
         self.card_body_font_size = 22
         self.visual_variety = VisualVarietyEngine(self.BASE_DIR)
@@ -671,6 +672,84 @@ class MediaFactory:
             "recomposed": True,
         }
 
+    def _resolve_url_falada(self, creative_data: dict) -> str:
+        override = creative_data.get("tts_url_falada_override")
+        if override:
+            return str(override).strip()
+        return self.url_falada_pt
+
+    def _build_narration_for_tts(self, creative_data: dict) -> str:
+        url_falada = self._resolve_url_falada(creative_data)
+        script = build_narration_script(
+            creative_data.get("gancho_atencao_inicial", ""),
+            creative_data.get("desenvolvimento_copy", ""),
+            url_falada,
+            self._trim_narration_for_preset,
+            self.preset_midia or {},
+        )
+        print(f"🔊 Site na narração: {url_falada}")
+        return script
+
+    def _regenerate_audio_and_remux(self, creative_data: dict, prior_assets: dict) -> str:
+        """Gera nova narração e retorna path do áudio mixado."""
+        basename = prior_assets.get("basename", "campanha")
+        canal = creative_data.get("canal_veiculacao_selecionado", "Meta Ads (Instagram/Facebook)")
+        voice_raw = os.path.join(self.work_dir, f"{basename}_voz.mp3")
+        audio_out = prior_assets.get("audio_file") or os.path.join(self.output_dir, f"{basename}.mp3")
+
+        texto_tts = self._build_narration_for_tts(creative_data)
+        voz = self._generate_audio(texto_tts, voice_raw, self.preset_midia)
+        if not self._audio_ok(voz):
+            return ""
+        voz = self._fit_narration_to_preset(voz, voice_raw)
+        mixed = self._mix_background_track(voz, canal, audio_out, self.preset_midia)
+        self._warn_narration_duration(mixed)
+        return mixed if self._audio_ok(mixed) else ""
+
+    def reapply_audio_only(self, creative_data: dict, prior_assets: dict) -> dict:
+        """Regera só narração/áudio e remuxa vídeo — sem regerar copy Gemini/Kling."""
+        print(f"\n🔊 [Fábrica v{MEDIA_FACTORY_VERSION}] Regerando narração (pronúncia/áudio)...")
+
+        self.preset_midia = creative_data.get("preset_midia") or resolve_channel_preset(
+            creative_data.get("canal_veiculacao_selecionado", ""),
+            creative_data.get("tipo_midia_selecionada", ""),
+        )
+        self.canvas_width = int(self.preset_midia.get("width", 1080))
+        self.canvas_height = int(self.preset_midia.get("height", 1920))
+
+        audio_path = self._regenerate_audio_and_remux(creative_data, prior_assets)
+        if not audio_path:
+            print("⚠️ Falha ao regerar áudio.")
+            return prior_assets
+
+        video_path = prior_assets.get("commercial_video_file", "")
+        kling_raw = prior_assets.get("kling_raw_file", "")
+        base_image = prior_assets.get("base_image_file", "")
+        basename = prior_assets.get("basename", "campanha")
+        overlay_png = os.path.join(self.work_dir, f"{basename}_overlay.png")
+        boom_path = os.path.join(self.work_dir, f"{basename}_boomerang.mp4")
+
+        remuxed = False
+        if kling_raw and os.path.isfile(kling_raw) and os.path.isfile(overlay_png):
+            remuxed = self._compile_kling_native(kling_raw, overlay_png, audio_path, video_path, boom_path)
+        elif base_image and os.path.isfile(base_image) and os.path.isfile(overlay_png):
+            duration = self._get_audio_duration(audio_path)
+            zoom = still_video_zoom_filter(self.canvas_width, self.canvas_height, int(duration * 25), 25)
+            remuxed = compose_still_with_overlay(
+                base_image, overlay_png, audio_path, video_path,
+                duration, self.canvas_width, self.canvas_height, zoom,
+            )
+        elif video_path and os.path.isfile(str(video_path)):
+            print("⚠️ Remux parcial — áudio atualizado; vídeo pode precisar regerar mídia completa.")
+
+        print("✅ Narração regerada com soletração correta do site.")
+        return {
+            **prior_assets,
+            "audio_file": audio_path,
+            "commercial_video_file": video_path if remuxed or os.path.isfile(str(video_path)) else prior_assets.get("commercial_video_file"),
+            "audio_regenerated": True,
+        }
+
     def generate_campaign_assets(self, creative_data: dict) -> dict:
         self.card_body_font_size = int(creative_data.get("overlay_card_font_size", 22))
         self.preset_midia = creative_data.get("preset_midia") or resolve_channel_preset(
@@ -699,14 +778,7 @@ class MediaFactory:
         formato_midia = creative_data.get("tipo_midia_selecionada", "Vídeo Vertical Reels (1080x1920)")
         canal_veiculacao = creative_data.get("canal_veiculacao_selecionado", "Meta Ads (Instagram/Facebook)")
 
-        texto_audio = (
-            f"{creative_data['gancho_atencao_inicial']}. "
-            f"{creative_data['desenvolvimento_copy']}"
-        )
-        texto_audio_tts = self._prepare_narration_text_for_tts(texto_audio)
-        texto_audio_tts = self._trim_narration_for_preset(texto_audio_tts, self.preset_midia)
-        if texto_audio_tts != texto_audio:
-            print(f"🔊 Site na narração (PT): {self.url_falada_pt}")
+        texto_audio_tts = self._build_narration_for_tts(creative_data)
         voz_pura_path = self._generate_audio(texto_audio_tts, names["voice_raw"], self.preset_midia)
         if not self._audio_ok(voz_pura_path):
             print("❌ CRÍTICO: Narração não gerada — verifique ELEVENLABS_API_KEY e créditos.")

@@ -711,8 +711,9 @@ class CampaignOrchestrator:
             "postar_instagram": fluxo["postar_instagram"],
         }
 
-    def execute_automated_pipeline(self):
-        config = self.show_interactive_menu()
+    def execute_automated_pipeline(self, config: dict | None = None):
+        if config is None:
+            config = self.show_interactive_menu()
 
         print(f"🚀 [MKT GUARDIAN AI - ENGINE ORQUESTRAÇÃO v{ORCHESTRATOR_VERSION}] Iniciando Esteira...")
         print(f"📁 Diretório de trabalho: {self.BASE_DIR}")

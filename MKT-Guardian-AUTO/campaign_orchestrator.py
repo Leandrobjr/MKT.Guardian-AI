@@ -14,6 +14,7 @@ from agent_memory import AgentMemory
 from feedback_router import classify_improvement, describe_plan
 from visual_variety import VisualVarietyEngine
 from channel_presets import resolve_channel_preset, format_preset_summary
+from tts_narration import strip_written_site_urls, normalize_card_solucao, NARRATION_CLOSING
 from build_info import ORCHESTRATOR_VERSION, print_build_banner
 
 try:
@@ -167,18 +168,33 @@ class CampaignOrchestrator:
         text = re.sub(r"\bno sua\b", "na sua", text, flags=re.IGNORECASE)
         text = re.sub(r"\bo sua\b", "a sua", text, flags=re.IGNORECASE)
         text = re.sub(
-            r"(Guardian AI[^.!?]*[.!?]\s*)Ela\s+(detecta|bloqueia|monitora|envia|avisa)",
+            r"(Guardian AI[^.!?]*[.!?]\s*)Ela\s+(detecta|alerta|monitora|envia|avisa)",
             r"\1Ele \2",
             text,
             flags=re.IGNORECASE,
         )
         text = re.sub(
-            r"(O app[^.!?]*[.!?]\s*)Ela\s+(detecta|bloqueia|monitora|envia|avisa)",
+            r"(O app[^.!?]*[.!?]\s*)Ela\s+(detecta|alerta|monitora|envia|avisa)",
             r"\1Ele \2",
             text,
             flags=re.IGNORECASE,
         )
         return text
+
+    def _enforce_product_truth(self, creative_data: dict) -> dict:
+        """Guardian AI detecta e alerta — nunca bloqueia apps, mensagens ou celular."""
+        for field in ("desenvolvimento_copy", "gancho_atencao_inicial", "chamada_para_acao_cta"):
+            if creative_data.get(field):
+                text = creative_data[field]
+                text = re.sub(r"\bbloque\w+\b", "alerta", text, flags=re.IGNORECASE)
+                text = re.sub(r"\bimpede\b", "alerta", text, flags=re.IGNORECASE)
+                if field == "desenvolvimento_copy":
+                    text = strip_written_site_urls(text)
+                creative_data[field] = self._fix_pt_artifacts(text)
+
+        sol = creative_data.get("texto_card_solucao", "")
+        creative_data["texto_card_solucao"] = normalize_card_solucao(sol)
+        return creative_data
 
     def _build_ambiente(self, publico_slug: str) -> str:
         if publico_slug == "empresarios":
@@ -450,7 +466,7 @@ class CampaignOrchestrator:
         creative_data["publico_slug"] = config.get("publico_slug", creative_data["publico_id"])
         preset = resolve_channel_preset(config.get("canal", ""), config.get("midia", ""))
         creative_data["preset_midia"] = preset
-        return creative_data
+        return self._enforce_product_truth(creative_data)
 
     def _generate_creative_data(
         self, config: dict, golpe_obj: dict, instrucoes_extras: str = ""
@@ -512,16 +528,23 @@ class CampaignOrchestrator:
             f"FRAMEWORK OBRIGATÓRIO: {framework.get('estrutura_obrigatoria', 'PAS')}\n"
             + ("PRINCÍPIOS:\n" + "\n".join(f"   - {p}" for p in framework.get("principios", [])) + "\n\n" if framework.get("principios") else "")
             + (f"ESTRUTURA DO ROTEIRO DE NARRAÇÃO:\n{roteiro_txt}\n\n" if roteiro_txt else "")
+            + "CAPACIDADE DO PRODUTO (NUNCA VIOLAR):\n"
+            "- Guardian AI NÃO bloqueia mensagens, apps nem configurações do celular.\n"
+            "- Ele DETECTA ameaças no WhatsApp e ENVIA ALERTA imediato para o usuário verificar.\n"
+            "- Nome da marca: sempre 'Guardian AI' (pronúncia em inglês).\n"
+            "- NUNCA inclua URL, domínio ou guardian-ai.app na narração.\n\n"
             + "REGRAS OBRIGATÓRIAS DE OUTPUT (JSON estrito):\n"
             "1. gancho_atencao_inicial: MANCHETE visceral em MAIÚSCULAS, máx 10 palavras.\n"
             f"2. desenvolvimento_copy: Roteiro PAS com {preset['copy_duration']}. "
             f"Tom: {preset['copy_tone']}.{regra_chars} "
-            f"Termine convidando a baixar GRÁTIS em guardian-ai.app.\n"
+            f"Mencione Guardian AI como solução de detecção e alerta. "
+            f"NÃO inclua URL na narração — o fechamento será adicionado automaticamente.\n"
             "3. chamada_para_acao_cta: Comando curto em MAIÚSCULAS.\n"
             "4. texto_card_notificacao: APENAS a mensagem REAL do golpista no WhatsApp.\n"
             "5. frase_destaque_golpista: Frase-chave do golpista para destacar no card.\n"
             "6. genero_personagem_visual: DEVE combinar com o público-alvo da campanha.\n"
-            "7. texto_card_solucao: Guardian AI detectou e bloqueou no WhatsApp.\n"
+            "7. texto_card_solucao: Guardian AI detectou e enviou um ALERTA imediato ao usuário! "
+            "(NUNCA diga que bloqueou, impediu ou cancelou mensagens.)\n"
             "8. publico_alvo_icp: Descrição resumida do público.\n"
             "Retorne JSON estrito."
         )
@@ -584,7 +607,7 @@ class CampaignOrchestrator:
         cta = creative_data.get("chamada_para_acao_cta", "Baixe grátis")
         url = creative_data.get("link_conversao", "https://guardian-ai.app")
         hashtags = "#guardianai #segurancadigital #golpewhatsapp #whatsapp #pix #golpe"
-        return f"{headline}\n\n{copy[:800]}\n\n{cta} — {url}\n\n{hashtags}"
+        return f"{headline}\n\n{copy[:800]}\n\n{cta}\n\n🔗 Assine agora: {url}\n\n{hashtags}"
 
     def _print_creative_summary(self, creative_data: dict) -> None:
         print("\n📝 CAMPANHA ESTRUTURADA PELOS AGENTES:")
@@ -806,13 +829,10 @@ class CampaignOrchestrator:
                     and not plan["regenerate_visual"]
                     and not plan["layout"]
                 ):
-                    from tts_narration import extract_url_falada_from_feedback
-
-                    creative_data["tts_url_falada_override"] = extract_url_falada_from_feedback(feedback)
                     if self.telegram:
                         self.telegram.notificar_sync(
-                            "🔊 *Pronúncia do site* — regerando narração "
-                            "(soletração a, P, P — sem regerar copy/Kling). Aguarde..."
+                            "🔊 *Narração* — regerando áudio "
+                            f"('{NARRATION_CLOSING}' — sem regerar copy/Kling). Aguarde..."
                         )
                     reapply_audio_next = True
                     instrucoes_melhoria = ""

@@ -71,7 +71,7 @@ def describe_plan(plan: dict) -> str:
     if plan["recompose_only"]:
         return "layout/overlay (quebra de texto nos cards — sem regerar copy)"
     if plan.get("reapply_audio_only"):
-        return "narração/áudio (soletração do site — sem regerar copy/Kling)"
+        return "narração/áudio (fechamento no card — sem regerar copy/Kling)"
     parts = []
     if plan["regenerate_copy"]:
         parts.append("copy")

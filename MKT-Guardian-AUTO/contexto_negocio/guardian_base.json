@@ -5,7 +5,7 @@
     "plataformas": ["Android (Play Store)", "iOS (App Store)"],
     "url_oficial": "https://guardian-ai.app",
     "posicionamento_comercial": "Proteção inteligente para sua vida, no WhatsApp.",
-    "proposta_unica_de_valor": "O único app que monitora, detecta e bloqueia golpes em tempo real diretamente no seu WhatsApp, sem complicação técnica.",
+    "proposta_unica_de_valor": "O app que monitora, detecta golpes no WhatsApp e envia alertas imediatos para você verificar — sem complicação técnica.",
     "foco_exclusivo": "Guardian AI protege EXCLUSIVAMENTE o WhatsApp — versão pessoal e WhatsApp Business. Todo criativo deve mostrar golpes e proteção acontecendo dentro do WhatsApp.",
     "tom_de_voz_obrigatorio": {
       "estilo": "Autoritário, urgente, acolhedor e simples",
@@ -177,8 +177,8 @@
     "roteiro_narracao_modelo": {
       "problema_0_5s": "Apresentar a ameaça que atinge o público diretamente",
       "agitacao_5_15s": "Mostrar como o golpe se desenrola e o que a vítima perde",
-      "solucao_15_22s": "Guardian AI detecta e bloqueia, avisando na hora",
-      "urgencia_cta_22_27s": "Comando para baixar grátis antes que seja tarde"
+      "solucao_15_22s": "Guardian AI detecta e envia alerta imediato para o usuário verificar",
+      "urgencia_cta_22_27s": "Convite para clicar no link abaixo e assinar agora"
     },
     "regras_headline": [
       "Máximo 10 palavras",
@@ -187,7 +187,7 @@
       "Evitar termos técnicos e abstrações"
     ],
     "regras_card_notificacao": "Mostrar APENAS a mensagem REAL que o golpista enviaria no WhatsApp (chat verde).",
-    "regras_card_solucao": "Card separado explicando como Guardian AI detectou, bloqueou e protege o WhatsApp 24h.",
+    "regras_card_solucao": "Card separado: Guardian AI detectou e enviou ALERTA imediato ao usuário. NUNCA afirmar que bloqueou mensagens ou apps.",
     "link_conversao_obrigatorio": "https://guardian-ai.app",
     "intensidade_emocional": "alta"
   },

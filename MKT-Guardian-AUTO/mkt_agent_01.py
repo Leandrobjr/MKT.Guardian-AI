@@ -16,7 +16,7 @@ from channel_presets import resolve_channel_preset, format_preset_summary
 from build_info import MEDIA_FACTORY_VERSION, print_build_banner
 from video_motion import build_natural_frame_sequence, motion_prompt_suffix, still_video_zoom_filter
 from video_compositor import compile_kling_pipeline, compose_still_with_overlay
-from tts_narration import build_narration_script
+from tts_narration import build_narration_script, normalize_card_solucao, NARRATION_CLOSING
 from kling_client import (
     KLING_BASE_URL,
     explain_balance_error,
@@ -79,10 +79,6 @@ class MediaFactory:
         self.dir_suspense = os.path.join(self.base_audio_dir, "musicas_suspense")
         self.dir_corporativo = os.path.join(self.base_audio_dir, "musicas_corporativo")
         self.url_conversao = os.getenv("GUARDIAN_URL_CONVERSAO", "https://guardian-ai.app")
-        self.url_falada_pt = os.getenv(
-            "GUARDIAN_URL_FALADA",
-            "guardian traço a i ponto a, P, P",
-        )
         self.card_body_font_size = 22
         self.visual_variety = VisualVarietyEngine(self.BASE_DIR)
         self.canvas_width = 1080
@@ -577,10 +573,7 @@ class MediaFactory:
         return {
             "headline": creative_data.get("gancho_atencao_inicial", ""),
             "alerta": creative_data.get("texto_card_notificacao", ""),
-            "solucao": creative_data.get(
-                "texto_card_solucao",
-                "Guardian AI monitora seu WhatsApp 24h, detecta golpes e bloqueia antes do prejuízo.",
-            ),
+            "solucao": normalize_card_solucao(creative_data.get("texto_card_solucao", "")),
             "cta": creative_data.get(
                 "texto_botao_conversao",
                 creative_data.get("chamada_para_acao_cta", "TESTE GRÁTIS — PROTEJA SEU WHATSAPP AGORA!"),
@@ -672,22 +665,14 @@ class MediaFactory:
             "recomposed": True,
         }
 
-    def _resolve_url_falada(self, creative_data: dict) -> str:
-        override = creative_data.get("tts_url_falada_override")
-        if override:
-            return str(override).strip()
-        return self.url_falada_pt
-
     def _build_narration_for_tts(self, creative_data: dict) -> str:
-        url_falada = self._resolve_url_falada(creative_data)
         script = build_narration_script(
             creative_data.get("gancho_atencao_inicial", ""),
             creative_data.get("desenvolvimento_copy", ""),
-            url_falada,
             self._trim_narration_for_preset,
             self.preset_midia or {},
         )
-        print(f"🔊 Site na narração: {url_falada}")
+        print(f"🔊 Fechamento narração: {NARRATION_CLOSING}")
         return script
 
     def _regenerate_audio_and_remux(self, creative_data: dict, prior_assets: dict) -> str:
@@ -789,10 +774,8 @@ class MediaFactory:
         self._warn_narration_duration(audio_final_path)
 
         alerta_texto = creative_data.get("texto_card_notificacao", "")
-        solucao_texto = creative_data.get(
-            "texto_card_solucao",
-            "Guardian AI monitora seu WhatsApp 24h, detecta golpes e bloqueia antes do prejuízo.",
-        )
+        solucao_texto = normalize_card_solucao(creative_data.get("texto_card_solucao", ""))
+        creative_data["texto_card_solucao"] = solucao_texto
         cta_texto = creative_data.get(
             "texto_botao_conversao",
             creative_data.get("chamada_para_acao_cta", "TESTE GRÁTIS — PROTEJA SEU WHATSAPP AGORA!"),
@@ -1090,11 +1073,6 @@ class MediaFactory:
 
     def _domain_to_spoken_pt(self, url_or_domain: str) -> str:
         domain = self._extract_domain(url_or_domain)
-        conhecidos = {
-            "guardian-ai.app": self.url_falada_pt,
-        }
-        if domain in conhecidos:
-            return conhecidos[domain]
         falado = domain.replace("-", " traço ")
         if "." in falado:
             nome, tld = falado.rsplit(".", 1)

@@ -4,9 +4,9 @@ from __future__ import annotations
 
 import re
 
-NARRATION_CLOSING = "Clique no link abaixo e assine agora!"
-# Texto fixo no card 2 — não depende do Gemini (evita "bloqueou" indevido)
-CARD_SOLUCAO_PADRAO = "Guardian AI detectou e enviou um ALERTA imediato ao usuário!"
+NARRATION_CLOSING = "Clique no link abaixo e assine agora"
+# Texto fixo no card 2 — não depende do Gemini, nunca diz "bloqueou"
+CARD_SOLUCAO_PADRAO = "Guardian AI detectou ameaça e enviou um ALERTA imediato ao usuário!"
 CTA_OVERLAY_FALLBACK = "TESTE GRÁTIS — PROTEJA SEU WHATSAPP AGORA!"
 
 

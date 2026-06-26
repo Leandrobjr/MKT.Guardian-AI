@@ -1,6 +1,6 @@
 """Versão do build — exibida no startup para confirmar git pull."""
 
-MEDIA_FACTORY_VERSION = "15.9"
+MEDIA_FACTORY_VERSION = "16.0"
 ORCHESTRATOR_VERSION = "4.1"
 MIN_GIT_COMMIT_PREFIX = "fbc6e11"  # FFmpeg nativo + overlay PNG
 
@@ -26,6 +26,6 @@ def print_build_banner(base_dir: str) -> None:
         f"Fábrica v{MEDIA_FACTORY_VERSION} | git {git_hash}"
     )
     print(
-        "   Esperado: Fábrica v15.8+ com 'Pipeline FFmpeg nativo'. "
+        "   Esperado: Fábrica v16.0+ | TikTok narração 1.18x + auto-fit ~18s. "
         "Se não aparecer, rode: git pull origin main"
     )

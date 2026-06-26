@@ -92,7 +92,9 @@ def resolve_channel_preset(canal: str, midia: str) -> dict:
 
 
 def format_preset_summary(preset: dict) -> str:
+    alvo = preset.get("target_narration_seconds")
+    alvo_txt = f" | alvo ~{alvo}s" if alvo else ""
     return (
         f"{preset['label']} | {preset['width']}x{preset['height']} | "
-        f"narração {preset['eleven_speed']}x | trilha {preset['trilha_tipo']}"
+        f"narração {preset['eleven_speed']}x | trilha {preset['trilha_tipo']}{alvo_txt}"
     )

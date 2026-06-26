@@ -704,6 +704,7 @@ class MediaFactory:
             f"{creative_data['desenvolvimento_copy']}"
         )
         texto_audio_tts = self._prepare_narration_text_for_tts(texto_audio)
+        texto_audio_tts = self._trim_narration_for_preset(texto_audio_tts, self.preset_midia)
         if texto_audio_tts != texto_audio:
             print(f"🔊 Site na narração (PT): {self.url_falada_pt}")
         voz_pura_path = self._generate_audio(texto_audio_tts, names["voice_raw"], self.preset_midia)

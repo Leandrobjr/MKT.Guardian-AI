@@ -34,6 +34,12 @@ def strip_written_site_urls(text: str, domain: str = "guardian-ai.app") -> str:
     return result.strip(" .,;")
 
 
+def _fix_app_name_pronunciation(text: str) -> str:
+    """Força ElevenLabs a pronunciar 'Guardian AI' em inglês (A.I. = duas letras)."""
+    import re as _re
+    return _re.sub(r"Guardian\s+AI\b", "Guardian A.I.", text, flags=_re.IGNORECASE)
+
+
 def build_narration_script(
     headline: str,
     body: str,
@@ -46,6 +52,7 @@ def build_narration_script(
     1. Remove URL escrita do corpo (marca Guardian AI permanece intacta)
     2. Trunca corpo reservando espaço para o fechamento fixo
     3. Fecha com convite ao link no card — sem soletrar domínio
+    4. Corrige pronúncia do nome do app para inglês
     """
     body_clean = strip_written_site_urls(body or "")
     headline = (headline or "").strip()
@@ -66,7 +73,8 @@ def build_narration_script(
         core,
     ).rstrip(" .,;")
 
-    return f"{core}. {closing}."
+    script = f"{core}. {closing}."
+    return _fix_app_name_pronunciation(script)
 
 
 def card_solucao_text() -> str:

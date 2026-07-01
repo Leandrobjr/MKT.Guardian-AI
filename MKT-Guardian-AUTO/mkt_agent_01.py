@@ -276,14 +276,35 @@ class MediaFactory:
             int(x1 * sx), int(y1 * sy),
         )
 
+    def _scaled_font_size(self, base_size: int, min_size: int = 14) -> int:
+        """Escala tamanho de fonte proporcionalmente ao canvas (referência 1920px de altura)."""
+        return max(min_size, int(base_size * self.canvas_height / 1920))
+
+    def _card_layout(self) -> tuple:
+        """Retorna (alerta_box, solucao_box, cta_box) ajustadas ao canvas atual.
+        Em canvas 1:1 os cards sobem para liberar a região do celular/personagem."""
+        is_square = self.canvas_height <= self.canvas_width * 1.15
+        if is_square:
+            return (
+                self._scale_box((36, 1250, 1044, 1410)),
+                self._scale_box((36, 1425, 1044, 1560)),
+                self._scale_box((36, 1575, 1044, 1700)),
+            )
+        return (
+            self._scale_box((36, 1050, 1044, 1240)),
+            self._scale_box((36, 1260, 1044, 1440)),
+            self._scale_box((36, 1470, 1044, 1600)),
+        )
+
     def _draw_headline_branded(
         self, draw: ImageDraw.ImageDraw, headline: str, highlight_phrases: list[str]
     ):
-        font = self._load_font(42, bold=True)
+        font_size = self._scaled_font_size(42, min_size=28)
+        font = self._load_font(font_size, bold=True)
         max_w = self.canvas_width - 100
         lines = self._wrap_text(draw, headline.upper(), font, max_w, max_lines=3)
         y = int(56 * self.canvas_height / 1920)
-        line_h = int(50 * self.canvas_height / 1920)
+        line_h = max(font_size + 8, int(50 * self.canvas_height / 1920))
         center_x = self.canvas_width // 2
         for line in lines:
             segments = self._split_line_by_highlights(line, highlight_phrases)
@@ -308,11 +329,16 @@ class MediaFactory:
     ):
         x0, y0, x1, y1 = box
         draw.rounded_rectangle(box, radius=20, fill=self.BRAND_CARD, outline=self.BRAND_CARD_BORDER, width=2)
-        font_title = self._load_font(20, bold=True)
-        font_body = self._load_font(self.card_body_font_size, bold=True)
-        draw.text((x0 + 20, y0 + 14), title, font=font_title, fill=title_color)
-        body_box = (x0, y0 + 46, x1, y1 - 10)
-        max_body_lines = max(2, (body_box[3] - body_box[1] - 8) // 30)
+        font_title_size = self._scaled_font_size(20, min_size=13)
+        font_body_size = self._scaled_font_size(self.card_body_font_size, min_size=13)
+        font_title = self._load_font(font_title_size, bold=True)
+        font_body = self._load_font(font_body_size, bold=True)
+        title_y_offset = max(10, int(14 * self.canvas_height / 1920))
+        body_y_offset = max(30, int(46 * self.canvas_height / 1920))
+        line_h = max(font_body_size + 4, int(30 * self.canvas_height / 1920))
+        draw.text((x0 + 20, y0 + title_y_offset), title, font=font_title, fill=title_color)
+        body_box = (x0, y0 + body_y_offset, x1, y1 - 8)
+        max_body_lines = max(2, (body_box[3] - body_box[1]) // line_h)
         if highlight_phrases:
             self._draw_rich_text_block(
                 draw, body_box, body, font_body, body_color,
@@ -320,26 +346,30 @@ class MediaFactory:
             )
         else:
             lines = self._wrap_text(draw, body, font_body, (x1 - x0) - 40, max_lines=max_body_lines)
-            y = y0 + 48
+            y = y0 + body_y_offset + 2
             for line in lines:
-                if y + 30 > body_box[3]:
+                if y + line_h > body_box[3]:
                     break
                 draw.text((x0 + 20, y), line, font=font_body, fill=body_color)
-                y += 30
+                y += line_h
 
     def _draw_cta_button(self, draw: ImageDraw.ImageDraw, box: tuple[int, int, int, int], main_text: str, url: str):
         draw.rounded_rectangle(box, radius=36, fill=self.BRAND_GREEN, outline=self.BRAND_GREEN_DARK, width=3)
-        font_main = self._load_font(24, bold=True)
-        font_url = self._load_font(18, bold=True)
+        font_main_size = self._scaled_font_size(24, min_size=16)
+        font_url_size = self._scaled_font_size(18, min_size=12)
+        font_main = self._load_font(font_main_size, bold=True)
+        font_url = self._load_font(font_url_size, bold=True)
+        cta_line_h = font_main_size + 6
         lines = self._wrap_text(draw, main_text.upper(), font_main, box[2] - box[0] - 40, max_lines=2)
-        y = box[1] + 18
+        y = box[1] + max(12, int(18 * self.canvas_height / 1920))
         for line in lines:
             x = (box[0] + box[2]) // 2 - self._text_width(draw, line, font_main) // 2
             draw.text((x, y), line, font=font_main, fill=self.BRAND_CTA_TEXT)
-            y += 30
+            y += cta_line_h
         url_clean = url.replace("https://", "").replace("http://", "")
+        url_y = box[3] - font_url_size - max(8, int(12 * self.canvas_height / 1920))
         xu = (box[0] + box[2]) // 2 - self._text_width(draw, url_clean, font_url) // 2
-        draw.text((xu, box[3] - 36), url_clean, font=font_url, fill=self.BRAND_CTA_TEXT)
+        draw.text((xu, url_y), url_clean, font=font_url, fill=self.BRAND_CTA_TEXT)
 
     def _compose_frame_pillow(
         self,
@@ -358,25 +388,22 @@ class MediaFactory:
         highlights = frases_destaque or []
 
         self._draw_headline_branded(draw, headline, highlights)
+        alerta_box, solucao_box, cta_box = self._card_layout()
 
         self._draw_brand_card(
-            draw, self._scale_box((36, 1050, 1044, 1240)),
+            draw, alerta_box,
             "MENSAGEM SUSPEITA NO WHATSAPP",
             alerta,
             self.WHATSAPP_GREEN, self.BRAND_TEXT,
             highlight_phrases=highlights, highlight_color=self.BRAND_HIGHLIGHT,
         )
         self._draw_brand_card(
-            draw, self._scale_box((36, 1260, 1044, 1440)),
+            draw, solucao_box,
             "GUARDIAN AI — PROTECAO WHATSAPP",
             solucao,
             self.BRAND_GREEN, self.BRAND_TEXT,
         )
-        self._draw_cta_button(
-            draw, self._scale_box((36, 1470, 1044, 1600)),
-            cta,
-            url,
-        )
+        self._draw_cta_button(draw, cta_box, cta, url)
 
         img.save(out_path, "JPEG", quality=95)
 
@@ -396,24 +423,22 @@ class MediaFactory:
         highlights = frases_destaque or []
 
         self._draw_headline_branded(draw, headline, highlights)
+        alerta_box, solucao_box, cta_box = self._card_layout()
+
         self._draw_brand_card(
-            draw, self._scale_box((36, 1050, 1044, 1240)),
+            draw, alerta_box,
             "MENSAGEM SUSPEITA NO WHATSAPP",
             alerta,
             self.WHATSAPP_GREEN, self.BRAND_TEXT,
             highlight_phrases=highlights, highlight_color=self.BRAND_HIGHLIGHT,
         )
         self._draw_brand_card(
-            draw, self._scale_box((36, 1260, 1044, 1440)),
+            draw, solucao_box,
             "GUARDIAN AI — PROTECAO WHATSAPP",
             solucao,
             self.BRAND_GREEN, self.BRAND_TEXT,
         )
-        self._draw_cta_button(
-            draw, self._scale_box((36, 1470, 1044, 1600)),
-            cta,
-            url,
-        )
+        self._draw_cta_button(draw, cta_box, cta, url)
         os.makedirs(os.path.dirname(out_path), exist_ok=True)
         img.save(out_path, "PNG")
 

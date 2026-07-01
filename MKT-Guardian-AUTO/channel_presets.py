@@ -25,7 +25,7 @@ def resolve_channel_preset(canal: str, midia: str) -> dict:
             "copy_duration": "18-24 segundos de narração (copy mais curta para imagem estática).",
             "copy_tone": "Tom claro e direto, frases médias, foco em leitura no feed.",
             "eleven_speed": 0.92,
-            "eleven_stability": 0.50,
+            "eleven_stability": 0.60,
             "eleven_style": 0.35,
             "trilha_tipo": "corporativo",
             "voice_volume": "1.35",
@@ -49,7 +49,7 @@ def resolve_channel_preset(canal: str, midia: str) -> dict:
                 "Evite gírias agressivas. Priorize clareza para público 35+."
             ),
             "eleven_speed": 0.88,
-            "eleven_stability": 0.58,
+            "eleven_stability": 0.60,
             "eleven_style": 0.28,
             "trilha_tipo": "corporativo",
             "voice_volume": "1.40",
@@ -74,9 +74,9 @@ def resolve_channel_preset(canal: str, midia: str) -> dict:
             "Tom urgente, ritmo acelerado, frases curtas e punchy. "
             "Máximo 3 frases no roteiro. Ganchos fortes nos primeiros 3 segundos."
         ),
-        "eleven_speed": 1.18,
-        "eleven_stability": 0.32,
-        "eleven_style": 0.62,
+        "eleven_speed": 1.0,
+        "eleven_stability": 0.60,
+        "eleven_style": 0.50,
         "trilha_tipo": "suspense",
         "voice_volume": "1.50",
         "track_volume_db": "-5dB",
@@ -86,7 +86,7 @@ def resolve_channel_preset(canal: str, midia: str) -> dict:
         "copy_max_chars": 250,
         "target_narration_seconds": 18,
         "auto_fit_narration": True,
-        "max_audio_speedup": 1.4,
+        "max_audio_speedup": 1.25,
         "video_slowdown": 1.45,
     }
 

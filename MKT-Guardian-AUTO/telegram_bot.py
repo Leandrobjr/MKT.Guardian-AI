@@ -22,6 +22,7 @@ from typing import Any
 
 import aiohttp
 from dotenv import load_dotenv
+from build_info import MEDIA_FACTORY_VERSION, ORCHESTRATOR_VERSION
 
 load_dotenv()
 
@@ -281,16 +282,12 @@ class CampaignBot:
             await self._handle_update(session)
 
         elif cmd == "/versao":
-            try:
-                from build_info import MEDIA_FACTORY_VERSION, ORCHESTRATOR_VERSION
-                await self._send(
-                    session,
-                    f"*Versão em execução:*\n"
-                    f"Fábrica: v{MEDIA_FACTORY_VERSION}\n"
-                    f"Orquestrador: v{ORCHESTRATOR_VERSION}",
-                )
-            except Exception as e:
-                await self._send(session, f"Erro ao ler versão: {e}")
+            await self._send(
+                session,
+                f"*Versão em execução:*\n"
+                f"Fábrica: v{MEDIA_FACTORY_VERSION}\n"
+                f"Orquestrador: v{ORCHESTRATOR_VERSION}",
+            )
 
         elif cmd == "/ajuda":
             await self._send(

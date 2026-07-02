@@ -324,18 +324,22 @@ class CampaignBot:
         session: aiohttp.ClientSession,
         text: str,
         reply_markup: dict | None = None,
+        parse_mode: str | None = "Markdown",
     ):
-        kwargs: dict[str, Any] = {
-            "chat_id": self.chat_id,
-            "text": text,
-            "parse_mode": "Markdown",
-        }
+        kwargs: dict[str, Any] = {"chat_id": self.chat_id, "text": text}
+        if parse_mode:
+            kwargs["parse_mode"] = parse_mode
         if reply_markup:
             kwargs["reply_markup"] = reply_markup
         await self._post(session, "sendMessage", **kwargs)
 
-    async def _answer_callback(self, session: aiohttp.ClientSession, cb_id: str, text: str = ""):
-        await self._post(session, "answerCallbackQuery", callback_query_id=cb_id, text=text)
+    async def _answer_callback(
+        self, session: aiohttp.ClientSession, cb_id: str, text: str = "", show_alert: bool = False
+    ):
+        await self._post(
+            session, "answerCallbackQuery",
+            callback_query_id=cb_id, text=text, show_alert=show_alert,
+        )
 
     # -----------------------------------------------------------------------
     # Teclado inline
@@ -408,29 +412,36 @@ class CampaignBot:
             code = data.split(":")[0] if ":" in data else ""
             if code not in ("A", "M", "R"):
                 return False
-            await self._answer_callback(session, cb["id"])
+            print(f"[Approval] callback code={code} job={pa.get('job_id')} data={data}")
+
+            # Toast instantâneo (não depende de Markdown/mensagem — sempre visível)
+            toast = {"A": "Aprovado ✅", "R": "Rejeitado ❌", "M": "Envie o texto da melhoria ✏️"}[code]
+            await self._answer_callback(session, cb["id"], text=toast)
+
             msg_id = cb.get("message", {}).get("message_id")
             chat_id = cb.get("message", {}).get("chat", {}).get("id")
-            # Desativa os botões da mensagem de aprovação (impede reclique/duplo processamento)
             if msg_id and chat_id:
                 await self._post(
                     session, "editMessageReplyMarkup",
                     chat_id=chat_id, message_id=msg_id, reply_markup={"inline_keyboard": []},
                 )
+
+            # Confirmações em texto plano (job_id tem underscores que quebram Markdown)
             if code == "A":
-                await self._send(session, f"✅ Aprovado! (Job {pa['job_id']})")
+                await self._send(session, f"✅ Aprovado! (Job {pa['job_id']})", parse_mode=None)
                 self._resolve_approval(pa, {"action": "approve"})
             elif code == "R":
-                await self._send(session, f"❌ Rejeitado. (Job {pa['job_id']})")
+                await self._send(session, f"❌ Rejeitado! (Job {pa['job_id']})", parse_mode=None)
                 self._resolve_approval(pa, {"action": "reject"})
             elif code == "M":
                 pa["awaiting_text"] = True
                 await self._send(
                     session,
-                    "✏️ *Descreva a melhoria* (responda em texto):\n\n"
+                    "✏️ Descreva a melhoria (responda em texto):\n\n"
                     "• Layout/card (texto cortado)\n"
                     "• Copy (headline, roteiro)\n"
                     "• Imagem/cena",
+                    parse_mode=None,
                 )
             return True
 
@@ -439,7 +450,8 @@ class CampaignBot:
                 return False
             texto = msg.get("text", "").strip()
             if texto and not texto.startswith("/"):
-                await self._send(session, f"📝 Recebido! Regenerando... (Job {pa['job_id']})")
+                print(f"[Approval] improve text job={pa.get('job_id')}: {texto[:60]}")
+                await self._send(session, f"📝 Recebido! Regenerando... (Job {pa['job_id']})", parse_mode=None)
                 self._resolve_approval(pa, {"action": "improve", "prompt": texto})
                 return True
 
@@ -497,6 +509,16 @@ class CampaignBot:
     async def _handle_callback(self, session: aiohttp.ClientSession, cb: dict):
         data  = cb.get("data", "")
         cb_id = cb["id"]
+
+        # Callback de aprovação (A:/M:/R:) que chegou aqui => não há aprovação ativa
+        if data[:1] in ("A", "M", "R") and ":" in data:
+            print(f"[Approval] callback SEM aprovação ativa: {data} (pending={self.pending_approval})")
+            await self._answer_callback(
+                session, cb_id,
+                text="Esta aprovação expirou ou já foi respondida.",
+                show_alert=True,
+            )
+            return
 
         if not data.startswith("WIZ:"):
             return

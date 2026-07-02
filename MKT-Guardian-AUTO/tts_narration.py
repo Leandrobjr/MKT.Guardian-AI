@@ -35,9 +35,14 @@ def strip_written_site_urls(text: str, domain: str = "guardian-ai.app") -> str:
 
 
 def _fix_app_name_pronunciation(text: str) -> str:
-    """Força ElevenLabs a pronunciar 'Guardian AI' em inglês (A.I. = duas letras)."""
-    import re as _re
-    return _re.sub(r"Guardian\s+AI\b", "Guardian A.I.", text, flags=_re.IGNORECASE)
+    """Força a voz pt-BR a pronunciar 'AI' em inglês (ay-eye).
+
+    Grafia fonética: uma voz portuguesa lê "A.I." como "á-í" (errado). Escrevendo
+    "Êi Ái" a mesma voz produz o som inglês das letras A ("ay") e I ("eye").
+    """
+    return re.sub(
+        r"Guardian\s+A\.?\s*I\.?", "Guardian Êi Ái", text, flags=re.IGNORECASE
+    )
 
 
 def build_narration_script(

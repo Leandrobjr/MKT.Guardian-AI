@@ -197,7 +197,7 @@ class CampaignBot:
             return {}
 
     async def _get_updates(self, session: aiohttp.ClientSession, offset: int) -> list:
-        params = {"offset": offset, "timeout": 20, "allowed_updates": ["message", "callback_query"]}
+        params = {"offset": offset, "timeout": 3, "allowed_updates": ["message", "callback_query"]}
         try:
             async with session.get(
                 f"{self._base}/getUpdates",
@@ -323,18 +323,23 @@ class CampaignBot:
             return
 
         if step == "confirm" and value == "yes":
-            # Lock impede que dois cliques rápidos disparem duas campanhas simultâneas
-            if self._pipeline_lock.locked() or self.session.running:
-                await self._send(session, "Campanha já em execução. Aguarde.")
-                return
             async with self._pipeline_lock:
                 if self.session.running:
-                    await self._send(session, "Campanha já em execução. Aguarde.")
+                    await self._send(session, "⚠️ Campanha já em execução. Aguarde o preview.")
                     return
                 config = self.session.to_config()
                 self.session.running = True
                 self.session.step = "running"
-            await self._send(session, "Campanha iniciada! Aguarde o preview para aprovação...")
+                msg_id = cb.get("message", {}).get("message_id")
+                chat_id = cb.get("message", {}).get("chat", {}).get("id")
+
+            # Remove o teclado inline para bloquear novos cliques no mesmo botão
+            if msg_id and chat_id:
+                await self._post(
+                    session, "editMessageReplyMarkup",
+                    chat_id=chat_id, message_id=msg_id, reply_markup={"inline_keyboard": []},
+                )
+            await self._send(session, "✅ Campanha iniciada! Aguarde o preview para aprovação...")
             t = threading.Thread(target=self._run_pipeline, args=(config,), daemon=True)
             self.session.thread = t
             t.start()

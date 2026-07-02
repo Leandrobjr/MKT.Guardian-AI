@@ -909,16 +909,17 @@ class MediaFactory:
             headline, alerta_texto, solucao_texto, cta_texto, url_conversao, frases_destaque,
         )
 
-        # Combina imagem estática + áudio em MP4 para veiculação
+        # Combina imagem base (sem overlay baked) + overlay_png + áudio em MP4 para veiculação
+        # ATENÇÃO: usa base_image_path para evitar texto duplicado (overlay_png já tem os cards)
         video_output_path = names["video"]
         video_ok = False
-        if self._audio_ok(audio_final_path):
+        if self._audio_ok(audio_final_path) and os.path.exists(base_image_path):
             duration = self._get_audio_duration(audio_final_path)
             zoom = still_video_zoom_filter(
                 self.canvas_width, self.canvas_height, int(duration * 25), 25
             )
             video_ok = compose_still_with_overlay(
-                final_design_path, overlay_png, audio_final_path,
+                base_image_path, overlay_png, audio_final_path,
                 video_output_path, duration,
                 self.canvas_width, self.canvas_height, zoom,
             )

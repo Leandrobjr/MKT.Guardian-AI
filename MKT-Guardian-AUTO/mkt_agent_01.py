@@ -282,19 +282,30 @@ class MediaFactory:
 
     def _card_layout(self) -> tuple:
         """Retorna (alerta_box, solucao_box, cta_box) ajustadas ao canvas atual.
-        Em canvas 1:1 os cards sobem para liberar a região do celular/personagem."""
+        Em canvas 1:1 (imagem estática) os cards ficam nos últimos 28% da imagem."""
         is_square = self.canvas_height <= self.canvas_width * 1.15
         if is_square:
-            return (
-                self._scale_box((36, 1250, 1044, 1410)),
-                self._scale_box((36, 1425, 1044, 1560)),
-                self._scale_box((36, 1575, 1044, 1700)),
+            # 1:1 — inicia em 72% (y=1382/1920) deixando 72% superior livre para a foto
+            boxes = (
+                self._scale_box((36, 1382, 1044, 1520)),
+                self._scale_box((36, 1532, 1044, 1655)),
+                self._scale_box((36, 1663, 1044, 1760)),
             )
-        return (
-            self._scale_box((36, 1050, 1044, 1240)),
-            self._scale_box((36, 1260, 1044, 1440)),
-            self._scale_box((36, 1470, 1044, 1600)),
+        else:
+            # 9:16 — posição original
+            boxes = (
+                self._scale_box((36, 1050, 1044, 1240)),
+                self._scale_box((36, 1260, 1044, 1440)),
+                self._scale_box((36, 1470, 1044, 1600)),
+            )
+        print(
+            f"[Layout] canvas={self.canvas_width}x{self.canvas_height} "
+            f"is_square={is_square} "
+            f"alerta_y={boxes[0][1]}-{boxes[0][3]} "
+            f"solucao_y={boxes[1][1]}-{boxes[1][3]} "
+            f"cta_y={boxes[2][1]}-{boxes[2][3]}"
         )
+        return boxes
 
     def _draw_headline_branded(
         self, draw: ImageDraw.ImageDraw, headline: str, highlight_phrases: list[str]

@@ -180,6 +180,7 @@ class CampaignBot:
             )
         self._base   = f"{TELEGRAM_API}{self.token}"
         self.session = Session()
+        self._pipeline_lock = asyncio.Lock()
 
     # -----------------------------------------------------------------------
     # HTTP helpers
@@ -279,6 +280,18 @@ class CampaignBot:
         elif cmd == "/atualizar":
             await self._handle_update(session)
 
+        elif cmd == "/versao":
+            try:
+                from build_info import MEDIA_FACTORY_VERSION, ORCHESTRATOR_VERSION
+                await self._send(
+                    session,
+                    f"*Versão em execução:*\n"
+                    f"Fábrica: v{MEDIA_FACTORY_VERSION}\n"
+                    f"Orquestrador: v{ORCHESTRATOR_VERSION}",
+                )
+            except Exception as e:
+                await self._send(session, f"Erro ao ler versão: {e}")
+
         elif cmd == "/ajuda":
             await self._send(
                 session,
@@ -287,6 +300,7 @@ class CampaignBot:
                 "/status — verificar status atual\n"
                 "/cancelar — cancelar e reiniciar\n"
                 "/atualizar — baixar código novo do GitHub e reiniciar\n"
+                "/versao — exibir versão do código em execução\n"
                 "/ajuda — esta mensagem",
             )
 
@@ -312,12 +326,17 @@ class CampaignBot:
             return
 
         if step == "confirm" and value == "yes":
-            if self.session.running:
-                await self._send(session, "Campanha já em execução.")
+            # Lock impede que dois cliques rápidos disparem duas campanhas simultâneas
+            if self._pipeline_lock.locked() or self.session.running:
+                await self._send(session, "Campanha já em execução. Aguarde.")
                 return
-            config = self.session.to_config()
-            self.session.running = True
-            self.session.step = "running"
+            async with self._pipeline_lock:
+                if self.session.running:
+                    await self._send(session, "Campanha já em execução. Aguarde.")
+                    return
+                config = self.session.to_config()
+                self.session.running = True
+                self.session.step = "running"
             await self._send(session, "Campanha iniciada! Aguarde o preview para aprovação...")
             t = threading.Thread(target=self._run_pipeline, args=(config,), daemon=True)
             self.session.thread = t

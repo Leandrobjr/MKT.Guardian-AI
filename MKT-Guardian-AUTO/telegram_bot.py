@@ -446,6 +446,12 @@ class CampaignBot:
             await self._send(session, "Bot iniciado. Use /nova para criar uma campanha.")
 
             while True:
+                # Durante aprovação de campanha, cede o polling ao telegram_approval.py
+                # para que o texto de melhoria não seja consumido por este loop.
+                if self.session.running:
+                    await asyncio.sleep(3)
+                    continue
+
                 try:
                     updates = await self._get_updates(session, offset)
                 except Exception as e:

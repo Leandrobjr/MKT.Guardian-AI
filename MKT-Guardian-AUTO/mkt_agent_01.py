@@ -908,11 +908,30 @@ class MediaFactory:
             base_image_path, final_design_path,
             headline, alerta_texto, solucao_texto, cta_texto, url_conversao, frases_destaque,
         )
+
+        # Combina imagem estática + áudio em MP4 para veiculação
+        video_output_path = names["video"]
+        video_ok = False
+        if self._audio_ok(audio_final_path):
+            duration = self._get_audio_duration(audio_final_path)
+            zoom = still_video_zoom_filter(
+                self.canvas_width, self.canvas_height, int(duration * 25), 25
+            )
+            video_ok = compose_still_with_overlay(
+                final_design_path, overlay_png, audio_final_path,
+                video_output_path, duration,
+                self.canvas_width, self.canvas_height, zoom,
+            )
+            if video_ok:
+                print("✅ MP4 estático gerado (imagem + áudio).")
+            else:
+                print("⚠️ FFmpeg falhou ao gerar MP4 estático.")
+
         return {
             "basename": names["basename"],
             "audio_file": audio_final_path,
             "static_image_file": final_design_path,
-            "commercial_video_file": "Não solicitado",
+            "commercial_video_file": video_output_path if video_ok else "Não solicitado",
             "kling_raw_file": "",
             "base_image_file": base_image_path if os.path.exists(base_image_path) else "",
         }

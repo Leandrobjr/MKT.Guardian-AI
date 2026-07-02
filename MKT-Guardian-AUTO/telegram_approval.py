@@ -126,9 +126,6 @@ class TelegramApproval:
         async with aiohttp.ClientSession() as session:
             print(f"📲 [Telegram] Enviando para aprovação (Job {job_id})...")
             resp = await self._enviar_asset(session, asset_path, caption, teclado)
-            if resp.get("ok") and audio_path and os.path.exists(audio_path):
-                print(f"🎙️ [Telegram] Enviando narração em áudio...")
-                await self._enviar_audio(session, audio_path, "🎙️ *Narração da campanha*")
             if not resp.get("ok"):
                 print(f"❌ [Telegram] Falha ao enviar: {resp}")
                 return {"action": "reject", "motivo": "telegram_falhou"}

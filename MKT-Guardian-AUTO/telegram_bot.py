@@ -306,13 +306,13 @@ class CampaignBot:
             print(f"[Bot] Erro HTTP {method}: {e}")
             return {}
 
-    async def _get_updates(self, session: aiohttp.ClientSession, offset: int) -> list:
-        params = {"offset": offset, "timeout": 25, "allowed_updates": ["message", "callback_query"]}
+    async def _get_updates(self, session: aiohttp.ClientSession, offset: int, timeout: int = 25) -> list:
+        params = {"offset": offset, "timeout": timeout, "allowed_updates": ["message", "callback_query"]}
         try:
             async with session.get(
                 f"{self._base}/getUpdates",
                 params=params,
-                timeout=aiohttp.ClientTimeout(total=30),
+                timeout=aiohttp.ClientTimeout(total=timeout + 10),
             ) as r:
                 data = await r.json()
                 return data.get("result", [])
@@ -409,6 +409,14 @@ class CampaignBot:
             if code not in ("A", "M", "R"):
                 return False
             await self._answer_callback(session, cb["id"])
+            msg_id = cb.get("message", {}).get("message_id")
+            chat_id = cb.get("message", {}).get("chat", {}).get("id")
+            # Desativa os botões da mensagem de aprovação (impede reclique/duplo processamento)
+            if msg_id and chat_id:
+                await self._post(
+                    session, "editMessageReplyMarkup",
+                    chat_id=chat_id, message_id=msg_id, reply_markup={"inline_keyboard": []},
+                )
             if code == "A":
                 await self._send(session, f"✅ Aprovado! (Job {pa['job_id']})")
                 self._resolve_approval(pa, {"action": "approve"})
@@ -533,13 +541,29 @@ class CampaignBot:
         if step not in STEPS:
             return
 
+        msg_id = cb.get("message", {}).get("message_id")
+        chat_id = cb.get("message", {}).get("chat", {}).get("id")
+
+        # Clique numa etapa já concluída: apenas remove o teclado obsoleto (sem poluir o chat)
         if self.session.step != step:
-            await self._send(session, "Selecione a opção da etapa atual.")
+            if msg_id and chat_id:
+                await self._post(
+                    session, "editMessageReplyMarkup",
+                    chat_id=chat_id, message_id=msg_id, reply_markup={"inline_keyboard": []},
+                )
             return
 
+        # Registra a escolha e desativa o teclado desta etapa (impede recliques/duplicatas)
         self.session.selections[step] = value
-        idx = STEPS.index(step)
+        if msg_id and chat_id:
+            await self._post(
+                session, "editMessageText",
+                chat_id=chat_id, message_id=msg_id,
+                text=f"{TITULOS[step]}\n\n✅ *{self._label_for(step, value)}*",
+                parse_mode="Markdown",
+            )
 
+        idx = STEPS.index(step)
         if idx + 1 < len(STEPS):
             next_step = STEPS[idx + 1]
             self.session.step = next_step
@@ -547,6 +571,12 @@ class CampaignBot:
         else:
             self.session.step = "confirm"
             await self._send(session, self.session.summary(), self._keyboard_confirm())
+
+    def _label_for(self, step: str, value: str) -> str:
+        for label, _val, id_interno in OPCOES.get(step, []):
+            if id_interno == value:
+                return label
+        return value
 
     # -----------------------------------------------------------------------
     # Atualização remota via git pull + restart
@@ -630,8 +660,8 @@ class CampaignBot:
         print("[Bot] Guardian AI Campaign Bot iniciado. Envie /nova no Telegram.")
         offset = 0
         async with aiohttp.ClientSession() as session:
-            # Descartar updates antigos acumulados antes da inicialização
-            updates = await self._get_updates(session, 0)
+            # Descartar updates antigos acumulados (timeout=0 → retorno imediato)
+            updates = await self._get_updates(session, -1, timeout=0)
             if updates:
                 offset = updates[-1]["update_id"] + 1
 

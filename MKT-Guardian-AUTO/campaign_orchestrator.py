@@ -775,12 +775,18 @@ class CampaignOrchestrator:
                 return
 
             job_id = f"{assets_resultado.get('basename', uuid.uuid4().hex[:8])}_r{revisao}"
+            audio_para_aprovacao = None
+            if not asset_path.lower().endswith(".mp4"):
+                audio_file = assets_resultado.get("audio_file", "")
+                if audio_file and os.path.isfile(audio_file):
+                    audio_para_aprovacao = audio_file
             acao = self.telegram.aprovar_sincronamente(
                 asset_path=asset_path,
                 headline=creative_data["gancho_atencao_inicial"],
                 copy=creative_data["desenvolvimento_copy"],
                 job_id=job_id,
                 timeout_segundos=self.telegram_timeout,
+                audio_path=audio_para_aprovacao,
             )
             print(f"📲 Decisão Telegram: {acao['action']}")
 

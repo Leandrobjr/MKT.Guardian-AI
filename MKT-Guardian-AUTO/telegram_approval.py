@@ -75,6 +75,25 @@ class TelegramApproval:
         async with session.post(f"{self._base}/{method}", data=data, timeout=aiohttp.ClientTimeout(total=120)) as r:
             return await r.json()
 
+    async def _enviar_audio(self, session: aiohttp.ClientSession, audio_path: str, caption: str) -> dict:
+        """Envia arquivo de áudio (narração) via sendAudio."""
+        if not audio_path or not os.path.exists(audio_path):
+            return {}
+        data = aiohttp.FormData()
+        data.add_field("chat_id", str(self.chat_id))
+        data.add_field("caption", caption[:1024])
+        data.add_field("parse_mode", "Markdown")
+        with open(audio_path, "rb") as f:
+            content = f.read()
+        data.add_field(
+            "audio",
+            content,
+            filename=os.path.basename(audio_path),
+            content_type="audio/mpeg",
+        )
+        async with session.post(f"{self._base}/sendAudio", data=data, timeout=aiohttp.ClientTimeout(total=60)) as r:
+            return await r.json()
+
     async def enviar_para_aprovacao(
         self,
         asset_path: str,
@@ -82,6 +101,7 @@ class TelegramApproval:
         copy: str,
         job_id: str,
         timeout_segundos: int = 3600,
+        audio_path: str | None = None,
     ) -> dict:
         if not os.path.exists(asset_path):
             print(f"❌ [Telegram] Asset não encontrado: {asset_path}")
@@ -106,6 +126,9 @@ class TelegramApproval:
         async with aiohttp.ClientSession() as session:
             print(f"📲 [Telegram] Enviando para aprovação (Job {job_id})...")
             resp = await self._enviar_asset(session, asset_path, caption, teclado)
+            if resp.get("ok") and audio_path and os.path.exists(audio_path):
+                print(f"🎙️ [Telegram] Enviando narração em áudio...")
+                await self._enviar_audio(session, audio_path, "🎙️ *Narração da campanha*")
             if not resp.get("ok"):
                 print(f"❌ [Telegram] Falha ao enviar: {resp}")
                 return {"action": "reject", "motivo": "telegram_falhou"}
@@ -179,9 +202,10 @@ class TelegramApproval:
         copy: str,
         job_id: str,
         timeout_segundos: int = 3600,
+        audio_path: str | None = None,
     ) -> dict:
         return asyncio.run(
-            self.enviar_para_aprovacao(asset_path, headline, copy, job_id, timeout_segundos)
+            self.enviar_para_aprovacao(asset_path, headline, copy, job_id, timeout_segundos, audio_path)
         )
 
     async def notificar(self, mensagem: str):

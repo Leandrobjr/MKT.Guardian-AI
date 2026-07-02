@@ -15,6 +15,8 @@ from __future__ import annotations
 import asyncio
 import json
 import os
+import subprocess
+import sys
 import threading
 from typing import Any
 
@@ -274,6 +276,9 @@ class CampaignBot:
             self.session.reset()
             await self._send(session, "Sessão reiniciada. Use /nova para começar.")
 
+        elif cmd == "/atualizar":
+            await self._handle_update(session)
+
         elif cmd == "/ajuda":
             await self._send(
                 session,
@@ -281,6 +286,7 @@ class CampaignBot:
                 "/nova — iniciar nova campanha\n"
                 "/status — verificar status atual\n"
                 "/cancelar — cancelar e reiniciar\n"
+                "/atualizar — baixar código novo do GitHub e reiniciar\n"
                 "/ajuda — esta mensagem",
             )
 
@@ -335,6 +341,49 @@ class CampaignBot:
         else:
             self.session.step = "confirm"
             await self._send(session, self.session.summary(), self._keyboard_confirm())
+
+    # -----------------------------------------------------------------------
+    # Atualização remota via git pull + restart
+    # -----------------------------------------------------------------------
+
+    async def _handle_update(self, session: aiohttp.ClientSession):
+        """Executa git pull e reinicia o processo do bot."""
+        if self.session.running:
+            await self._send(session, "⚠️ Campanha em execução. Aguarde o fim antes de atualizar.")
+            return
+
+        await self._send(session, "🔄 Verificando atualizações no GitHub...")
+        repo_dir = os.path.dirname(os.path.abspath(__file__))
+
+        try:
+            result = subprocess.run(
+                ["git", "pull", "origin", "main"],
+                cwd=repo_dir,
+                capture_output=True,
+                text=True,
+                timeout=60,
+            )
+            saida = (result.stdout + result.stderr).strip()[:1000]
+        except subprocess.TimeoutExpired:
+            await self._send(session, "❌ git pull demorou demais (timeout 60s).")
+            return
+        except Exception as e:
+            await self._send(session, f"❌ Erro ao executar git pull: {e}")
+            return
+
+        if result.returncode != 0:
+            await self._send(session, f"❌ git pull falhou:\n```\n{saida}\n```")
+            return
+
+        if "Already up to date" in saida:
+            await self._send(session, f"✅ Código já está atualizado:\n```\n{saida}\n```")
+            return
+
+        await self._send(session, f"✅ Código atualizado:\n```\n{saida}\n```\n\n♻️ Reiniciando bot...")
+        # Pequena pausa para garantir que a mensagem seja entregue antes do restart
+        await asyncio.sleep(2)
+        # Substitui o processo atual pelo mesmo script — reinício limpo sem perder o PID do systemd
+        os.execv(sys.executable, [sys.executable] + sys.argv)
 
     # -----------------------------------------------------------------------
     # Execução do pipeline em thread separada

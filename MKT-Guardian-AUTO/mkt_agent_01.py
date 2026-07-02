@@ -225,13 +225,14 @@ class MediaFactory:
     ):
         x0, y0, x1, y1 = box
         max_w = x1 - x0 - 40
-        line_h = 30
+        fsize = getattr(font, "size", 22)
+        line_h = max(fsize + 4, int(30 * self.canvas_height / 1920))
         max_lines = max(1, (y1 - y0 - 8) // line_h)
 
         spans = self._parse_highlight_spans(text, highlight_phrases)
         word_lines = self._flow_words_to_lines(draw, spans, font, max_w, max_lines)
 
-        y = y0
+        y = y0 + 2
         for word_line in word_lines:
             if y + line_h > y1:
                 break

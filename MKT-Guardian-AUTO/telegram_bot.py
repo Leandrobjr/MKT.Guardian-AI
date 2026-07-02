@@ -13,14 +13,17 @@ Uso:
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import json
 import os
+import queue as _queue
 import subprocess
 import sys
 import threading
 from typing import Any
 
 import aiohttp
+import requests
 from dotenv import load_dotenv
 from build_info import MEDIA_FACTORY_VERSION, ORCHESTRATOR_VERSION
 
@@ -168,6 +171,101 @@ class Session:
 
 
 # ---------------------------------------------------------------------------
+# Ponte de aprovação — usa o ÚNICO loop de polling do bot (evita corrida de
+# getUpdates entre dois consumidores no mesmo bot token).
+# ---------------------------------------------------------------------------
+
+class BotApprovalBridge:
+    """Interface compatível com TelegramApproval, porém sem polling próprio.
+
+    O envio de mídia/mensagem é síncrono (requests, na thread do orquestrador).
+    A decisão do usuário chega pelo loop principal do bot via fila thread-safe.
+    """
+
+    def __init__(self, bot: "CampaignBot"):
+        self.bot = bot
+        self.chat_id = bot.chat_id
+        self._base = bot._base
+
+    def _send_message(self, text: str, reply_markup: dict | None = None):
+        payload = {"chat_id": self.chat_id, "text": text[:4096], "parse_mode": "Markdown"}
+        if reply_markup:
+            payload["reply_markup"] = json.dumps(reply_markup)
+        try:
+            requests.post(f"{self._base}/sendMessage", data=payload, timeout=30)
+        except Exception as e:
+            print(f"[Bridge] erro sendMessage: {e}")
+
+    def _send_asset(self, asset_path: str, caption: str, reply_markup: dict):
+        is_video = asset_path.lower().endswith(".mp4")
+        method = "sendVideo" if is_video else "sendPhoto"
+        field = "video" if is_video else "photo"
+        try:
+            with open(asset_path, "rb") as f:
+                content = f.read()
+            files = {
+                field: (
+                    os.path.basename(asset_path),
+                    content,
+                    "video/mp4" if is_video else "image/jpeg",
+                )
+            }
+            data = {
+                "chat_id": self.chat_id,
+                "caption": caption[:1024],
+                "parse_mode": "Markdown",
+                "reply_markup": json.dumps(reply_markup),
+            }
+            requests.post(f"{self._base}/{method}", data=data, files=files, timeout=180)
+        except Exception as e:
+            print(f"[Bridge] erro {method}: {e}")
+
+    def aprovar_sincronamente(
+        self,
+        asset_path: str,
+        headline: str,
+        copy: str,
+        job_id: str,
+        timeout_segundos: int = 3600,
+        audio_path: str | None = None,
+    ) -> dict:
+        if not os.path.exists(asset_path):
+            print(f"❌ [Bridge] Asset não encontrado: {asset_path}")
+            return {"action": "reject", "motivo": "asset_ausente"}
+
+        copy_resumo = copy if len(copy) <= 300 else copy[:300] + "..."
+        caption = (
+            f"*APROVAÇÃO — Guardian AI*\n\n"
+            f"*Headline:* {headline}\n\n"
+            f"*Copy:* {copy_resumo}\n\n"
+            f"Job: `{job_id}`"
+        )
+        teclado = {
+            "inline_keyboard": [
+                [{"text": "✅ APROVAR", "callback_data": f"A:{job_id}"}],
+                [{"text": "✏️ MELHORAR (envie texto)", "callback_data": f"M:{job_id}"}],
+                [{"text": "❌ REJEITAR", "callback_data": f"R:{job_id}"}],
+            ]
+        }
+
+        result_q: _queue.Queue = _queue.Queue(maxsize=1)
+        self.bot.register_approval(job_id, result_q)
+        print(f"📲 [Bridge] Enviando para aprovação (Job {job_id})...")
+        self._send_asset(asset_path, caption, teclado)
+        try:
+            decision = result_q.get(timeout=timeout_segundos)
+        except _queue.Empty:
+            self._send_message(f"⏱️ Timeout — Job {job_id} não aprovado a tempo.")
+            decision = {"action": "timeout"}
+        finally:
+            self.bot.clear_approval(job_id)
+        return decision
+
+    def notificar_sync(self, mensagem: str):
+        self._send_message(mensagem)
+
+
+# ---------------------------------------------------------------------------
 # Bot
 # ---------------------------------------------------------------------------
 
@@ -182,6 +280,18 @@ class CampaignBot:
         self._base   = f"{TELEGRAM_API}{self.token}"
         self.session = Session()
         self._pipeline_lock = asyncio.Lock()
+        self.pending_approval: dict | None = None
+
+    # -----------------------------------------------------------------------
+    # Coordenação de aprovação (chamado pela thread do orquestrador)
+    # -----------------------------------------------------------------------
+
+    def register_approval(self, job_id: str, result_queue: _queue.Queue):
+        self.pending_approval = {"job_id": job_id, "queue": result_queue, "awaiting_text": False}
+
+    def clear_approval(self, job_id: str):
+        if self.pending_approval and self.pending_approval.get("job_id") == job_id:
+            self.pending_approval = None
 
     # -----------------------------------------------------------------------
     # HTTP helpers
@@ -197,7 +307,7 @@ class CampaignBot:
             return {}
 
     async def _get_updates(self, session: aiohttp.ClientSession, offset: int) -> list:
-        params = {"offset": offset, "timeout": 3, "allowed_updates": ["message", "callback_query"]}
+        params = {"offset": offset, "timeout": 25, "allowed_updates": ["message", "callback_query"]}
         try:
             async with session.get(
                 f"{self._base}/getUpdates",
@@ -253,6 +363,86 @@ class CampaignBot:
     async def _send_step(self, session: aiohttp.ClientSession, step: str):
         await self._send(session, TITULOS[step], self._keyboard_for_step(step))
 
+    def _diagnostico_versao(self) -> str:
+        """Diagnóstico definitivo: prova qual código está realmente carregado."""
+        repo_dir = os.path.dirname(os.path.abspath(__file__))
+        try:
+            git_hash = subprocess.run(
+                ["git", "rev-parse", "--short", "HEAD"],
+                cwd=repo_dir, capture_output=True, text=True, timeout=10,
+            ).stdout.strip() or "?"
+        except Exception:
+            git_hash = "?"
+
+        try:
+            import mkt_agent_01
+            mkt_file = mkt_agent_01.__file__
+            src = open(mkt_file, encoding="utf-8").read()
+            src_hash = hashlib.md5(src.encode("utf-8")).hexdigest()[:8]
+            tem_card_layout = "✅" if "_card_layout" in src else "❌ (CÓDIGO ANTIGO!)"
+        except Exception as e:
+            mkt_file = f"erro: {e}"
+            src_hash = "?"
+            tem_card_layout = "?"
+
+        return (
+            f"*Versão em execução:*\n"
+            f"Fábrica: v{MEDIA_FACTORY_VERSION}\n"
+            f"Orquestrador: v{ORCHESTRATOR_VERSION}\n"
+            f"git: `{git_hash}`\n\n"
+            f"*Código real carregado:*\n"
+            f"arquivo: `{mkt_file}`\n"
+            f"hash fonte: `{src_hash}`\n"
+            f"layout novo (_card_layout): {tem_card_layout}"
+        )
+
+    async def _handle_approval_update(self, session: aiohttp.ClientSession, upd: dict) -> bool:
+        """Roteia callbacks/texto de aprovação para a campanha em execução.
+        Retorna True se o update foi consumido pelo fluxo de aprovação."""
+        pa = self.pending_approval
+        if not pa:
+            return False
+
+        if cb := upd.get("callback_query"):
+            data = cb.get("data", "")
+            code = data.split(":")[0] if ":" in data else ""
+            if code not in ("A", "M", "R"):
+                return False
+            await self._answer_callback(session, cb["id"])
+            if code == "A":
+                await self._send(session, f"✅ Aprovado! (Job {pa['job_id']})")
+                self._resolve_approval(pa, {"action": "approve"})
+            elif code == "R":
+                await self._send(session, f"❌ Rejeitado. (Job {pa['job_id']})")
+                self._resolve_approval(pa, {"action": "reject"})
+            elif code == "M":
+                pa["awaiting_text"] = True
+                await self._send(
+                    session,
+                    "✏️ *Descreva a melhoria* (responda em texto):\n\n"
+                    "• Layout/card (texto cortado)\n"
+                    "• Copy (headline, roteiro)\n"
+                    "• Imagem/cena",
+                )
+            return True
+
+        if msg := upd.get("message"):
+            if not pa.get("awaiting_text"):
+                return False
+            texto = msg.get("text", "").strip()
+            if texto and not texto.startswith("/"):
+                await self._send(session, f"📝 Recebido! Regenerando... (Job {pa['job_id']})")
+                self._resolve_approval(pa, {"action": "improve", "prompt": texto})
+                return True
+
+        return False
+
+    def _resolve_approval(self, pa: dict, decision: dict):
+        try:
+            pa["queue"].put_nowait(decision)
+        except _queue.Full:
+            pass
+
     async def _handle_command(self, session: aiohttp.ClientSession, text: str):
         cmd = text.strip().lower().split()[0]
 
@@ -282,12 +472,7 @@ class CampaignBot:
             await self._handle_update(session)
 
         elif cmd == "/versao":
-            await self._send(
-                session,
-                f"*Versão em execução:*\n"
-                f"Fábrica: v{MEDIA_FACTORY_VERSION}\n"
-                f"Orquestrador: v{ORCHESTRATOR_VERSION}",
-            )
+            await self._send(session, self._diagnostico_versao())
 
         elif cmd == "/ajuda":
             await self._send(
@@ -414,13 +599,15 @@ class CampaignBot:
         try:
             from campaign_orchestrator import CampaignOrchestrator
             orch = CampaignOrchestrator()
-            orch.execute_automated_pipeline(config=config)
+            bridge = BotApprovalBridge(self)
+            orch.execute_automated_pipeline(config=config, telegram_override=bridge)
         except Exception as e:
             print(f"[Bot] Erro no pipeline: {e}")
             self._notify_error(str(e))
         finally:
             self.session.running = False
             self.session.step = "idle"
+            self.pending_approval = None
 
     def _notify_error(self, msg: str):
         async def _do():
@@ -451,12 +638,6 @@ class CampaignBot:
             await self._send(session, "Bot iniciado. Use /nova para criar uma campanha.")
 
             while True:
-                # Durante aprovação de campanha, cede o polling ao telegram_approval.py
-                # para que o texto de melhoria não seja consumido por este loop.
-                if self.session.running:
-                    await asyncio.sleep(3)
-                    continue
-
                 try:
                     updates = await self._get_updates(session, offset)
                 except Exception as e:
@@ -467,18 +648,24 @@ class CampaignBot:
                 for upd in updates:
                     offset = upd["update_id"] + 1
                     try:
+                        # Valida origem (mesmo chat) antes de qualquer roteamento
+                        chat = str(
+                            upd.get("message", {}).get("chat", {}).get("id", "")
+                            or upd.get("callback_query", {}).get("message", {}).get("chat", {}).get("id", "")
+                        )
+                        if chat and chat != self.chat_id:
+                            continue
+
+                        # Aprovação de campanha tem prioridade sobre o wizard
+                        if await self._handle_approval_update(session, upd):
+                            continue
+
                         if msg := upd.get("message"):
-                            chat = str(msg.get("chat", {}).get("id", ""))
-                            if chat != self.chat_id:
-                                continue
                             text = msg.get("text", "")
                             if text.startswith("/"):
                                 await self._handle_command(session, text)
 
                         elif cb := upd.get("callback_query"):
-                            chat = str(cb.get("message", {}).get("chat", {}).get("id", ""))
-                            if chat != self.chat_id:
-                                continue
                             await self._handle_callback(session, cb)
                     except Exception as e:
                         print(f"[Bot] Erro ao processar update: {e}")

@@ -711,7 +711,7 @@ class CampaignOrchestrator:
             "postar_instagram": fluxo["postar_instagram"],
         }
 
-    def execute_automated_pipeline(self, config: dict | None = None):
+    def execute_automated_pipeline(self, config: dict | None = None, telegram_override=None):
         if config is None:
             config = self.show_interactive_menu()
 
@@ -729,7 +729,11 @@ class CampaignOrchestrator:
         print(f"📐 Preset de produção: {format_preset_summary(preset)}")
 
         if config.get("aprovacao_telegram"):
-            self._init_telegram()
+            if telegram_override is not None:
+                self.telegram = telegram_override
+                print("📲 Aprovação via bot Telegram (loop único).")
+            else:
+                self._init_telegram()
         if config.get("postar_instagram"):
             self._init_publisher()
 

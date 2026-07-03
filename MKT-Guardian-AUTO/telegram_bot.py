@@ -187,8 +187,10 @@ class BotApprovalBridge:
         self.chat_id = bot.chat_id
         self._base = bot._base
 
-    def _send_message(self, text: str, reply_markup: dict | None = None):
-        payload = {"chat_id": self.chat_id, "text": text[:4096], "parse_mode": "Markdown"}
+    def _send_message(self, text: str, reply_markup: dict | None = None, parse_mode: str | None = "Markdown"):
+        payload: dict[str, Any] = {"chat_id": self.chat_id, "text": text[:4096]}
+        if parse_mode:
+            payload["parse_mode"] = parse_mode
         if reply_markup:
             payload["reply_markup"] = json.dumps(reply_markup)
         try:
@@ -196,7 +198,8 @@ class BotApprovalBridge:
         except Exception as e:
             print(f"[Bridge] erro sendMessage: {e}")
 
-    def _send_asset(self, asset_path: str, caption: str, reply_markup: dict):
+    def _send_asset(self, asset_path: str, caption: str, reply_markup: dict) -> int | None:
+        """Envia mídia e retorna message_id para rastrear botões obsoletos."""
         is_video = asset_path.lower().endswith(".mp4")
         method = "sendVideo" if is_video else "sendPhoto"
         field = "video" if is_video else "photo"
@@ -216,9 +219,28 @@ class BotApprovalBridge:
                 "parse_mode": "Markdown",
                 "reply_markup": json.dumps(reply_markup),
             }
-            requests.post(f"{self._base}/{method}", data=data, files=files, timeout=180)
+            resp = requests.post(f"{self._base}/{method}", data=data, files=files, timeout=180)
+            body = resp.json()
+            if body.get("ok"):
+                return body.get("result", {}).get("message_id")
+            print(f"[Bridge] {method} falhou: {body}")
         except Exception as e:
             print(f"[Bridge] erro {method}: {e}")
+        return None
+
+    def _clear_message_keyboard(self, message_id: int):
+        try:
+            requests.post(
+                f"{self._base}/editMessageReplyMarkup",
+                json={
+                    "chat_id": self.chat_id,
+                    "message_id": message_id,
+                    "reply_markup": {"inline_keyboard": []},
+                },
+                timeout=15,
+            )
+        except Exception as e:
+            print(f"[Bridge] erro ao limpar teclado msg={message_id}: {e}")
 
     def aprovar_sincronamente(
         self,
@@ -249,20 +271,23 @@ class BotApprovalBridge:
         }
 
         result_q: _queue.Queue = _queue.Queue(maxsize=1)
-        self.bot.register_approval(job_id, result_q)
         print(f"📲 [Bridge] Enviando para aprovação (Job {job_id})...")
-        self._send_asset(asset_path, caption, teclado)
+        # Registra ANTES do envio — evita clique instantâneo sem pending_approval (popup falso)
+        self.bot.register_approval(job_id, result_q, message_id=None)
+        msg_id = self._send_asset(asset_path, caption, teclado)
+        if msg_id:
+            self.bot.update_approval_message_id(job_id, msg_id)
         try:
             decision = result_q.get(timeout=timeout_segundos)
         except _queue.Empty:
-            self._send_message(f"⏱️ Timeout — Job {job_id} não aprovado a tempo.")
+            self._send_message(f"⏱️ Timeout — Job {job_id} não aprovado a tempo.", parse_mode=None)
             decision = {"action": "timeout"}
         finally:
-            self.bot.clear_approval(job_id)
+            self.bot.clear_approval(job_id, clear_keyboard=True)
         return decision
 
     def notificar_sync(self, mensagem: str):
-        self._send_message(mensagem)
+        self._send_message(mensagem, parse_mode="Markdown")
 
 
 # ---------------------------------------------------------------------------
@@ -280,18 +305,74 @@ class CampaignBot:
         self._base   = f"{TELEGRAM_API}{self.token}"
         self.session = Session()
         self._pipeline_lock = asyncio.Lock()
+        self._approval_lock = threading.Lock()
         self.pending_approval: dict | None = None
+        self._stale_approval_msgs: list[int] = []
 
     # -----------------------------------------------------------------------
     # Coordenação de aprovação (chamado pela thread do orquestrador)
     # -----------------------------------------------------------------------
 
-    def register_approval(self, job_id: str, result_queue: _queue.Queue):
-        self.pending_approval = {"job_id": job_id, "queue": result_queue, "awaiting_text": False}
+    def register_approval(
+        self, job_id: str, result_queue: _queue.Queue, message_id: int | None = None
+    ):
+        with self._approval_lock:
+            # Invalida botões de previews anteriores (causa #1 do popup falso)
+            self._stale_approval_msgs.extend(
+                mid for mid in (
+                    [self.pending_approval.get("message_id")] if self.pending_approval else []
+                ) if mid
+            )
+            self.pending_approval = {
+                "job_id": job_id,
+                "queue": result_queue,
+                "awaiting_text": False,
+                "message_id": message_id,
+            }
+            print(f"[Approval] registrado job={job_id} msg_id={message_id}")
+        self._clear_stale_keyboards_sync()
 
-    def clear_approval(self, job_id: str):
-        if self.pending_approval and self.pending_approval.get("job_id") == job_id:
+    def update_approval_message_id(self, job_id: str, message_id: int | None):
+        with self._approval_lock:
+            if self.pending_approval and self.pending_approval.get("job_id") == job_id:
+                self.pending_approval["message_id"] = message_id
+
+    def clear_approval(self, job_id: str, clear_keyboard: bool = False):
+        with self._approval_lock:
+            if not self.pending_approval or self.pending_approval.get("job_id") != job_id:
+                return
+            msg_id = self.pending_approval.get("message_id")
             self.pending_approval = None
+            print(f"[Approval] encerrado job={job_id}")
+        if clear_keyboard and msg_id:
+            self._clear_stale_keyboards_sync([msg_id])
+
+    def _get_pending_approval(self) -> dict | None:
+        with self._approval_lock:
+            return dict(self.pending_approval) if self.pending_approval else None
+
+    def _clear_stale_keyboards_sync(self, extra_ids: list[int] | None = None):
+        ids = list(self._stale_approval_msgs)
+        if extra_ids:
+            ids.extend(extra_ids)
+        self._stale_approval_msgs.clear()
+        base = self._base
+        chat = self.chat_id
+        for mid in ids:
+            if not mid:
+                continue
+            try:
+                requests.post(
+                    f"{base}/editMessageReplyMarkup",
+                    json={
+                        "chat_id": chat,
+                        "message_id": mid,
+                        "reply_markup": {"inline_keyboard": []},
+                    },
+                    timeout=10,
+                )
+            except Exception as e:
+                print(f"[Approval] falha limpar msg={mid}: {e}")
 
     # -----------------------------------------------------------------------
     # HTTP helpers
@@ -403,30 +484,45 @@ class CampaignBot:
     async def _handle_approval_update(self, session: aiohttp.ClientSession, upd: dict) -> bool:
         """Roteia callbacks/texto de aprovação para a campanha em execução.
         Retorna True se o update foi consumido pelo fluxo de aprovação."""
-        pa = self.pending_approval
+        pa = self._get_pending_approval()
         if not pa:
             return False
 
         if cb := upd.get("callback_query"):
             data = cb.get("data", "")
-            code = data.split(":")[0] if ":" in data else ""
+            if ":" not in data:
+                return False
+            code, cb_job = data.split(":", 1)
             if code not in ("A", "M", "R"):
                 return False
-            print(f"[Approval] callback code={code} job={pa.get('job_id')} data={data}")
-
-            # Toast instantâneo (não depende de Markdown/mensagem — sempre visível)
-            toast = {"A": "Aprovado ✅", "R": "Rejeitado ❌", "M": "Envie o texto da melhoria ✏️"}[code]
-            await self._answer_callback(session, cb["id"], text=toast)
 
             msg_id = cb.get("message", {}).get("message_id")
             chat_id = cb.get("message", {}).get("chat", {}).get("id")
+
+            if cb_job != pa.get("job_id"):
+                print(f"[Approval] callback obsoleto job={cb_job} ativo={pa.get('job_id')}")
+                await self._answer_callback(
+                    session, cb["id"],
+                    text="Preview antigo — aguarde o novo ou use os botões da mensagem mais recente.",
+                )
+                if msg_id and chat_id:
+                    await self._post(
+                        session, "editMessageReplyMarkup",
+                        chat_id=chat_id, message_id=msg_id, reply_markup={"inline_keyboard": []},
+                    )
+                return True
+
+            print(f"[Approval] callback code={code} job={pa.get('job_id')}")
+
+            toast = {"A": "Aprovado ✅", "R": "Rejeitado ❌", "M": "Envie o texto da melhoria ✏️"}[code]
+            await self._answer_callback(session, cb["id"], text=toast)
+
             if msg_id and chat_id:
                 await self._post(
                     session, "editMessageReplyMarkup",
                     chat_id=chat_id, message_id=msg_id, reply_markup={"inline_keyboard": []},
                 )
 
-            # Confirmações em texto plano (job_id tem underscores que quebram Markdown)
             if code == "A":
                 await self._send(session, f"✅ Aprovado! (Job {pa['job_id']})", parse_mode=None)
                 self._resolve_approval(pa, {"action": "approve"})
@@ -434,7 +530,9 @@ class CampaignBot:
                 await self._send(session, f"❌ Rejeitado! (Job {pa['job_id']})", parse_mode=None)
                 self._resolve_approval(pa, {"action": "reject"})
             elif code == "M":
-                pa["awaiting_text"] = True
+                with self._approval_lock:
+                    if self.pending_approval and self.pending_approval.get("job_id") == pa["job_id"]:
+                        self.pending_approval["awaiting_text"] = True
                 await self._send(
                     session,
                     "✏️ Descreva a melhoria (responda em texto):\n\n"
@@ -446,7 +544,8 @@ class CampaignBot:
             return True
 
         if msg := upd.get("message"):
-            if not pa.get("awaiting_text"):
+            pa = self._get_pending_approval()
+            if not pa or not pa.get("awaiting_text"):
                 return False
             texto = msg.get("text", "").strip()
             if texto and not texto.startswith("/"):
@@ -476,13 +575,25 @@ class CampaignBot:
             await self._send_step(session, STEPS[0])
 
         elif cmd == "/status":
+            pa = self._get_pending_approval()
+            linhas = [
+                f"PID bot: `{os.getpid()}`",
+                f"Versão: v{MEDIA_FACTORY_VERSION}",
+            ]
             if self.session.running:
-                await self._send(session, "Campanha em execução. Aguarde o preview de aprovação.")
+                linhas.append("Pipeline: *em execução*")
             elif self.session.step == "idle":
-                await self._send(session, "Nenhuma campanha ativa. Use /nova para iniciar.")
+                linhas.append("Pipeline: *ocioso*")
             else:
                 idx = STEPS.index(self.session.step) + 1 if self.session.step in STEPS else "?"
-                await self._send(session, f"Wizard em andamento — etapa {idx}/6. Selecione uma opção.")
+                linhas.append(f"Wizard: etapa {idx}/6")
+            if pa:
+                linhas.append(f"Aprovação pendente: `{pa.get('job_id')}`")
+                if pa.get("awaiting_text"):
+                    linhas.append("Aguardando texto de melhoria ✏️")
+            else:
+                linhas.append("Aprovação pendente: nenhuma")
+            await self._send(session, "\n".join(linhas))
 
         elif cmd == "/cancelar":
             self.session.reset()
@@ -510,14 +621,21 @@ class CampaignBot:
         data  = cb.get("data", "")
         cb_id = cb["id"]
 
-        # Callback de aprovação (A:/M:/R:) que chegou aqui => não há aprovação ativa
+        # Callback de aprovação sem sessão ativa (preview antigo ou entre ciclos de melhoria)
         if data[:1] in ("A", "M", "R") and ":" in data:
-            print(f"[Approval] callback SEM aprovação ativa: {data} (pending={self.pending_approval})")
+            cb_job = data.split(":", 1)[1]
+            print(f"[Approval] callback sem sessão ativa: {data} job={cb_job}")
             await self._answer_callback(
                 session, cb_id,
-                text="Esta aprovação expirou ou já foi respondida.",
-                show_alert=True,
+                text="Preview antigo — aguarde o novo preview ou ignore botões de mensagens anteriores.",
             )
+            msg_id = cb.get("message", {}).get("message_id")
+            chat_id = cb.get("message", {}).get("chat", {}).get("id")
+            if msg_id and chat_id:
+                await self._post(
+                    session, "editMessageReplyMarkup",
+                    chat_id=chat_id, message_id=msg_id, reply_markup={"inline_keyboard": []},
+                )
             return
 
         if not data.startswith("WIZ:"):
@@ -659,20 +777,27 @@ class CampaignBot:
         finally:
             self.session.running = False
             self.session.step = "idle"
-            self.pending_approval = None
+            with self._approval_lock:
+                if self.pending_approval:
+                    job_id = self.pending_approval.get("job_id")
+                    msg_id = self.pending_approval.get("message_id")
+                    self.pending_approval = None
+                    if msg_id:
+                        self._clear_stale_keyboards_sync([msg_id])
+                    print(f"[Approval] pipeline encerrado — limpeza job={job_id}")
 
     def _notify_error(self, msg: str):
-        async def _do():
-            async with aiohttp.ClientSession() as s:
-                await self._post(
-                    s, "sendMessage",
-                    chat_id=self.chat_id,
-                    text=f"Erro no pipeline: {msg}",
-                )
         try:
-            asyncio.run(_do())
-        except Exception:
-            pass
+            requests.post(
+                f"{self._base}/sendMessage",
+                json={
+                    "chat_id": self.chat_id,
+                    "text": f"❌ Erro no pipeline: {msg[:3500]}",
+                },
+                timeout=15,
+            )
+        except Exception as e:
+            print(f"[Bot] erro ao notificar: {e}")
 
     # -----------------------------------------------------------------------
     # Loop principal de polling
@@ -742,8 +867,34 @@ def _remove_lock():
         pass
 
 
-def main():
+def _pid_alive(pid: int) -> bool:
+    if pid <= 0:
+        return False
+    try:
+        os.kill(pid, 0)
+        return True
+    except OSError:
+        return False
+
+
+def _acquire_lock() -> bool:
+    """Impede segundo processo do bot (systemd + manual) competindo no getUpdates."""
+    if os.path.exists(LOCK_FILE):
+        try:
+            with open(LOCK_FILE, encoding="utf-8") as f:
+                old_pid = int(f.read().strip())
+            if old_pid != os.getpid() and _pid_alive(old_pid):
+                print(f"[Bot] Outro processo ativo (PID {old_pid}). Encerre-o antes de iniciar outro.")
+                return False
+        except (ValueError, OSError):
+            pass
     _write_lock()
+    return True
+
+
+def main():
+    if not _acquire_lock():
+        sys.exit(1)
     try:
         bot = CampaignBot()
         asyncio.run(bot.run())

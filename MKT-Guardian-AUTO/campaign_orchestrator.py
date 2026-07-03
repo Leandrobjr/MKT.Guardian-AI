@@ -836,6 +836,19 @@ class CampaignOrchestrator:
                 print("❌ Nenhum asset visual gerado para aprovação.")
                 return
 
+            video_path = assets_resultado.get("commercial_video_file", "")
+            if config.get("midia") == "imagem" and (
+                not video_path
+                or not os.path.isfile(str(video_path))
+                or str(video_path) in ("Não solicitado", "Não solicitada", "FALHOU")
+            ):
+                print("⚠️ MP4 estático ausente — preview será JPEG (sem áudio embutido no arquivo)")
+                if self.telegram:
+                    self.telegram.notificar_sync(
+                        "⚠️ *Aviso:* MP4 não gerado (FFmpeg). Preview em *imagem JPEG* "
+                        "— sem áudio mixado no arquivo. Layout atual; verifique FFmpeg no servidor."
+                    )
+
             job_id = f"{assets_resultado.get('basename', uuid.uuid4().hex[:8])}_r{revisao}"
             audio_para_aprovacao = None
             if not asset_path.lower().endswith(".mp4"):
@@ -867,6 +880,11 @@ class CampaignOrchestrator:
                 if revisao >= self.max_revisoes:
                     print(f"❌ Limite de {self.max_revisoes} revisões atingido.")
                     return
+                if self.telegram:
+                    self.telegram.notificar_sync(
+                        f"⏳ Job `{job_id}` em regeneração — "
+                        "ignore botões de previews anteriores até o novo preview chegar."
+                    )
                 feedback = acao.get("prompt", "")
                 plan = classify_improvement(feedback)
                 print(f"🔧 Plano de correção: {describe_plan(plan)}")

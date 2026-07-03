@@ -723,9 +723,32 @@ class CampaignBot:
                         print(f"[Bot] Erro ao processar update: {e}")
 
 
+LOCK_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".bot_running.lock")
+
+
+def _write_lock():
+    try:
+        with open(LOCK_FILE, "w", encoding="utf-8") as f:
+            f.write(str(os.getpid()))
+    except Exception:
+        pass
+
+
+def _remove_lock():
+    try:
+        if os.path.exists(LOCK_FILE):
+            os.remove(LOCK_FILE)
+    except Exception:
+        pass
+
+
 def main():
-    bot = CampaignBot()
-    asyncio.run(bot.run())
+    _write_lock()
+    try:
+        bot = CampaignBot()
+        asyncio.run(bot.run())
+    finally:
+        _remove_lock()
 
 
 if __name__ == "__main__":

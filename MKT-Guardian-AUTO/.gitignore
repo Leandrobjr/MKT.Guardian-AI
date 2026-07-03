@@ -5,5 +5,6 @@ venv/
 __pycache__/
 *.pyc
 output_campanha/
+.bot_running.lock
 contexto_negocio/memoria/*.jsonl
 !contexto_negocio/memoria/*.jsonl.example

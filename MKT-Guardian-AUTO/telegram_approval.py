@@ -21,6 +21,25 @@ from dotenv import load_dotenv
 load_dotenv()
 
 TELEGRAM_API = "https://api.telegram.org/bot"
+LOCK_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".bot_running.lock")
+
+
+def _bot_daemon_running() -> bool:
+    """Detecta se o daemon telegram_bot.py está ativo (mesmo token) para evitar
+    dois consumidores de getUpdates — causa de botões que 'não funcionam'."""
+    if not os.path.exists(LOCK_FILE):
+        return False
+    try:
+        pid = int(open(LOCK_FILE, encoding="utf-8").read().strip())
+    except (ValueError, OSError):
+        return False
+    try:
+        os.kill(pid, 0)  # não mata — apenas testa se o PID existe
+        return True
+    except (ProcessLookupError, PermissionError):
+        return False
+    except Exception:
+        return False
 
 
 class TelegramApproval:
@@ -33,6 +52,15 @@ class TelegramApproval:
             raise EnvironmentError(
                 "TELEGRAM_BOT_TOKEN e TELEGRAM_CHAT_ID precisam estar no .env\n"
                 "Crie um bot em @BotFather e obtenha o Chat ID via @userinfobot"
+            )
+
+        if _bot_daemon_running():
+            raise EnvironmentError(
+                "⚠️ O bot do Telegram (serviço guardian-bot) já está em execução.\n"
+                "Dois processos no mesmo bot quebram os botões de aprovação.\n\n"
+                "Use uma das opções:\n"
+                "  • Crie a campanha pelo Telegram: envie /nova ao bot (recomendado)\n"
+                "  • OU pare o bot antes de usar o terminal: sudo systemctl stop guardian-bot"
             )
 
     async def _post(self, session: aiohttp.ClientSession, method: str, **kwargs) -> dict:

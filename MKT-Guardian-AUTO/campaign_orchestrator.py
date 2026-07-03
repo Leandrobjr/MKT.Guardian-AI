@@ -217,8 +217,9 @@ class CampaignOrchestrator:
             "relatable working-class comfort — not luxury mansion, not worn-out poverty, not peeling paint."
         )
 
-    def _build_publico_scene(self, publico_slug: str, golpe_id: str) -> str | None:
-        """Cena visual alinhada ao ICP; sobrescreve direção genérica do golpe quando necessário."""
+    def _build_publico_scene(self, publico_slug: str, golpe_id: str, genero: str = "") -> str | None:
+        """Cena visual alinhada ao ICP; sobrescreve direção genérica do golpe quando necessário.
+        `genero` ('feminino'/'masculino') força a coerência com o tratamento do golpe (Mãe/Pai)."""
         wa = (
             "authentic WhatsApp chat with green message bubbles visible on phone screen, "
             "worried focused expression, documentary photorealistic, "
@@ -274,34 +275,44 @@ class CampaignOrchestrator:
             return por_golpe.get(golpe_id, padrao)
 
         if publico_slug == "idosos":
-            variants = [
-                (
-                    "Documentary photorealistic photo of a Brazilian senior man (65-75) on a living room "
-                    f"armchair reading {wa} urgent fake PIX payment message, "
-                ),
-                (
-                    "Documentary photorealistic photo of a Brazilian senior woman (58-72) with reading glasses "
-                    f"on sofa checking {wa} scam message pretending to be bank or relative, "
-                ),
+            cena_mulher = (
+                "Documentary photorealistic photo of a Brazilian senior woman (58-72) with reading glasses "
+                f"on sofa checking {wa} scam message pretending to be a relative, "
+            )
+            cena_homem = (
+                "Documentary photorealistic photo of a Brazilian senior man (65-75) on a living room "
+                f"armchair reading {wa} urgent fake message pretending to be a relative, "
+            )
+            if genero == "feminino":
+                return cena_mulher
+            if genero == "masculino":
+                return cena_homem
+            return random.choice([
+                cena_homem,
+                cena_mulher,
                 (
                     "Documentary photorealistic photo of elderly Brazilian couple at a simple dining table, "
                     f"one showing the other {wa} suspicious WhatsApp conversation, "
                 ),
-            ]
-            return random.choice(variants)
+            ])
 
         if publico_slug == "pais":
+            mae_cena = (
+                "Documentary photorealistic photo of a Brazilian mother (40-52) at home "
+                f"reading {wa} message from fake son or daughter asking urgent PIX, "
+            )
+            pai_cena = (
+                "Documentary photorealistic photo of a Brazilian father (40-55) in living room "
+                f"staring at {wa} fake relative emergency message, "
+            )
+            if genero == "feminino":
+                falso_parente_cena = mae_cena
+            elif genero == "masculino":
+                falso_parente_cena = pai_cena
+            else:
+                falso_parente_cena = random.choice([mae_cena, pai_cena])
             por_golpe = {
-                "falso_parente": random.choice([
-                    (
-                        "Documentary photorealistic photo of a Brazilian mother (40-52) at home "
-                        f"reading {wa} message from fake son or daughter asking urgent PIX, "
-                    ),
-                    (
-                        "Documentary photorealistic photo of a Brazilian father (40-55) in living room "
-                        f"staring at {wa} fake relative emergency message, "
-                    ),
-                ]),
+                "falso_parente": falso_parente_cena,
                 "grooming": (
                     "Documentary photorealistic photo of a Brazilian parent checking teenager's smartphone, "
                     f"{wa} suspicious grooming message visible, worried expression, "
@@ -356,13 +367,31 @@ class CampaignOrchestrator:
 
         return None
 
+    def _detect_visual_gender(self, creative_data: dict) -> str:
+        """Gênero da PESSOA retratada, inferido do tratamento do golpe (Mãe/Pai/Vó/Vô).
+        Evita incoerência entre narrativa ('MÃE') e imagem (homem)."""
+        alvo = (
+            creative_data.get("texto_card_notificacao", "") + " "
+            + creative_data.get("gancho_atencao_inicial", "") + " "
+            + creative_data.get("desenvolvimento_copy", "")
+        ).lower()
+        fem = bool(re.search(r"\bm[ãa]e\b|\bvov[óo]\b|\bav[óo]\b|\btitia\b|\bsogra\b", alvo))
+        masc = bool(re.search(r"\bpai\b|\bvov[ôo]\b|\bav[ôo]\b|\btitio\b|\bsogro\b", alvo))
+        if fem and not masc:
+            return "feminino"
+        if masc and not fem:
+            return "masculino"
+        gc = creative_data.get("genero_campanha", "")
+        return gc if gc in ("feminino", "masculino") else ""
+
     def _build_art_direction(self, golpe_obj: dict, creative_data: dict, config: dict) -> str:
         golpe_id = config.get("golpe_id", "")
         publico_slug = config.get("publico_slug", "")
         msg = creative_data.get("texto_card_notificacao", "").lower()
         genero = creative_data.get("genero_personagem_visual", "").lower()
+        genero_visual = self._detect_visual_gender(creative_data)
 
-        cena_publico = self._build_publico_scene(publico_slug, golpe_id)
+        cena_publico = self._build_publico_scene(publico_slug, golpe_id, genero_visual)
         base = cena_publico or golpe_obj.get("direcao_arte_emocional", "")
         ambiente = self._build_ambiente(publico_slug)
 
@@ -433,6 +462,10 @@ class CampaignOrchestrator:
     def _finalize_creative_data(self, creative_data: dict, config: dict, golpe_obj: dict) -> dict:
         produto = self.context_data.get("PRODUTO_E_POSICIONAMENTO", {})
         creative_data = self._harmonize_gender_copy(creative_data)
+        # Gênero autoritativo pelo tratamento do golpe (Mãe/Pai/Vó/Vô) — prevalece sobre aleatório
+        genero_visual = self._detect_visual_gender(creative_data)
+        if genero_visual:
+            creative_data["genero_campanha"] = genero_visual
         creative_data["tipo_midia_selecionada"] = config["midia"]
         creative_data["canal_veiculacao_selecionado"] = config["canal"]
         creative_data["direcao_arte_emocional"] = self._build_art_direction(golpe_obj, creative_data, config)

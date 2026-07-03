@@ -53,13 +53,15 @@ class VisualVarietyEngine:
         with open(self.log_path, "a", encoding="utf-8") as f:
             f.write(json.dumps(record, ensure_ascii=False) + "\n")
 
-    def _anti_repeat_clause(self, base_scene: str) -> str:
+    def _anti_repeat_clause(self, base_scene: str, lock_gender: bool = False) -> str:
         recent = self._recent_hashes()
         h = self._hash_prompt(base_scene)
         if h in recent:
+            # Quando o gênero é obrigatório (coerência com a narrativa), NÃO peça gênero diferente
+            variacao = "age, ethnicity, hair, clothes" if lock_gender else "age, gender, ethnicity, hair, clothes"
             return (
-                "CRITICAL: Generate a COMPLETELY DIFFERENT person (age, gender, ethnicity, hair, clothes) "
-                "and DIFFERENT room layout from any prior campaign. Avoid kitchen table with middle-aged woman."
+                f"CRITICAL: Generate a COMPLETELY DIFFERENT person ({variacao}) "
+                "and DIFFERENT room layout from any prior campaign."
             )
         return (
             "Create a unique individual with distinct face, hairstyle, outfit colors and background details. "
@@ -95,7 +97,18 @@ class VisualVarietyEngine:
         shot = random.choice(self.SHOT_VARIANTS)
         lighting = random.choice(self.LIGHTING)
         variation_id = f"{int(time.time())}-{random.randint(1000, 9999)}"
-        anti_repeat = self._anti_repeat_clause(creative_data.get("direcao_arte_emocional", ""))
+
+        # Gênero obrigatório para coerência com a narrativa (Mãe→mulher, Pai→homem)
+        genero = creative_data.get("genero_campanha", "")
+        genero_lock = ""
+        if genero == "feminino":
+            genero_lock = "MANDATORY: the single main subject is a WOMAN (female). "
+        elif genero == "masculino":
+            genero_lock = "MANDATORY: the single main subject is a MAN (male). "
+
+        anti_repeat = self._anti_repeat_clause(
+            creative_data.get("direcao_arte_emocional", ""), lock_gender=bool(genero_lock)
+        )
 
         genero_hint = creative_data.get("genero_personagem_visual", "")
         creative_data["persona_visual"] = persona
@@ -104,8 +117,8 @@ class VisualVarietyEngine:
         creative_data["visual_variation_id"] = variation_id
 
         sufixo = (
-            f"Main subject: Brazilian {persona['profissao']}, approximately {persona['idade']} years old, "
-            f"from {persona['cidade']}. "
+            f"{genero_lock}"
+            f"Approximately {persona['idade']} years old, from {persona['cidade']}. "
             f"{genero_hint + '. ' if genero_hint else ''}"
             f"{shot} {lighting} "
             f"Unique campaign visual ID {variation_id}. {anti_repeat}"

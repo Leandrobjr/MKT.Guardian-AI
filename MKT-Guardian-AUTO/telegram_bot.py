@@ -20,6 +20,7 @@ import queue as _queue
 import subprocess
 import sys
 import threading
+import traceback
 from typing import Any
 
 import aiohttp
@@ -120,7 +121,25 @@ class Session:
     def reset(self):
         self.__init__()
 
+    def wizard_complete(self) -> bool:
+        return all(s in self.selections for s in STEPS)
+
+    def status_label(self) -> str:
+        if self.running:
+            return "Pipeline: em execução"
+        if self.step == "idle":
+            return "Pipeline: ocioso — use /nova"
+        if self.step == "confirm":
+            ok = "pronto" if self.wizard_complete() else "incompleto — use /nova"
+            return f"Confirmação: {ok} para INICIAR CAMPANHA"
+        if self.step in STEPS:
+            return f"Wizard: etapa {STEPS.index(self.step) + 1}/6"
+        return f"Estado: {self.step}"
+
     def to_config(self) -> dict:
+        missing = [s for s in STEPS if s not in self.selections]
+        if missing:
+            raise ValueError(f"Wizard incompleto — faltam etapas: {', '.join(missing)}")
         publico_slug = self.selections["select_publico"]
         golpe_id = self.selections["select_golpe"]
         midia_key = self.selections["select_midia"]
@@ -304,7 +323,6 @@ class CampaignBot:
             )
         self._base   = f"{TELEGRAM_API}{self.token}"
         self.session = Session()
-        self._pipeline_lock = asyncio.Lock()
         self._approval_lock = threading.Lock()
         self.pending_approval: dict | None = None
         self._stale_approval_msgs: list[int] = []
@@ -579,14 +597,8 @@ class CampaignBot:
             linhas = [
                 f"PID bot: `{os.getpid()}`",
                 f"Versão: v{MEDIA_FACTORY_VERSION}",
+                self.session.status_label(),
             ]
-            if self.session.running:
-                linhas.append("Pipeline: *em execução*")
-            elif self.session.step == "idle":
-                linhas.append("Pipeline: *ocioso*")
-            else:
-                idx = STEPS.index(self.session.step) + 1 if self.session.step in STEPS else "?"
-                linhas.append(f"Wizard: etapa {idx}/6")
             if pa:
                 linhas.append(f"Aprovação pendente: `{pa.get('job_id')}`")
                 if pa.get("awaiting_text"):
@@ -656,23 +668,52 @@ class CampaignBot:
             return
 
         if step == "confirm" and value == "yes":
-            async with self._pipeline_lock:
-                if self.session.running:
-                    await self._send(session, "⚠️ Campanha já em execução. Aguarde o preview.")
-                    return
-                config = self.session.to_config()
-                self.session.running = True
-                self.session.step = "running"
-                msg_id = cb.get("message", {}).get("message_id")
-                chat_id = cb.get("message", {}).get("chat", {}).get("id")
+            msg_id = cb.get("message", {}).get("message_id")
+            chat_id = cb.get("message", {}).get("chat", {}).get("id")
 
-            # Remove o teclado inline para bloquear novos cliques no mesmo botão
+            if self.session.running:
+                await self._answer_callback(session, cb_id, text="Campanha já em execução — aguarde o preview.")
+                return
+
+            if self.session.step != "confirm":
+                await self._answer_callback(
+                    session, cb_id,
+                    text="Esta confirmação expirou. Use /nova e toque INICIAR na mensagem mais recente.",
+                )
+                if msg_id and chat_id:
+                    await self._post(
+                        session, "editMessageReplyMarkup",
+                        chat_id=chat_id, message_id=msg_id, reply_markup={"inline_keyboard": []},
+                    )
+                return
+
+            if not self.session.wizard_complete():
+                await self._answer_callback(session, cb_id, text="Wizard incompleto — envie /nova para recomeçar.")
+                return
+
+            try:
+                config = self.session.to_config()
+            except Exception as e:
+                print(f"[Bot] erro to_config no confirm: {e}")
+                await self._answer_callback(session, cb_id, text=f"Erro na configuração: {e}", show_alert=True)
+                return
+
+            await self._answer_callback(session, cb_id, text="Iniciando campanha…")
+
             if msg_id and chat_id:
                 await self._post(
                     session, "editMessageReplyMarkup",
                     chat_id=chat_id, message_id=msg_id, reply_markup={"inline_keyboard": []},
                 )
-            await self._send(session, "✅ Campanha iniciada! Aguarde o preview para aprovação...")
+                await self._post(
+                    session, "editMessageText",
+                    chat_id=chat_id, message_id=msg_id,
+                    text=self.session.summary() + "\n\n✅ *Campanha iniciada — aguarde o preview.*",
+                    parse_mode="Markdown",
+                )
+
+            self.session.running = True
+            self.session.step = "running"
             t = threading.Thread(target=self._run_pipeline, args=(config,), daemon=True)
             self.session.thread = t
             t.start()
@@ -846,6 +887,8 @@ class CampaignBot:
                             await self._handle_callback(session, cb)
                     except Exception as e:
                         print(f"[Bot] Erro ao processar update: {e}")
+                        import traceback
+                        traceback.print_exc()
 
 
 LOCK_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".bot_running.lock")

@@ -38,7 +38,7 @@
     {
       "id": "pais",
       "nome": "Pais e Responsáveis",
-      "faixa_etaria": "30-55",
+      "faixa_etaria": "35-50",
       "descricao": "Pais preocupados com a segurança digital dos filhos menores e idosos da família",
       "dores_principais": [
         "Medo de grooming e aliciamento de menores",
@@ -67,7 +67,7 @@
     {
       "id": "idosos",
       "nome": "Idosos e Aposentados",
-      "faixa_etaria": "55-75",
+      "faixa_etaria": "65-85",
       "descricao": "Aposentados vulneráveis a fraudes emocionais e golpes de falso parente",
       "dores_principais": [
         "Medo de golpe do falso parente pedindo dinheiro",
@@ -147,7 +147,7 @@
         "'NÃO CONTA PRA SUA MÃE.' A FRASE QUE ANTECEDE UMA TRAGÉDIA"
       ],
       "frase_golpista": "vc é muito linda... não conta pra ninguém que a gente conversa, é nosso segredo 😉 manda uma foto sua?",
-      "direcao_arte_emocional": "Documentary photorealistic photo of a Brazilian mother checking her teenage daughter's smartphone, daughter (girl 12-15) on bed in background, WhatsApp chat with suspicious grooming message on screen, worried mother, clean tidy bedroom with well-painted walls, pleasant natural light",
+      "direcao_arte_emocional": "Documentary photorealistic photo of a Brazilian mother checking her teenage daughter's smartphone, daughter (girl, 10-17) on bed in background, WhatsApp chat with suspicious grooming message on screen, worried mother (35-50), clean tidy bedroom with well-painted walls, pleasant natural light",
       "ctas": ["PROTEJA SEU FILHO HOJE — É GRÁTIS", "VIGIE QUEM FALA COM SEU FILHO"]
     },
     {
@@ -191,6 +191,33 @@
     "link_conversao_obrigatorio": "https://guardian-ai.app",
     "intensidade_emocional": "alta"
   },
+  "GUARDRAILS_PERSONAGENS": {
+    "faixas_etarias": {
+      "idosos": {
+        "min": 65,
+        "max": 85,
+        "rotulo": "Idoso(a)",
+        "regra": "Personagem idoso(a) deve ter 65 anos ou mais."
+      },
+      "pais": {
+        "min": 35,
+        "max": 50,
+        "rotulo": "Pai/Mãe",
+        "regra": "Personagem pai ou mãe deve ter entre 35 e 50 anos."
+      },
+      "filhos": {
+        "min": 10,
+        "max": 17,
+        "rotulo": "Filho/Filha",
+        "regra": "Personagem filho ou filha (quando aparecer na cena) deve ter entre 10 e 17 anos."
+      }
+    },
+    "alternancia_genero": {
+      "obrigatorio": true,
+      "regra": "Alternar o sexo do personagem principal a cada nova campanha (homem → mulher → homem).",
+      "excecao": "Quando a narrativa fixar tratamento (Mãe, Pai, Vó, Vô), o sexo segue a narrativa — mas a próxima campanha neutra alterna a partir daí."
+    }
+  },
   "DIRETRIZES_VISUAIS": {
     "estilo_fotografico": "Documentary photorealistic advertising photography, Brazilian everyday life, clean well-kept homes with tidy walls, pleasant natural daylight, relatable working-class comfort, authentic human skin texture, 50mm lens shallow depth of field.",
     "regras_obrigatorias": [
@@ -199,6 +226,8 @@
       "Walls must be well-kept and painted, not peeling or heavily worn.",
       "People dressed in normal clean casual clothes — not ragged, not high fashion.",
       "Gender in image MUST match gender in scam message (linda=menina, lindo=menino).",
+      "Age guardrails: elderly 65+, parents 35-50, children 10-17 when shown.",
+      "Alternate main character gender across campaigns when narrative does not lock Mãe/Pai.",
       "The scam must be visible inside WhatsApp (message, link, code request).",
       "Product context is WhatsApp security only."
     ],
@@ -239,11 +268,13 @@
     "budget_diario_brl": 50.00
   },
   "PERSONAS_EXEMPLO": [
-    {"nome": "Carlos", "idade": 62, "profissao": "Aposentado", "cidade": "São Paulo", "publico_id": "idosos"},
-    {"nome": "Ana", "idade": 45, "profissao": "Professora", "cidade": "Belo Horizonte", "publico_id": "pais"},
-    {"nome": "Roberto", "idade": 38, "profissao": "Comerciante", "cidade": "Rio de Janeiro", "publico_id": "profissionais"},
-    {"nome": "Maria", "idade": 55, "profissao": "Dona de casa", "cidade": "Fortaleza", "publico_id": "massa"},
-    {"nome": "Fernanda", "idade": 33, "profissao": "Enfermeira", "cidade": "Curitiba", "publico_id": "massa"},
-    {"nome": "José", "idade": 68, "profissao": "Aposentado INSS", "cidade": "Salvador", "publico_id": "idosos"}
+    {"nome": "Carlos", "idade": 68, "profissao": "Aposentado", "cidade": "São Paulo", "publico_id": "idosos", "genero": "masculino"},
+    {"nome": "Helena", "idade": 72, "profissao": "Aposentada", "cidade": "Recife", "publico_id": "idosos", "genero": "feminino"},
+    {"nome": "Ana", "idade": 42, "profissao": "Professora", "cidade": "Belo Horizonte", "publico_id": "pais", "genero": "feminino"},
+    {"nome": "Marcos", "idade": 45, "profissao": "Pai de família", "cidade": "Curitiba", "publico_id": "pais", "genero": "masculino"},
+    {"nome": "Roberto", "idade": 42, "profissao": "Comerciante", "cidade": "Rio de Janeiro", "publico_id": "profissionais", "genero": "masculino"},
+    {"nome": "Maria", "idade": 48, "profissao": "Dona de casa", "cidade": "Fortaleza", "publico_id": "massa", "genero": "feminino"},
+    {"nome": "Fernanda", "idade": 38, "profissao": "Enfermeira", "cidade": "Curitiba", "publico_id": "massa", "genero": "feminino"},
+    {"nome": "José", "idade": 70, "profissao": "Aposentado INSS", "cidade": "Salvador", "publico_id": "idosos", "genero": "masculino"}
   ]
 }

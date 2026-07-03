@@ -24,7 +24,63 @@ class VisualVarietyEngine:
 
     def __init__(self, base_dir: str):
         self.log_path = os.path.join(base_dir, "contexto_negocio", "memoria", "imagens_prompts.jsonl")
+        self.gender_state_path = os.path.join(
+            base_dir, "contexto_negocio", "memoria", "genero_alternancia.json"
+        )
         os.makedirs(os.path.dirname(self.log_path), exist_ok=True)
+
+    def _load_gender_state(self) -> dict:
+        if not os.path.isfile(self.gender_state_path):
+            return {}
+        try:
+            with open(self.gender_state_path, encoding="utf-8") as f:
+                return json.load(f)
+        except (json.JSONDecodeError, OSError):
+            return {}
+
+    def _save_gender_state(self, state: dict):
+        try:
+            with open(self.gender_state_path, "w", encoding="utf-8") as f:
+                json.dump(state, f, ensure_ascii=False, indent=2)
+        except OSError:
+            pass
+
+    def next_alternating_gender(self, publico_slug: str = "geral") -> str:
+        """Alterna M/F a cada campanha quando a narrativa não fixa o sexo."""
+        state = self._load_gender_state()
+        last = state.get(publico_slug) or state.get("_global", "masculino")
+        return "feminino" if last == "masculino" else "masculino"
+
+    def record_gender(self, genero: str, publico_slug: str = "geral"):
+        if genero not in ("feminino", "masculino"):
+            return
+        state = self._load_gender_state()
+        state[publico_slug] = genero
+        state["_global"] = genero
+        self._save_gender_state(state)
+
+    def _age_range(self, context_data: dict, key: str) -> tuple[int, int] | None:
+        faixa = (
+            context_data.get("GUARDRAILS_PERSONAGENS", {})
+            .get("faixas_etarias", {})
+            .get(key, {})
+        )
+        if faixa.get("min") is not None and faixa.get("max") is not None:
+            return int(faixa["min"]), int(faixa["max"])
+        return None
+
+    def _clamp_age(self, idade: int, lo: int, hi: int) -> int:
+        return max(lo, min(hi, idade))
+
+    def _apply_age_guardrails(self, persona: dict, publico_slug: str, context_data: dict) -> dict:
+        p = dict(persona)
+        if publico_slug == "idosos":
+            rng = self._age_range(context_data, "idosos") or (65, 85)
+            p["idade"] = self._clamp_age(p.get("idade", 68), *rng)
+        elif publico_slug == "pais":
+            rng = self._age_range(context_data, "pais") or (35, 50)
+            p["idade"] = self._clamp_age(p.get("idade", 42), *rng)
+        return p
 
     def _recent_hashes(self, limit: int = 12) -> set[str]:
         if not os.path.isfile(self.log_path):
@@ -73,27 +129,35 @@ class VisualVarietyEngine:
         "geral": "massa",
     }
 
-    def pick_persona(self, context_data: dict, publico_id: str, publico_slug: str = "") -> dict:
+    def pick_persona(
+        self, context_data: dict, publico_id: str, publico_slug: str = "", genero: str = ""
+    ) -> dict:
         if publico_slug == "escolas":
             escola = [
-                {"nome": "Paula", "idade": 44, "profissao": "Diretora escolar", "cidade": "Brasília"},
-                {"nome": "Ana", "idade": 45, "profissao": "Professora", "cidade": "Belo Horizonte"},
+                {"nome": "Paula", "idade": 44, "profissao": "Diretora escolar", "cidade": "Brasília", "genero": "feminino"},
+                {"nome": "Ana", "idade": 45, "profissao": "Professora", "cidade": "Belo Horizonte", "genero": "feminino"},
             ]
-            return random.choice(escola)
+            candidatos = escola
+        else:
+            lookup_id = self.PERSONA_ALIASES.get(publico_id, publico_id)
+            personas = context_data.get("PERSONAS_EXEMPLO", [])
+            candidatos = [p for p in personas if p.get("publico_id") == lookup_id]
+            if genero in ("feminino", "masculino"):
+                por_genero = [p for p in candidatos if p.get("genero") == genero]
+                if por_genero:
+                    candidatos = por_genero
+            if not candidatos:
+                candidatos = personas
+            if not candidatos:
+                return {"nome": "Bruno", "idade": 42, "profissao": "trabalhador", "cidade": "São Paulo", "genero": "masculino"}
 
-        lookup_id = self.PERSONA_ALIASES.get(publico_id, publico_id)
-        personas = context_data.get("PERSONAS_EXEMPLO", [])
-        candidatos = [p for p in personas if p.get("publico_id") == lookup_id]
-        if not candidatos:
-            candidatos = personas
-        if not candidatos:
-            return {"nome": "Bruno", "idade": 42, "profissao": "trabalhador", "cidade": "São Paulo"}
-        return random.choice(candidatos)
+        persona = random.choice(candidatos)
+        return self._apply_age_guardrails(persona, publico_slug, context_data)
 
     def enrich(self, creative_data: dict, config: dict, context_data: dict) -> dict:
         publico_id = config.get("publico_id", "massa")
         publico_slug = config.get("publico_slug", publico_id)
-        persona = self.pick_persona(context_data, publico_id, publico_slug)
+        persona = self.pick_persona(context_data, publico_id, publico_slug, genero=creative_data.get("genero_campanha", ""))
         shot = random.choice(self.SHOT_VARIANTS)
         lighting = random.choice(self.LIGHTING)
         variation_id = f"{int(time.time())}-{random.randint(1000, 9999)}"

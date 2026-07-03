@@ -276,11 +276,11 @@ class CampaignOrchestrator:
 
         if publico_slug == "idosos":
             cena_mulher = (
-                "Documentary photorealistic photo of a Brazilian senior woman (58-72) with reading glasses "
+                "Documentary photorealistic photo of a Brazilian senior woman (65-82) with reading glasses "
                 f"on sofa checking {wa} scam message pretending to be a relative, "
             )
             cena_homem = (
-                "Documentary photorealistic photo of a Brazilian senior man (65-75) on a living room "
+                "Documentary photorealistic photo of a Brazilian senior man (65-82) on a living room "
                 f"armchair reading {wa} urgent fake message pretending to be a relative, "
             )
             if genero == "feminino":
@@ -298,11 +298,11 @@ class CampaignOrchestrator:
 
         if publico_slug == "pais":
             mae_cena = (
-                "Documentary photorealistic photo of a Brazilian mother (40-52) at home "
+                "Documentary photorealistic photo of a Brazilian mother (35-50) at home "
                 f"reading {wa} message from fake son or daughter asking urgent PIX, "
             )
             pai_cena = (
-                "Documentary photorealistic photo of a Brazilian father (40-55) in living room "
+                "Documentary photorealistic photo of a Brazilian father (35-50) in living room "
                 f"staring at {wa} fake relative emergency message, "
             )
             if genero == "feminino":
@@ -384,6 +384,32 @@ class CampaignOrchestrator:
         gc = creative_data.get("genero_campanha", "")
         return gc if gc in ("feminino", "masculino") else ""
 
+    def _format_guardrails_for_prompt(self) -> str:
+        g = self.context_data.get("GUARDRAILS_PERSONAGENS", {})
+        faixas = g.get("faixas_etarias", {})
+        alt = g.get("alternancia_genero", {})
+        lines = ["GUARDRAILS DE PERSONAGENS (OBRIGATÓRIO):"]
+        for key in ("idosos", "pais", "filhos"):
+            f = faixas.get(key, {})
+            if f.get("regra"):
+                lines.append(f"- {f.get('rotulo', key)}: {f['regra']}")
+        if alt.get("regra"):
+            lines.append(f"- Alternância de sexo: {alt['regra']}")
+            if alt.get("excecao"):
+                lines.append(f"  Exceção: {alt['excecao']}")
+        return "\n".join(lines)
+
+    def _resolve_genero_campanha(self, creative_data: dict, config: dict) -> str:
+        """Narrativa (Mãe/Pai) prevalece; caso neutro, alterna M/F entre campanhas."""
+        genero_narrativa = self._detect_visual_gender(creative_data)
+        publico_slug = config.get("publico_slug", "geral")
+        if genero_narrativa:
+            genero = genero_narrativa
+        else:
+            genero = self.visual_variety.next_alternating_gender(publico_slug)
+        self.visual_variety.record_gender(genero, publico_slug)
+        return genero
+
     def _build_art_direction(self, golpe_obj: dict, creative_data: dict, config: dict) -> str:
         golpe_id = config.get("golpe_id", "")
         publico_slug = config.get("publico_slug", "")
@@ -400,14 +426,14 @@ class CampaignOrchestrator:
             masculino = any(w in msg for w in ("lindo", "mano", "cara")) or "menino" in genero
             if feminino:
                 base = (
-                    "Documentary photorealistic photo of a Brazilian mother checking her teenage "
-                    "daughter's smartphone, daughter (girl, 12-15) visible in background on bed, "
+                    "Documentary photorealistic photo of a Brazilian mother (35-50) checking her teenage "
+                    "daughter's smartphone, daughter (girl, 10-17) visible in background on bed, "
                     "WhatsApp chat on phone screen with suspicious message, worried mother expression, "
                 )
             elif masculino:
                 base = (
-                    "Documentary photorealistic photo of a Brazilian mother checking her teenage "
-                    "son's smartphone, son (boy, 12-15) visible in background, "
+                    "Documentary photorealistic photo of a Brazilian mother (35-50) checking her teenage "
+                    "son's smartphone, son (boy, 10-17) visible in background, "
                     "WhatsApp chat on phone with suspicious message, worried mother expression, "
                 )
             else:
@@ -430,10 +456,10 @@ class CampaignOrchestrator:
         if feminino:
             creative_data["genero_campanha"] = "feminino"
             if not genero:
-                creative_data["genero_personagem_visual"] = "menina adolescente brasileira"
+                creative_data["genero_personagem_visual"] = "menina adolescente brasileira (10-17 anos)"
         elif masculino:
             creative_data["genero_campanha"] = "masculino"
-            creative_data["genero_personagem_visual"] = genero or "menino adolescente brasileiro"
+            creative_data["genero_personagem_visual"] = genero or "menino adolescente brasileiro (10-17 anos)"
         else:
             creative_data["genero_campanha"] = "neutro"
 
@@ -462,10 +488,7 @@ class CampaignOrchestrator:
     def _finalize_creative_data(self, creative_data: dict, config: dict, golpe_obj: dict) -> dict:
         produto = self.context_data.get("PRODUTO_E_POSICIONAMENTO", {})
         creative_data = self._harmonize_gender_copy(creative_data)
-        # Gênero autoritativo pelo tratamento do golpe (Mãe/Pai/Vó/Vô) — prevalece sobre aleatório
-        genero_visual = self._detect_visual_gender(creative_data)
-        if genero_visual:
-            creative_data["genero_campanha"] = genero_visual
+        creative_data["genero_campanha"] = self._resolve_genero_campanha(creative_data, config)
         creative_data["tipo_midia_selecionada"] = config["midia"]
         creative_data["canal_veiculacao_selecionado"] = config["canal"]
         creative_data["direcao_arte_emocional"] = self._build_art_direction(golpe_obj, creative_data, config)
@@ -526,6 +549,7 @@ class CampaignOrchestrator:
             f"- Duração alvo da narração: {preset['copy_duration']}\n"
             f"- Tom de voz do roteiro: {preset['copy_tone']}\n"
             f"- Objetivo de Conversão: {config['objetivo']}\n\n"
+            f"{self._format_guardrails_for_prompt()}\n\n"
             f"FOCO DO PRODUTO (OBRIGATÓRIO):\n"
             f"- {foco_whatsapp}\n"
             f"- Toda narrativa deve mencionar WhatsApp explicitamente.\n\n"
@@ -574,7 +598,8 @@ class CampaignOrchestrator:
             "3. chamada_para_acao_cta: Comando curto em MAIÚSCULAS.\n"
             "4. texto_card_notificacao: APENAS a mensagem REAL do golpista no WhatsApp.\n"
             "5. frase_destaque_golpista: Frase-chave do golpista para destacar no card.\n"
-            "6. genero_personagem_visual: DEVE combinar com o público-alvo da campanha.\n"
+            "6. genero_personagem_visual: DEVE respeitar GUARDRAILS — idoso(a) 65+, pai/mãe 35-50, "
+            "filho/filha 10-17 se aparecer; sexo coerente com narrativa (Mãe=mulher, Pai=homem).\n"
             "7. texto_card_solucao: IGNORE este campo — será substituído automaticamente por: "
             f"'{card_solucao_text()}'\n"
             "8. publico_alvo_icp: Descrição resumida do público.\n"

@@ -1,0 +1,178 @@
+{
+  "_defaults": {
+    "grooming": {
+      "narrativa_parental": false
+    }
+  },
+  "idosos": {
+    "_default": {
+      "protagonista": "Idoso(a) brasileiro(a) aposentado(a) (65-82 anos)",
+      "angulo_narrativa": "Aposentadoria e economia de uma vida inteira em risco por golpe no WhatsApp.",
+      "narrativa_parental": false,
+      "proibicoes_narrativa": [
+        "NÃO use narrativa de pai/mãe protegendo filhos",
+        "NÃO coloque adolescentes como foco principal"
+      ],
+      "obrigacoes_narrativa": [
+        "Protagonista com 65 anos ou mais",
+        "Mencione aposentadoria, poupança ou medo de perder economia"
+      ]
+    },
+    "falso_parente": {
+      "ganchos": [
+        "O 'NETO' QUE PEDIU PIX NÃO ERA O NETO DELA.",
+        "'VÓ, TROQUEI DE NÚMERO.' FOI ASSIM QUE PERDERAM A APOSENTADORIA.",
+        "ELA ACHOU QUE AJUDAVA O FILHO. ERA UM GOLPISTA."
+      ],
+      "frase_golpista": "Oi vó, troquei de número, salva aí. Preciso de um PIX urgente, depois te explico pessoalmente."
+    },
+    "grooming": {
+      "angulo_narrativa": "Idosos cuidando de netos expostos a estranhos no WhatsApp — ângulo avô/avó, não pai/mãe jovem.",
+      "ganchos": [
+        "O ESTRANHO QUE FALAVA COM O NETO PELO WHATSAPP TINHA 50 ANOS.",
+        "ENQUANTO A AVÓ DORMIA, ALGUÉM PEDIA FOTOS DO NETO."
+      ],
+      "frase_golpista": "oi, sou colega do seu neto... ele me passou seu número. posso te mandar uma foto? não conta pra ele",
+      "persona_visual": "avó ou avô brasileiro(a) (65-82 anos) preocupado(a)"
+    }
+  },
+  "pais": {
+    "_default": {
+      "protagonista": "Pai ou mãe brasileiro(a) (35-50 anos)",
+      "angulo_narrativa": "Proteção dos filhos e da família contra ameaças reais no WhatsApp.",
+      "narrativa_parental": true,
+      "obrigacoes_narrativa": [
+        "Espectador é pai ou mãe preocupado(a)",
+        "Dor centrada nos filhos ou na segurança familiar"
+      ]
+    },
+    "grooming": {
+      "ganchos": [
+        "ELE DISSE QUE TINHA 12 ANOS. TINHA 43.",
+        "ENQUANTO VOCÊ LÊ ISTO, UM ESTRANHO PODE ESTAR FALANDO COM SEU FILHO",
+        "'NÃO CONTA PRA SUA MÃE.' A FRASE QUE ANTECEDE UMA TRAGÉDIA"
+      ],
+      "frase_golpista": "vc é muito linda... não conta pra ninguém que a gente conversa, é nosso segredo 😉 manda uma foto sua?",
+      "direcao_arte_emocional": "Documentary photorealistic photo of a Brazilian mother (35-50) checking her teenage daughter's smartphone, daughter (girl, 10-17) visible in background, WhatsApp chat with suspicious grooming message on screen, worried mother expression, clean tidy home",
+      "cta_template": "TESTE GRÁTIS — PROTEJA o WhatsApp dos SEUS FILHOS, AGORA!",
+      "narrativa_parental": true
+    },
+    "falso_parente": {
+      "ganchos": [
+        "'MÃE, TROQUEI DE NÚMERO.' FOI ASSIM QUE ROUBARAM R$ 8 MIL DELA.",
+        "O 'FILHO' QUE PEDIU DINHEIRO NÃO ERA O FILHO DELA"
+      ]
+    }
+  },
+  "empresarios": {
+    "_default": {
+      "protagonista": "Empresário(a) ou comerciante brasileiro(a) (35-55 anos)",
+      "angulo_narrativa": "O negócio, o caixa e a reputação em risco por golpe no WhatsApp Business.",
+      "narrativa_parental": false,
+      "persona_visual": "empresário ou comerciante brasileiro(a), 35-55 anos, ambiente comercial",
+      "proibicoes_narrativa": [
+        "NÃO use cena doméstica de cozinha ou quarto de adolescente",
+        "NÃO trate o espectador como pai/mãe em casa"
+      ],
+      "obrigacoes_narrativa": [
+        "Ambiente comercial: loja, balcão, escritório, WhatsApp Business",
+        "Dor ligada a prejuízo financeiro ou reputação do negócio"
+      ],
+      "cta_template": "TESTE GRÁTIS — PROTEJA SEU WHATSAPP BUSINESS AGORA!"
+    },
+    "pix_fantasma": {
+      "ganchos": [
+        "UM PIX DO CAIXA DA LOJA CAIU NA CONTA DE UM GOLPISTA.",
+        "O 'CLIENTE' QUE PEDIU ESTORNO ERA UM FRAUDADOR."
+      ],
+      "frase_golpista": "Olá, sou do financeiro. Identificamos cobrança duplicada no seu CNPJ. Confirme o PIX de estorno para este número agora."
+    },
+    "clonagem_whatsapp": {
+      "ganchos": [
+        "CLONARAM O WHATSAPP BUSINESS E PEDIRAM PIX AOS CLIENTES.",
+        "EM MINUTOS, O NÚMERO DA LOJA VIRou ARMA DE GOLPE."
+      ]
+    },
+    "grooming": {
+      "angulo_narrativa": "Comerciante alerta sobre golpista se passando por menor em grupos de clientes ou família — ângulo profissional, não pai em casa.",
+      "ganchos": [
+        "UM 'CLIENTE MENOR' NO WHATSAPP BUSINESS ERA UM ADULTO.",
+        "GOLPISTA SE PASSOU POR FILHO DE CLIENTE PARA APLICAR GOLPE."
+      ],
+      "frase_golpista": "oi, sou o filho da dona Maria que compra aí... minha mãe pediu pra eu falar com vc em particular",
+      "direcao_arte_emocional": "Documentary photorealistic photo of a Brazilian shop owner (35-55) behind store counter reviewing WhatsApp Business chat with suspicious message from fake minor, commercial workspace, worried expression"
+    }
+  },
+  "escolas": {
+    "_default": {
+      "protagonista": "Diretor(a), coordenador(a) pedagógico(a) ou professor(a) brasileiro(a) (40-55 anos)",
+      "angulo_narrativa": "A escola como guardiã da comunicação digital com famílias e alunos — responsabilidade institucional.",
+      "narrativa_parental": false,
+      "persona_visual": "diretor(a) ou coordenador(a) pedagógico(a) em ambiente escolar administrativo",
+      "proibicoes_narrativa": [
+        "NÃO trate o espectador como pai ou mãe em casa",
+        "NÃO use 'seu filho' ou 'sua filha' como protagonista — use alunos, turma, famílias da escola",
+        "NÃO coloque cena em quarto de adolescente com mãe/pai — use ambiente escolar"
+      ],
+      "obrigacoes_narrativa": [
+        "Protagonista é educador(a) ou gestor(a) escolar",
+        "Golpe ocorre em contexto escolar: grupo de turma, grupo de pais, comunicação escola-família",
+        "Mencione responsabilidade da escola com alunos e famílias"
+      ],
+      "cta_template": "TESTE GRÁTIS — PROTEJA O WHATSAPP DA SUA ESCOLA, AGORA!"
+    },
+    "grooming": {
+      "angulo_narrativa": "Predador digital infiltrado em grupo de WhatsApp da turma ou dos pais. O educador detecta, alerta famílias e protege a comunicação escolar — NÃO é história de mãe em casa.",
+      "ganchos": [
+        "UM ESTRANHO NO GRUPO DE WHATSAPP DA ESCOLA. NINGUÉM PERCEBEU.",
+        "O 'RESPONSÁVEL NOVO' DO GRUPO DA TURMA NÃO TINHA FILHO NA ESCOLA.",
+        "ENQUANTO A ESCOLA DORMIA, UM PREDADOR FALAVA COM OS ALUNOS."
+      ],
+      "gancho_modelo": "Alerta escolar: predador infiltrado no WhatsApp da turma",
+      "frase_golpista": "oi pessoal, sou mãe da Laura da 7ºB... alguém pode me chamar no privado? preciso combinar uma coisa 😊",
+      "direcao_arte_emocional": "Documentary photorealistic photo of a Brazilian school director or pedagogical coordinator (40-55) in school administrative office, reviewing smartphone showing WhatsApp parents group with suspicious stranger asking private contact, school diplomas and notices on wall, worried professional expression, NOT home bedroom",
+      "obrigacoes_narrativa": [
+        "História centrada na escola descobrindo ameaça em grupo de turma ou de pais",
+        "Mencione alunos, turma, famílias ou comunicação escola-família",
+        "Guardian AI alerta o gestor escolar — não uma mãe em casa"
+      ]
+    },
+    "phishing": {
+      "ganchos": [
+        "UM LINK NO GRUPO DOS PAIS ROUBOU DADOS DE MEIA ESCOLA.",
+        "O 'COMUNICADO OFICIAL' NO WHATSAPP ERA FALSO."
+      ],
+      "frase_golpista": "Comunicado urgente da secretaria: clique no link para confirmar dados dos alunos antes do prazo: bit.ly/escola-dados",
+      "direcao_arte_emocional": "Documentary photorealistic photo of a Brazilian school director in administrative office reviewing WhatsApp group message with suspicious phishing link pretending to be school announcement"
+    },
+    "clonagem_whatsapp": {
+      "ganchos": [
+        "CLONARAM O WHATSAPP DA ESCOLA E PEDIRAM MENSALIDADE AOS PAIS.",
+        "O NÚMERO OFICIAL DA ESCOLA FOI SEQUESTRADO NO WHATSAPP."
+      ],
+      "frase_golpista": "Secretaria Escolar: enviamos código de verificação. Digite os 6 dígitos aqui para confirmar o WhatsApp institucional."
+    },
+    "falso_parente": {
+      "angulo_narrativa": "Golpista se passa por responsável de aluno no grupo da escola pedindo PIX ou dados — ângulo gestão escolar.",
+      "ganchos": [
+        "O 'PAI' QUE PEDIU PIX NO GRUPO DA TURMA NÃO ERA PAI DE NENHUM ALUNO.",
+        "GOLPISTA SE PASSOU POR RESPONSÁVEL PARA ENGANAR A ESCOLA."
+      ],
+      "frase_golpista": "Oi, sou pai do João da turma. Troquei de número. Preciso pagar uma taxa escolar urgente via PIX, podem me ajudar?"
+    },
+    "pix_fantasma": {
+      "ganchos": [
+        "PIX FALSO DE 'MENSALIDADE' NO GRUPO DOS PAIS ROUBOU MILHARES.",
+        "A ESCOLA QUASE PERDEU O CAIXA POR GOLPE NO WHATSAPP."
+      ],
+      "frase_golpista": "Secretaria: mensalidade com desconto só hoje. Faça o PIX para este número e envie o comprovante no grupo."
+    },
+    "falsa_central": {
+      "ganchos": [
+        "O 'SUPORTE DO BANCO' QUE LIGOU PARA A ESCOLA ERA GOLPISTA.",
+        "FALSA CENTRAL PEDIU SENHA DA CONTA ESCOLAR PELO WHATSAPP."
+      ],
+      "frase_golpista": "Central de segurança bancária: detectamos fraude na conta da escola. Confirme a senha do Internet Banking agora pelo WhatsApp."
+    }
+  }
+}

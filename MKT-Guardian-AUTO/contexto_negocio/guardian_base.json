@@ -62,7 +62,26 @@
       ],
       "gatilhos_emocionais": ["reputação", "prejuízo financeiro", "paralisação do negócio"],
       "prioridade": 3,
+      "persona_visual_padrao": "empresário ou comerciante brasileiro(a), 35-55 anos",
+      "angulo_padrao": "O negócio e o caixa em risco por golpe no WhatsApp Business.",
       "direcao_arte_referencia": "Comerciante ou empresário brasileiro em loja, balcão ou escritório comercial — nunca cozinha doméstica. WhatsApp Business visível no celular."
+    },
+    {
+      "id": "escolas",
+      "nome": "Dirigentes e Educadores Escolares",
+      "faixa_etaria": "35-60",
+      "descricao": "Diretores, coordenadores pedagógicos e professores responsáveis pela comunicação digital com famílias e alunos",
+      "dores_principais": [
+        "Grooming e aliciamento em grupos de WhatsApp de turmas",
+        "Phishing disfarçado de comunicado escolar",
+        "Clonagem do WhatsApp institucional da escola",
+        "Responsabilidade legal e moral com dados de menores"
+      ],
+      "gatilhos_emocionais": ["responsabilidade institucional", "proteção de alunos", "confiança das famílias"],
+      "prioridade": 2,
+      "protagonista_padrao": "Diretor(a) ou coordenador(a) pedagógico(a) de escola brasileira (40-55 anos)",
+      "persona_visual_padrao": "diretor(a) ou coordenador(a) em ambiente escolar administrativo",
+      "angulo_padrao": "A escola como guardiã da comunicação digital com famílias e alunos."
     },
     {
       "id": "idosos",

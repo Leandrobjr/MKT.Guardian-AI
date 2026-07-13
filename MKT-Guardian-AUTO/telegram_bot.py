@@ -93,7 +93,7 @@ PUBLICO_ID_MAP = {
     "idosos": "idosos",
     "pais": "pais",
     "empresarios": "profissionais",
-    "escolas": "profissionais",
+    "escolas": "escolas",
 }
 
 MIDIA_LABEL = {
@@ -887,7 +887,6 @@ class CampaignBot:
                             await self._handle_callback(session, cb)
                     except Exception as e:
                         print(f"[Bot] Erro ao processar update: {e}")
-                        import traceback
                         traceback.print_exc()
 
 

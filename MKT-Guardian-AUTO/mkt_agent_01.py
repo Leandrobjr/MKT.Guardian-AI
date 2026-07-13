@@ -283,21 +283,22 @@ class MediaFactory:
 
     def _card_layout(self) -> tuple:
         """Retorna (alerta_box, solucao_box, cta_box) ajustadas ao canvas atual.
-        Em canvas 1:1 (imagem estática) os cards ficam nos últimos 28% da imagem."""
+        Cards compactos e deslocados para a faixa inferior — a maior parte do
+        quadro (rosto, mãos, celular) permanece sempre visível e sem obstrução."""
         is_square = self.canvas_height <= self.canvas_width * 1.15
         if is_square:
-            # 1:1 — inicia em 72% (y=1382/1920) deixando 72% superior livre para a foto
+            # 1:1 — cards ocupam só os últimos ~19% da imagem, iniciando em 73%
             boxes = (
-                self._scale_box((36, 1382, 1044, 1520)),
-                self._scale_box((36, 1532, 1044, 1655)),
-                self._scale_box((36, 1663, 1044, 1760)),
+                self._scale_box((36, 1402, 1044, 1527)),
+                self._scale_box((36, 1535, 1044, 1645)),
+                self._scale_box((36, 1653, 1044, 1763)),
             )
         else:
-            # 9:16 — posição original
+            # 9:16 — cards ocupam só os últimos ~20% da imagem, iniciando em 68%
             boxes = (
-                self._scale_box((36, 1050, 1044, 1240)),
-                self._scale_box((36, 1260, 1044, 1440)),
-                self._scale_box((36, 1470, 1044, 1600)),
+                self._scale_box((36, 1306, 1044, 1476)),
+                self._scale_box((36, 1486, 1044, 1581)),
+                self._scale_box((36, 1591, 1044, 1686)),
             )
         print(
             f"[Layout] canvas={self.canvas_width}x{self.canvas_height} "
@@ -307,6 +308,33 @@ class MediaFactory:
             f"cta_y={boxes[2][1]}-{boxes[2][3]}"
         )
         return boxes
+
+    def _draw_ad_scrim(
+        self, img: Image.Image, top_y: int, bottom_y: int, extra_top_fade: int = 0
+    ):
+        """Painel translúcido único atrás dos 3 cards — une a UI visualmente
+        (efeito 'glass panel') em vez de 3 caixas soltas sobre a foto."""
+        margin = int(18 * self.canvas_width / 1080)
+        x0, x1 = margin, self.canvas_width - margin
+        w = x1 - x0
+        radius = int(30 * self.canvas_width / 1080)
+
+        if extra_top_fade > 0:
+            fade_h = extra_top_fade
+            fade = Image.new("RGBA", (w, fade_h), (0, 0, 0, 0))
+            fdraw = ImageDraw.Draw(fade)
+            fdraw.rounded_rectangle(
+                (0, 0, w, fade_h + radius), radius=radius, fill=(6, 12, 24, 70)
+            )
+            img.paste(fade, (x0, top_y - fade_h), fade)
+
+        h = bottom_y - top_y
+        if h <= 0 or w <= 0:
+            return
+        panel = Image.new("RGBA", (w, h), (0, 0, 0, 0))
+        pdraw = ImageDraw.Draw(panel)
+        pdraw.rounded_rectangle((0, 0, w, h), radius=radius, fill=(6, 12, 24, 195))
+        img.paste(panel, (x0, top_y), panel)
 
     def _draw_headline_branded(
         self, draw: ImageDraw.ImageDraw, headline: str, highlight_phrases: list[str]
@@ -340,46 +368,64 @@ class MediaFactory:
         highlight_color: tuple | None = None,
     ):
         x0, y0, x1, y1 = box
-        draw.rounded_rectangle(box, radius=20, fill=self.BRAND_CARD, outline=self.BRAND_CARD_BORDER, width=2)
-        font_title_size = self._scaled_font_size(20, min_size=13)
+        radius = int(16 * self.canvas_width / 1080)
+        draw.rounded_rectangle(
+            box, radius=radius, fill=(15, 23, 42, 235),
+            outline=self.BRAND_CARD_BORDER, width=1,
+        )
+        accent_w = max(4, int(6 * self.canvas_width / 1080))
+        accent_pad = max(8, int(10 * self.canvas_height / 1920))
+        draw.rounded_rectangle(
+            (x0 + accent_pad, y0 + accent_pad, x0 + accent_pad + accent_w, y1 - accent_pad),
+            radius=accent_w // 2, fill=title_color,
+        )
+        text_x0 = x0 + accent_pad + accent_w + int(12 * self.canvas_width / 1080)
+        font_title_size = self._scaled_font_size(17, min_size=12)
         font_body_size = self._scaled_font_size(self.card_body_font_size, min_size=13)
         font_title = self._load_font(font_title_size, bold=True)
         font_body = self._load_font(font_body_size, bold=True)
-        title_y_offset = max(10, int(14 * self.canvas_height / 1920))
-        body_y_offset = max(30, int(46 * self.canvas_height / 1920))
-        line_h = max(font_body_size + 4, int(30 * self.canvas_height / 1920))
-        draw.text((x0 + 20, y0 + title_y_offset), title, font=font_title, fill=title_color)
-        body_box = (x0, y0 + body_y_offset, x1, y1 - 8)
-        max_body_lines = max(2, (body_box[3] - body_box[1]) // line_h)
+        title_y_offset = max(8, int(12 * self.canvas_height / 1920))
+        body_y_offset = max(24, int(36 * self.canvas_height / 1920))
+        line_h = max(font_body_size + 3, int(27 * self.canvas_height / 1920))
+        draw.text((text_x0, y0 + title_y_offset), title, font=font_title, fill=title_color)
+        body_box = (text_x0 - 20, y0 + body_y_offset, x1, y1 - 6)
+        max_body_lines = max(1, (body_box[3] - body_box[1]) // line_h)
         if highlight_phrases:
             self._draw_rich_text_block(
                 draw, body_box, body, font_body, body_color,
                 highlight_phrases, highlight_color or self.BRAND_HIGHLIGHT,
             )
         else:
-            lines = self._wrap_text(draw, body, font_body, (x1 - x0) - 40, max_lines=max_body_lines)
+            lines = self._wrap_text(draw, body, font_body, (x1 - text_x0) - 20, max_lines=max_body_lines)
             y = y0 + body_y_offset + 2
             for line in lines:
                 if y + line_h > body_box[3]:
                     break
-                draw.text((x0 + 20, y), line, font=font_body, fill=body_color)
+                draw.text((text_x0, y), line, font=font_body, fill=body_color)
                 y += line_h
 
     def _draw_cta_button(self, draw: ImageDraw.ImageDraw, box: tuple[int, int, int, int], main_text: str, url: str):
-        draw.rounded_rectangle(box, radius=36, fill=self.BRAND_GREEN, outline=self.BRAND_GREEN_DARK, width=3)
-        font_main_size = self._scaled_font_size(24, min_size=16)
-        font_url_size = self._scaled_font_size(18, min_size=12)
+        radius = int(30 * self.canvas_width / 1080)
+        draw.rounded_rectangle(box, radius=radius, fill=self.BRAND_GREEN, outline=self.BRAND_GREEN_DARK, width=2)
+        box_h = box[3] - box[1]
+        # fonte reduzida quando o botão é mais baixo (cards compactos) para caber sem cortar texto
+        font_main_size = self._scaled_font_size(20 if box_h < 110 else 24, min_size=14)
+        font_url_size = self._scaled_font_size(14 if box_h < 110 else 18, min_size=11)
         font_main = self._load_font(font_main_size, bold=True)
         font_url = self._load_font(font_url_size, bold=True)
-        cta_line_h = font_main_size + 6
-        lines = self._wrap_text(draw, main_text.upper(), font_main, box[2] - box[0] - 40, max_lines=2)
-        y = box[1] + max(12, int(18 * self.canvas_height / 1920))
+        cta_line_h = font_main_size + 4
+        url_clean = url.replace("https://", "").replace("http://", "")
+        reserved_bottom = font_url_size + max(6, int(10 * self.canvas_height / 1920))
+        available_h = box_h - reserved_bottom - max(8, int(12 * self.canvas_height / 1920))
+        max_lines = max(1, min(2, available_h // cta_line_h))
+        lines = self._wrap_text(draw, main_text.upper(), font_main, box[2] - box[0] - 40, max_lines=max_lines)
+        text_block_h = len(lines) * cta_line_h
+        y = box[1] + max(6, (available_h - text_block_h) // 2) + max(6, int(10 * self.canvas_height / 1920))
         for line in lines:
             x = (box[0] + box[2]) // 2 - self._text_width(draw, line, font_main) // 2
             draw.text((x, y), line, font=font_main, fill=self.BRAND_CTA_TEXT)
             y += cta_line_h
-        url_clean = url.replace("https://", "").replace("http://", "")
-        url_y = box[3] - font_url_size - max(8, int(12 * self.canvas_height / 1920))
+        url_y = box[3] - font_url_size - max(6, int(10 * self.canvas_height / 1920))
         xu = (box[0] + box[2]) // 2 - self._text_width(draw, url_clean, font_url) // 2
         draw.text((xu, url_y), url_clean, font=font_url, fill=self.BRAND_CTA_TEXT)
 
@@ -401,6 +447,12 @@ class MediaFactory:
 
         self._draw_headline_branded(draw, headline, highlights)
         alerta_box, solucao_box, cta_box = self._card_layout()
+        self._draw_ad_scrim(
+            img,
+            alerta_box[1] - int(14 * self.canvas_height / 1920),
+            cta_box[3] + int(10 * self.canvas_height / 1920),
+            extra_top_fade=int(46 * self.canvas_height / 1920),
+        )
 
         self._draw_brand_card(
             draw, alerta_box,
@@ -436,6 +488,12 @@ class MediaFactory:
 
         self._draw_headline_branded(draw, headline, highlights)
         alerta_box, solucao_box, cta_box = self._card_layout()
+        self._draw_ad_scrim(
+            img,
+            alerta_box[1] - int(14 * self.canvas_height / 1920),
+            cta_box[3] + int(10 * self.canvas_height / 1920),
+            extra_top_fade=int(46 * self.canvas_height / 1920),
+        )
 
         self._draw_brand_card(
             draw, alerta_box,

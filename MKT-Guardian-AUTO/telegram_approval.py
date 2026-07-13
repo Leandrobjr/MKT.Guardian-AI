@@ -18,6 +18,8 @@ import time
 import aiohttp
 from dotenv import load_dotenv
 
+from story_approval import format_story_telegram, story_keyboard
+
 load_dotenv()
 
 TELEGRAM_API = "https://api.telegram.org/bot"
@@ -219,6 +221,105 @@ class TelegramApproval:
                 text=f"⏱️ Timeout — Job {job_id} não aprovado a tempo.",
             )
             return {"action": "timeout"}
+
+    async def aprovar_estoria(
+        self,
+        creative_data: dict,
+        job_id: str,
+        config: dict,
+        timeout_segundos: int = 3600,
+    ) -> dict:
+        caption = format_story_telegram(creative_data, config, job_id)
+        teclado = story_keyboard(job_id)
+
+        async with aiohttp.ClientSession() as session:
+            print(f"📲 [Telegram] Enviando estória para aprovação (Job {job_id})...")
+            resp = await self._post(
+                session,
+                "sendMessage",
+                chat_id=self.chat_id,
+                text=caption[:4096],
+                parse_mode="Markdown",
+                reply_markup=teclado,
+            )
+            if not resp.get("ok"):
+                print(f"❌ [Telegram] Falha ao enviar estória: {resp}")
+                return {"action": "reject", "motivo": "telegram_falhou"}
+
+            updates = await self._get_updates(session, offset=0)
+            last_id = updates[-1]["update_id"] if updates else 0
+            awaiting_text = False
+            start = time.time()
+
+            print(f"⏳ [Telegram] Aguardando aprovação da estória (timeout: {timeout_segundos // 60} min)...")
+
+            while time.time() - start < timeout_segundos:
+                await asyncio.sleep(3)
+                updates = await self._get_updates(session, offset=last_id + 1)
+
+                for upd in updates:
+                    last_id = upd["update_id"]
+
+                    if cb := upd.get("callback_query"):
+                        data = cb.get("data", "")
+                        if job_id not in data:
+                            continue
+                        await self._post(session, "answerCallbackQuery", callback_query_id=cb["id"])
+                        code = data.split(":")[0]
+
+                        if code == "A":
+                            await self._post(
+                                session, "sendMessage", chat_id=self.chat_id,
+                                text=f"✅ Estória aprovada! Produção de mídia iniciará. (Job {job_id})",
+                            )
+                            return {"action": "approve"}
+
+                        if code == "R":
+                            await self._post(
+                                session, "sendMessage", chat_id=self.chat_id,
+                                text=f"❌ Estória rejeitada. (Job {job_id})",
+                            )
+                            return {"action": "reject"}
+
+                        if code == "M":
+                            awaiting_text = True
+                            await self._post(
+                                session, "sendMessage", chat_id=self.chat_id,
+                                text=(
+                                    "Descreva a melhoria na *estória* (responda em texto):\n\n"
+                                    "• Headline / gancho\n"
+                                    "• Roteiro / narrativa\n"
+                                    "• Personagem ou ângulo (ex.: foco escola, não pais)\n"
+                                    "• CTA ou mensagem do golpista"
+                                ),
+                                parse_mode="Markdown",
+                            )
+
+                    elif awaiting_text and (msg := upd.get("message")):
+                        texto = msg.get("text", "").strip()
+                        if texto and not texto.startswith("/"):
+                            await self._post(
+                                session, "sendMessage", chat_id=self.chat_id,
+                                text=f"📝 Recebido! Regerando estória... (Job {job_id})",
+                            )
+                            return {"action": "improve", "prompt": texto}
+
+            await self._post(
+                session, "sendMessage", chat_id=self.chat_id,
+                text=f"⏱️ Timeout — estória {job_id} não aprovada a tempo.",
+            )
+            return {"action": "timeout"}
+
+    def aprovar_estoria_sincronamente(
+        self,
+        creative_data: dict,
+        job_id: str,
+        config: dict,
+        timeout_segundos: int = 3600,
+    ) -> dict:
+        return asyncio.run(
+            self.aprovar_estoria(creative_data, job_id, config, timeout_segundos)
+        )
 
     def aprovar_sincronamente(
         self,

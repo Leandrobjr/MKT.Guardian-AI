@@ -27,6 +27,7 @@ import aiohttp
 import requests
 from dotenv import load_dotenv
 from build_info import MEDIA_FACTORY_VERSION, ORCHESTRATOR_VERSION
+from story_approval import format_story_telegram, story_keyboard
 
 load_dotenv()
 
@@ -276,7 +277,7 @@ class BotApprovalBridge:
 
         copy_resumo = copy if len(copy) <= 300 else copy[:300] + "..."
         caption = (
-            f"*APROVAÇÃO — Guardian AI*\n\n"
+            f"*APROVAÇÃO DO CRIATIVO* (vídeo/imagem final)\n\n"
             f"*Headline:* {headline}\n\n"
             f"*Copy:* {copy_resumo}\n\n"
             f"Job: `{job_id}`"
@@ -304,6 +305,50 @@ class BotApprovalBridge:
         finally:
             self.bot.clear_approval(job_id, clear_keyboard=True)
         return decision
+
+    def aprovar_estoria_sincronamente(
+        self,
+        creative_data: dict,
+        job_id: str,
+        config: dict,
+        timeout_segundos: int = 3600,
+    ) -> dict:
+        caption = format_story_telegram(creative_data, config, job_id)
+        teclado = story_keyboard(job_id)
+        result_q: _queue.Queue = _queue.Queue(maxsize=1)
+        print(f"📲 [Bridge] Enviando estória para aprovação (Job {job_id})...")
+        self.bot.register_approval(job_id, result_q, message_id=None)
+        msg_id = self._send_message_with_keyboard(caption, teclado)
+        if msg_id:
+            self.bot.update_approval_message_id(job_id, msg_id)
+        try:
+            decision = result_q.get(timeout=timeout_segundos)
+        except _queue.Empty:
+            self._send_message(f"⏱️ Timeout — estória {job_id} não aprovada a tempo.", parse_mode=None)
+            decision = {"action": "timeout"}
+        finally:
+            self.bot.clear_approval(job_id, clear_keyboard=True)
+        return decision
+
+    def _send_message_with_keyboard(self, text: str, reply_markup: dict) -> int | None:
+        try:
+            resp = requests.post(
+                f"{self._base}/sendMessage",
+                json={
+                    "chat_id": self.chat_id,
+                    "text": text[:4096],
+                    "parse_mode": "Markdown",
+                    "reply_markup": reply_markup,
+                },
+                timeout=30,
+            )
+            body = resp.json()
+            if body.get("ok"):
+                return body.get("result", {}).get("message_id")
+            print(f"[Bridge] sendMessage estória falhou: {body}")
+        except Exception as e:
+            print(f"[Bridge] erro sendMessage estória: {e}")
+        return None
 
     def notificar_sync(self, mensagem: str):
         self._send_message(mensagem, parse_mode="Markdown")
@@ -532,7 +577,13 @@ class CampaignBot:
 
             print(f"[Approval] callback code={code} job={pa.get('job_id')}")
 
-            toast = {"A": "Aprovado ✅", "R": "Rejeitado ❌", "M": "Envie o texto da melhoria ✏️"}[code]
+            is_story = str(pa.get("job_id", "")).startswith("story_")
+            toast_map = {
+                "A": "Estória aprovada ✅" if is_story else "Aprovado ✅",
+                "R": "Rejeitado ❌",
+                "M": "Envie o texto da melhoria ✏️",
+            }
+            toast = toast_map[code]
             await self._answer_callback(session, cb["id"], text=toast)
 
             if msg_id and chat_id:
@@ -542,23 +593,33 @@ class CampaignBot:
                 )
 
             if code == "A":
-                await self._send(session, f"✅ Aprovado! (Job {pa['job_id']})", parse_mode=None)
+                msg_ok = (
+                    f"✅ Estória aprovada! Produção de mídia em seguida. (Job {pa['job_id']})"
+                    if is_story else f"✅ Aprovado! (Job {pa['job_id']})"
+                )
+                await self._send(session, msg_ok, parse_mode=None)
                 self._resolve_approval(pa, {"action": "approve"})
             elif code == "R":
-                await self._send(session, f"❌ Rejeitado! (Job {pa['job_id']})", parse_mode=None)
+                msg_no = (
+                    f"❌ Estória rejeitada. (Job {pa['job_id']})"
+                    if is_story else f"❌ Rejeitado! (Job {pa['job_id']})"
+                )
+                await self._send(session, msg_no, parse_mode=None)
                 self._resolve_approval(pa, {"action": "reject"})
             elif code == "M":
                 with self._approval_lock:
                     if self.pending_approval and self.pending_approval.get("job_id") == pa["job_id"]:
                         self.pending_approval["awaiting_text"] = True
-                await self._send(
-                    session,
+                hint = (
+                    "✏️ Melhoria na *estória* (headline, roteiro, personagem, CTA):\n"
+                    "Responda em texto."
+                    if is_story else
                     "✏️ Descreva a melhoria (responda em texto):\n\n"
                     "• Layout/card (texto cortado)\n"
                     "• Copy (headline, roteiro)\n"
-                    "• Imagem/cena",
-                    parse_mode=None,
+                    "• Imagem/cena"
                 )
+                await self._send(session, hint, parse_mode=None)
             return True
 
         if msg := upd.get("message"):
@@ -568,7 +629,12 @@ class CampaignBot:
             texto = msg.get("text", "").strip()
             if texto and not texto.startswith("/"):
                 print(f"[Approval] improve text job={pa.get('job_id')}: {texto[:60]}")
-                await self._send(session, f"📝 Recebido! Regenerando... (Job {pa['job_id']})", parse_mode=None)
+                is_story = str(pa.get("job_id", "")).startswith("story_")
+                msg = (
+                    f"📝 Recebido! Regerando estória... (Job {pa['job_id']})"
+                    if is_story else f"📝 Recebido! Regenerando... (Job {pa['job_id']})"
+                )
+                await self._send(session, msg, parse_mode=None)
                 self._resolve_approval(pa, {"action": "improve", "prompt": texto})
                 return True
 

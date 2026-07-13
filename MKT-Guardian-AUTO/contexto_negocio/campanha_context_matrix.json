@@ -117,9 +117,10 @@
       "obrigacoes_narrativa": [
         "Protagonista é educador(a) ou gestor(a) escolar",
         "Golpe ocorre em contexto escolar: grupo de turma, grupo de pais, comunicação escola-família",
-        "Mencione responsabilidade da escola com alunos e famílias"
+        "Mencione responsabilidade da escola com alunos e famílias",
+        "CTA e fechamento devem incentivar pais a usarem Guardian AI e escolas a conhecerem planos para grupos de alunos"
       ],
-      "cta_template": "TESTE GRÁTIS — PROTEJA O WHATSAPP DA SUA ESCOLA, AGORA!"
+      "cta_template": "PROTEJA SEUS ALUNOS DE GOLPES NO WHATSAPP — GUARDIAN AI PARA PAIS E PLANOS GRUPO DE ALUNOS"
     },
     "grooming": {
       "angulo_narrativa": "Predador digital infiltrado em grupo de WhatsApp da turma ou dos pais. O educador detecta, alerta famílias e protege a comunicação escolar — NÃO é história de mãe em casa.",

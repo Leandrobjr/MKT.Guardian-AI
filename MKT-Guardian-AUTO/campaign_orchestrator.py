@@ -17,6 +17,7 @@ from channel_presets import resolve_channel_preset, format_preset_summary
 from tts_narration import strip_written_site_urls, card_solucao_text, NARRATION_CLOSING
 from build_info import ORCHESTRATOR_VERSION, print_build_banner
 from campaign_context_engine import CampaignContextEngine
+from story_approval import format_story_telegram, story_keyboard
 
 try:
     from telegram_approval import TelegramApproval
@@ -110,7 +111,10 @@ class CampaignOrchestrator:
             return cta
         publico_slug = config.get("publico_slug", "")
         if publico_slug == "escolas":
-            return "TESTE GRÁTIS — PROTEJA O WHATSAPP DA SUA ESCOLA, AGORA!"
+            return (
+                "PROTEJA SEUS ALUNOS DE GOLPES NO WHATSAPP — "
+                "GUARDIAN AI PARA PAIS E PLANOS GRUPO DE ALUNOS"
+            )
         publico_id = config.get("publico_id", "massa")
         if publico_id == "pais":
             if genero_campanha == "feminino":
@@ -713,6 +717,103 @@ class CampaignOrchestrator:
         print(f"🔘 CTA: {creative_data['texto_botao_conversao']}")
         print(f"🎬 Cena: {creative_data['direcao_arte_emocional'][:120]}...\n")
 
+    def _story_approval_enabled(self) -> bool:
+        return os.getenv("STORY_APPROVAL", "true").lower() in ("1", "true", "yes")
+
+    def _story_job_id(self, config: dict, revisao: int, story_attempt: int) -> str:
+        slug = config.get("publico_slug", "geral")
+        golpe = config.get("golpe_id", "golpe")
+        return f"story_{slug}_{golpe}_r{revisao}_s{story_attempt}"
+
+    def _aprovar_estoria_terminal(self, creative_data: dict, config: dict, job_id: str) -> dict:
+        print("\n" + "=" * 70)
+        print("📋 APROVAÇÃO DA ESTÓRIA (antes de gerar vídeo/áudio — economiza APIs)")
+        print("=" * 70)
+        print(f"Combo: {creative_data.get('campaign_combo', '—')}")
+        print(f"Headline: {creative_data.get('gancho_atencao_inicial', '')}")
+        print(f"\nRoteiro:\n{creative_data.get('desenvolvimento_copy', '')}")
+        print(f"\nCard golpista: {creative_data.get('texto_card_notificacao', '')}")
+        print(f"Personagem: {creative_data.get('genero_personagem_visual', '')}")
+        print(f"CTA botão: {creative_data.get('texto_botao_conversao', '')}")
+        print(f"\nCena: {creative_data.get('direcao_arte_emocional', '')[:300]}...")
+        print(f"\nJob: {job_id}")
+        print("\n[1] ✅ Aprovar estória e produzir mídia")
+        print("[2] ✏️ Melhorar estória (reescrever copy)")
+        print("[3] ❌ Rejeitar campanha")
+        op = input("Escolha (1/2/3): ").strip()
+        if op == "1":
+            return {"action": "approve"}
+        if op == "3":
+            return {"action": "reject", "motivo": "estoria_rejeitada_terminal"}
+        if op == "2":
+            feedback = input("Descreva a melhoria na estória: ").strip()
+            if feedback:
+                return {"action": "improve", "prompt": feedback}
+            return {"action": "reject", "motivo": "melhoria_vazia"}
+        return {"action": "reject", "motivo": "opcao_invalida"}
+
+    def _solicitar_aprovacao_estoria(
+        self, config: dict, creative_data: dict, revisao: int, story_attempt: int
+    ) -> dict:
+        job_id = self._story_job_id(config, revisao, story_attempt)
+        if config.get("aprovacao_telegram") and self.telegram:
+            if hasattr(self.telegram, "aprovar_estoria_sincronamente"):
+                return self.telegram.aprovar_estoria_sincronamente(
+                    creative_data, job_id, config, timeout_segundos=self.telegram_timeout
+                )
+        return self._aprovar_estoria_terminal(creative_data, config, job_id)
+
+    def _gerar_e_aprovar_estoria(
+        self,
+        config: dict,
+        golpe_obj: dict,
+        instrucoes_base: str,
+        revisao: int,
+    ) -> tuple[bool, dict | None]:
+        instrucoes = instrucoes_base
+        story_attempt = 0
+
+        while story_attempt <= self.max_revisoes:
+            print("\n🧠 [Agente Redator Sênior] Escrevendo copies de alta conversão...")
+            creative_data = self._generate_creative_data(config, golpe_obj, instrucoes)
+            if not creative_data:
+                return False, None
+            self._print_creative_summary(creative_data)
+
+            if not self._story_approval_enabled():
+                return True, creative_data
+
+            acao = self._solicitar_aprovacao_estoria(config, creative_data, revisao, story_attempt)
+            print(f"📋 Decisão estória: {acao.get('action')}")
+
+            if acao["action"] == "approve":
+                if self.telegram:
+                    self.telegram.notificar_sync("✅ *Estória aprovada* — iniciando produção de vídeo/áudio...")
+                else:
+                    print("✅ Estória aprovada — iniciando produção de vídeo/áudio...")
+                return True, creative_data
+
+            if acao["action"] in ("reject", "timeout"):
+                self.memory.registrar_rejeitado(
+                    config.get("publico_slug", ""),
+                    config.get("golpe_id", ""),
+                    self._story_job_id(config, revisao, story_attempt),
+                    acao.get("motivo", acao["action"]),
+                )
+                return False, None
+
+            if acao["action"] == "improve":
+                story_attempt += 1
+                if story_attempt > self.max_revisoes:
+                    print(f"❌ Limite de {self.max_revisoes} revisões da estória atingido.")
+                    return False, None
+                instrucoes = acao.get("prompt", "")
+                if self.telegram:
+                    self.telegram.notificar_sync("📝 Regerando *estória* com seu feedback (sem custo de vídeo/áudio)...")
+                continue
+
+        return False, None
+
     def show_interactive_menu(self) -> dict:
         """Exibe o painel interativo de configuração de campanha para o usuário."""
         print("\n======================================================================")
@@ -830,6 +931,8 @@ class CampaignOrchestrator:
         )
         config["_campaign_context"] = campaign_ctx
         print(self.context_engine.summary_line(campaign_ctx))
+        if self._story_approval_enabled():
+            print("📋 Aprovação da estória ATIVA — vídeo/áudio só após você aprovar o roteiro.")
         preset = resolve_channel_preset(config.get("canal", ""), config.get("midia", ""))
         print(f"📐 Preset de produção: {format_preset_summary(preset)}")
 
@@ -866,12 +969,11 @@ class CampaignOrchestrator:
             else:
                 if revisao > 0:
                     print(f"\n🔄 Revisão {revisao}/{self.max_revisoes} — regerando campanha...")
-                print("\n🧠 [Agente Redator Sênior] Escrevendo copies de alta conversão...")
-                creative_data = self._generate_creative_data(config, golpe_obj, instrucoes_melhoria)
-                if not creative_data:
-                    print("❌ Falha crítica: impossível gerar roteiro.")
+                ok_estoria, creative_data = self._gerar_e_aprovar_estoria(
+                    config, golpe_obj, instrucoes_melhoria, revisao
+                )
+                if not ok_estoria or not creative_data:
                     return
-                self._print_creative_summary(creative_data)
                 assets_resultado = self.media_factory.generate_campaign_assets(creative_data)
 
             if not config.get("aprovacao_telegram") or not self.telegram:

@@ -752,15 +752,15 @@ class CampaignOrchestrator:
         golpe = config.get("golpe_id", "golpe")
         return f"story_{slug}_{golpe}_r{revisao}_s{story_attempt}"
 
-    def _ler_correcao_terminal(self) -> str:
-        """Leitura de correção no terminal — equivalente ao MELHORAR do Telegram."""
-        print("\n✏️ SOLICITAR CORREÇÃO (mesma função do botão MELHORAR no Telegram)")
+    def _ler_melhoria_terminal(self) -> str:
+        """Leitura de melhoria no terminal — equivalente ao MELHORAR do Telegram."""
+        print("\n✏️ MELHORAR ESTÓRIA")
         print("Descreva o que mudar. Exemplos:")
         print("  • Produto: não falar em grupos — Guardian alerta só no privado (1:1)")
         print("  • Headline mais urgente / roteiro mais curto")
         print("  • Trocar personagem ou cenário (ex.: diretor escolar, não mãe)")
         print("  • Ajustar mensagem do golpista ou CTA")
-        print("Digite sua correção (linha vazia + Enter para enviar):\n")
+        print("Digite sua melhoria (linha vazia + Enter para enviar):\n")
         lines: list[str] = []
         while True:
             line = input("> " if not lines else "  ")
@@ -783,7 +783,7 @@ class CampaignOrchestrator:
         print(f"\nCena: {creative_data.get('direcao_arte_emocional', '')[:300]}...")
         print(f"\nJob: {job_id}")
         print("\n[1] ✅ Aprovar estória e produzir mídia")
-        print("[2] ✏️ Solicitar correção (reescrever estória — sem custo de APIs)")
+        print("[2] ✏️ Melhorar estória (reescrever copy — sem custo de APIs)")
         print("[3] ❌ Rejeitar campanha")
         op = input("Escolha (1/2/3): ").strip()
         if op == "1":
@@ -791,10 +791,10 @@ class CampaignOrchestrator:
         if op == "3":
             return {"action": "reject", "motivo": "estoria_rejeitada_terminal"}
         if op == "2":
-            feedback = self._ler_correcao_terminal()
+            feedback = self._ler_melhoria_terminal()
             if feedback:
                 return {"action": "improve", "prompt": feedback}
-            print("⚠️ Correção vazia — tente novamente ou escolha [1] ou [3].")
+            print("⚠️ Melhoria vazia — tente novamente ou escolha [1] ou [3].")
             return {"action": "improve", "prompt": ""}  # loop continua pedindo
         print("⚠️ Opção inválida. Use 1, 2 ou 3.")
         return {"action": "retry"}
@@ -855,7 +855,7 @@ class CampaignOrchestrator:
             if acao["action"] == "improve":
                 feedback = acao.get("prompt", "").strip()
                 if not feedback:
-                    print("⚠️ Informe a correção (opção 2) ou escolha aprovar/rejeitar.")
+                    print("⚠️ Informe a melhoria (opção 2) ou escolha aprovar/rejeitar.")
                     continue
                 story_attempt += 1
                 if story_attempt > self.max_revisoes:
@@ -869,10 +869,10 @@ class CampaignOrchestrator:
                     self._story_job_id(config, revisao, story_attempt),
                     story_attempt,
                 )
-                print(f"📝 Correção registrada — regerando estória (tentativa {story_attempt}/{self.max_revisoes})...")
+                print(f"📝 Melhoria registrada — regerando estória (tentativa {story_attempt}/{self.max_revisoes})...")
                 if self.telegram:
                     self.telegram.notificar_sync(
-                        "📝 Regerando *estória* com sua correção (sem custo de vídeo/áudio)..."
+                        "📝 Regerando *estória* com sua melhoria (sem custo de vídeo/áudio)..."
                     )
                 continue
 

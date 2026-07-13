@@ -112,8 +112,7 @@ class CampaignOrchestrator:
         publico_slug = config.get("publico_slug", "")
         if publico_slug == "escolas":
             return (
-                "PROTEJA SEUS ALUNOS DE GOLPES NO WHATSAPP — "
-                "GUARDIAN AI PARA PAIS E PLANOS GRUPO DE ALUNOS"
+                "PROTEJA SEUS ALUNOS — PAIS USEM GUARDIAN AI. PLANOS PARA GRUPOS DE ALUNOS"
             )
         publico_id = config.get("publico_id", "massa")
         if publico_id == "pais":
@@ -199,16 +198,42 @@ class CampaignOrchestrator:
         )
         return text
 
+    def _format_product_capabilities_for_prompt(self) -> str:
+        cap = self.context_data.get("PRODUTO_E_POSICIONAMENTO", {}).get("capacidades_reais", {})
+        if not cap:
+            return ""
+        lines = ["CAPACIDADES REAIS DO GUARDIAN AI (NUNCA VIOLAR):"]
+        for item in cap.get("faz", []):
+            lines.append(f"  ✅ {item}")
+        for item in cap.get("nao_faz", []):
+            lines.append(f"  ❌ {item}")
+        if cap.get("regra_criativo"):
+            lines.append(f"  📌 {cap['regra_criativo']}")
+        return "\n".join(lines)
+
     def _enforce_product_truth(self, creative_data: dict) -> dict:
-        """Guardian AI detecta e alerta — nunca bloqueia apps, mensagens ou celular."""
-        for field in ("desenvolvimento_copy", "gancho_atencao_inicial", "chamada_para_acao_cta"):
-            if creative_data.get(field):
-                text = creative_data[field]
-                text = re.sub(r"\bbloque\w+\b", "alerta", text, flags=re.IGNORECASE)
-                text = re.sub(r"\bimpede\b", "alerta", text, flags=re.IGNORECASE)
-                if field == "desenvolvimento_copy":
-                    text = strip_written_site_urls(text)
-                creative_data[field] = self._fix_pt_artifacts(text)
+        """Guardian AI detecta e alerta em conversas privadas — nunca bloqueia nem monitora grupos."""
+        grupo_patterns = [
+            (r"\bno grupo\b", "na conversa privada"),
+            (r"\bdo grupo\b", "do chat privado"),
+            (r"\bem grupo\b", "em conversa privada"),
+            (r"\bgrupos? (da|de|do) (turma|escola|pais)\b", "conversa privada com o aluno"),
+            (r"\binfiltrad\w+ no grupo\b", "contatando o aluno no privado"),
+            (r"\bpredador\w* no grupo\b", "predador no privado do WhatsApp"),
+            (r"\bdetecta\w* (o |a )?invasor\b", "alerta sobre mensagem suspeita no privado"),
+            (r"\bmonitora\w* grupos?\b", "alerta em conversas privadas"),
+        ]
+        for field in ("desenvolvimento_copy", "gancho_atencao_inicial", "chamada_para_acao_cta", "texto_card_notificacao"):
+            if not creative_data.get(field):
+                continue
+            text = creative_data[field]
+            text = re.sub(r"\bbloque\w+\b", "alerta", text, flags=re.IGNORECASE)
+            text = re.sub(r"\bimpede\b", "alerta", text, flags=re.IGNORECASE)
+            for pattern, repl in grupo_patterns:
+                text = re.sub(pattern, repl, text, flags=re.IGNORECASE)
+            if field == "desenvolvimento_copy":
+                text = strip_written_site_urls(text)
+            creative_data[field] = self._fix_pt_artifacts(text)
 
         creative_data["texto_card_solucao"] = card_solucao_text()
         return creative_data
@@ -278,17 +303,17 @@ class CampaignOrchestrator:
                 "phishing": (
                     "Documentary photorealistic photo of a Brazilian school director or teacher (40-55) "
                     "in a school administrative office reviewing "
-                    f"{wa} suspicious phishing link in WhatsApp group message, diplomas on wall, "
+                    f"{wa} suspicious phishing link in PRIVATE WhatsApp message (1:1 chat), diplomas on wall, "
                 ),
                 "clonagem_whatsapp": (
                     "Documentary photorealistic photo of a Brazilian school coordinator at office desk "
-                    f"with alarmed expression reading {wa} fake WhatsApp verification code message, "
+                    f"with alarmed expression reading {wa} fake WhatsApp verification code in private chat, "
                 ),
                 "grooming": (
                     "Documentary photorealistic photo of a Brazilian school director or pedagogical "
-                    "coordinator (40-55) in school administrative office reviewing "
-                    f"{wa} suspicious stranger message in school parents WhatsApp group, "
-                    "diplomas and school notices on wall, worried professional expression, "
+                    "coordinator (40-55) in school administrative office preparing parent safety communication, "
+                    f"smartphone on desk showing example of suspicious PRIVATE 1:1 WhatsApp grooming message "
+                    "(not a group chat), school diplomas on wall, professional educational setting, "
                 ),
             }
             padrao = (
@@ -590,6 +615,7 @@ class CampaignOrchestrator:
             f"- Tom de voz do roteiro: {preset['copy_tone']}\n"
             f"- Objetivo de Conversão: {config['objetivo']}\n\n"
             f"{self.context_engine.format_for_prompt(campaign_ctx)}\n\n"
+            f"{self._format_product_capabilities_for_prompt()}\n\n"
             f"{self._format_guardrails_for_prompt(publico_slug)}\n\n"
             f"FOCO DO PRODUTO (OBRIGATÓRIO):\n"
             f"- {foco_whatsapp}\n"
@@ -627,7 +653,8 @@ class CampaignOrchestrator:
             + (f"ESTRUTURA DO ROTEIRO DE NARRAÇÃO:\n{roteiro_txt}\n\n" if roteiro_txt else "")
             + "CAPACIDADE DO PRODUTO (NUNCA VIOLAR):\n"
             "- Guardian AI NÃO bloqueia mensagens, apps nem configurações do celular.\n"
-            "- Ele DETECTA ameaças no WhatsApp e ENVIA ALERTA imediato para o usuário verificar.\n"
+            "- Ele DETECTA ameaças em conversas PRIVADAS (1:1) do WhatsApp e ENVIA ALERTA imediato.\n"
+            "- NÃO monitora grupos do WhatsApp — golpes em campanha devem ser em chat privado.\n"
             "- Nome da marca: sempre 'Guardian AI' (pronúncia em inglês).\n"
             "- NUNCA inclua URL, domínio ou guardian-ai.app na narração.\n\n"
             + "REGRAS OBRIGATÓRIAS DE OUTPUT (JSON estrito):\n"
@@ -725,6 +752,24 @@ class CampaignOrchestrator:
         golpe = config.get("golpe_id", "golpe")
         return f"story_{slug}_{golpe}_r{revisao}_s{story_attempt}"
 
+    def _ler_correcao_terminal(self) -> str:
+        """Leitura de correção no terminal — equivalente ao MELHORAR do Telegram."""
+        print("\n✏️ SOLICITAR CORREÇÃO (mesma função do botão MELHORAR no Telegram)")
+        print("Descreva o que mudar. Exemplos:")
+        print("  • Produto: não falar em grupos — Guardian alerta só no privado (1:1)")
+        print("  • Headline mais urgente / roteiro mais curto")
+        print("  • Trocar personagem ou cenário (ex.: diretor escolar, não mãe)")
+        print("  • Ajustar mensagem do golpista ou CTA")
+        print("Digite sua correção (linha vazia + Enter para enviar):\n")
+        lines: list[str] = []
+        while True:
+            line = input("> " if not lines else "  ")
+            if not line.strip() and lines:
+                break
+            if line.strip():
+                lines.append(line.strip())
+        return " ".join(lines).strip()
+
     def _aprovar_estoria_terminal(self, creative_data: dict, config: dict, job_id: str) -> dict:
         print("\n" + "=" * 70)
         print("📋 APROVAÇÃO DA ESTÓRIA (antes de gerar vídeo/áudio — economiza APIs)")
@@ -738,7 +783,7 @@ class CampaignOrchestrator:
         print(f"\nCena: {creative_data.get('direcao_arte_emocional', '')[:300]}...")
         print(f"\nJob: {job_id}")
         print("\n[1] ✅ Aprovar estória e produzir mídia")
-        print("[2] ✏️ Melhorar estória (reescrever copy)")
+        print("[2] ✏️ Solicitar correção (reescrever estória — sem custo de APIs)")
         print("[3] ❌ Rejeitar campanha")
         op = input("Escolha (1/2/3): ").strip()
         if op == "1":
@@ -746,11 +791,13 @@ class CampaignOrchestrator:
         if op == "3":
             return {"action": "reject", "motivo": "estoria_rejeitada_terminal"}
         if op == "2":
-            feedback = input("Descreva a melhoria na estória: ").strip()
+            feedback = self._ler_correcao_terminal()
             if feedback:
                 return {"action": "improve", "prompt": feedback}
-            return {"action": "reject", "motivo": "melhoria_vazia"}
-        return {"action": "reject", "motivo": "opcao_invalida"}
+            print("⚠️ Correção vazia — tente novamente ou escolha [1] ou [3].")
+            return {"action": "improve", "prompt": ""}  # loop continua pedindo
+        print("⚠️ Opção inválida. Use 1, 2 ou 3.")
+        return {"action": "retry"}
 
     def _solicitar_aprovacao_estoria(
         self, config: dict, creative_data: dict, revisao: int, story_attempt: int
@@ -786,6 +833,9 @@ class CampaignOrchestrator:
             acao = self._solicitar_aprovacao_estoria(config, creative_data, revisao, story_attempt)
             print(f"📋 Decisão estória: {acao.get('action')}")
 
+            if acao["action"] == "retry":
+                continue
+
             if acao["action"] == "approve":
                 if self.telegram:
                     self.telegram.notificar_sync("✅ *Estória aprovada* — iniciando produção de vídeo/áudio...")
@@ -803,13 +853,27 @@ class CampaignOrchestrator:
                 return False, None
 
             if acao["action"] == "improve":
+                feedback = acao.get("prompt", "").strip()
+                if not feedback:
+                    print("⚠️ Informe a correção (opção 2) ou escolha aprovar/rejeitar.")
+                    continue
                 story_attempt += 1
                 if story_attempt > self.max_revisoes:
                     print(f"❌ Limite de {self.max_revisoes} revisões da estória atingido.")
                     return False, None
-                instrucoes = acao.get("prompt", "")
+                instrucoes = feedback
+                self.memory.registrar_correcao(
+                    config.get("publico_slug", ""),
+                    config.get("golpe_id", ""),
+                    f"[estoria-pre-producao] {feedback}",
+                    self._story_job_id(config, revisao, story_attempt),
+                    story_attempt,
+                )
+                print(f"📝 Correção registrada — regerando estória (tentativa {story_attempt}/{self.max_revisoes})...")
                 if self.telegram:
-                    self.telegram.notificar_sync("📝 Regerando *estória* com seu feedback (sem custo de vídeo/áudio)...")
+                    self.telegram.notificar_sync(
+                        "📝 Regerando *estória* com sua correção (sem custo de vídeo/áudio)..."
+                    )
                 continue
 
         return False, None

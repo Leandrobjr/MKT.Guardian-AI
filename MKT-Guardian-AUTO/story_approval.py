@@ -29,7 +29,7 @@ def story_keyboard(job_id: str) -> dict:
     return {
         "inline_keyboard": [
             [{"text": "✅ APROVAR ESTÓRIA", "callback_data": f"A:{job_id}"}],
-            [{"text": "✏️ MELHORAR ESTÓRIA (envie texto)", "callback_data": f"M:{job_id}"}],
+            [{"text": "✏️ SOLICITAR CORREÇÃO (envie texto)", "callback_data": f"M:{job_id}"}],
             [{"text": "❌ REJEITAR", "callback_data": f"R:{job_id}"}],
         ]
     }

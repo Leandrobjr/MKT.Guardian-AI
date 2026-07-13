@@ -212,16 +212,22 @@ class CampaignOrchestrator:
         return "\n".join(lines)
 
     def _enforce_product_truth(self, creative_data: dict) -> dict:
-        """Guardian AI detecta e alerta em conversas privadas — nunca bloqueia nem monitora grupos."""
-        grupo_patterns = [
-            (r"\bno grupo\b", "na conversa privada"),
-            (r"\bdo grupo\b", "do chat privado"),
-            (r"\bem grupo\b", "em conversa privada"),
-            (r"\bgrupos? (da|de|do) (turma|escola|pais)\b", "conversa privada com o aluno"),
+        """Guardian AI detecta e alerta em conversas privadas — nunca bloqueia nem monitora grupos.
+
+        Corrige apenas frases que ATRIBUEM ao produto uma capacidade que ele não tem
+        (monitorar/detectar dentro do grupo). NÃO altera frases que já contrastam
+        corretamente grupo x privado (ex.: "não é no grupo, é no privado"), pois essas
+        são justamente os ganchos corretos definidos em campanha_context_matrix.json —
+        um regex genérico de "no/do/em grupo" quebrava essas frases e gerava
+        contradições do tipo "não acontece na conversa privada, é no privado".
+        """
+        capacidade_patterns = [
             (r"\binfiltrad\w+ no grupo\b", "contatando o aluno no privado"),
             (r"\bpredador\w* no grupo\b", "predador no privado do WhatsApp"),
+            (r"\bdetecta\w*\s+(o |a )?invasor\w*\s+no grupo\b", "alerta sobre mensagem suspeita no privado"),
             (r"\bdetecta\w* (o |a )?invasor\b", "alerta sobre mensagem suspeita no privado"),
             (r"\bmonitora\w* grupos?\b", "alerta em conversas privadas"),
+            (r"\b(detecta|alerta|notifica)\w*\s+(o |a )?grupo\b", r"\1 o usuário no privado"),
         ]
         for field in ("desenvolvimento_copy", "gancho_atencao_inicial", "chamada_para_acao_cta", "texto_card_notificacao"):
             if not creative_data.get(field):
@@ -229,13 +235,81 @@ class CampaignOrchestrator:
             text = creative_data[field]
             text = re.sub(r"\bbloque\w+\b", "alerta", text, flags=re.IGNORECASE)
             text = re.sub(r"\bimpede\b", "alerta", text, flags=re.IGNORECASE)
-            for pattern, repl in grupo_patterns:
+            for pattern, repl in capacidade_patterns:
                 text = re.sub(pattern, repl, text, flags=re.IGNORECASE)
+            # Rede de segurança: se a substituição criar "privad..." repetido perto
+            # (ex.: "...conversa privada, é no privado"), remove a redundância.
+            text = re.sub(
+                r"\b(conversa privada|chat privado)\b([^.!?]{0,20})\bno privado\b",
+                r"\1\2",
+                text,
+                flags=re.IGNORECASE,
+            )
             if field == "desenvolvimento_copy":
                 text = strip_written_site_urls(text)
             creative_data[field] = self._fix_pt_artifacts(text)
 
         creative_data["texto_card_solucao"] = card_solucao_text()
+        return creative_data
+
+    def _sanitize_headline(self, creative_data: dict, campaign_ctx: dict) -> dict:
+        """Substitui manchetes contraditórias ou quebradas pelo gancho do contexto da campanha."""
+        headline = (creative_data.get("gancho_atencao_inicial") or "").strip()
+        broken = [
+            r"privad[oa][^.!?]{0,30}privad[oa]",  # "privada... privado" redundante
+            r"conversa privada[^.!?]{0,25}no privado",
+            r"chat privado[^.!?]{0,25}no privado",
+            r"não acontece[^.!?]{0,40}no privado",
+        ]
+        if any(re.search(p, headline, re.IGNORECASE) for p in broken):
+            ganchos = campaign_ctx.get("ganchos") or []
+            if ganchos:
+                creative_data["gancho_atencao_inicial"] = ganchos[0].upper()
+                print(f"⚠️ Manchete corrigida → {creative_data['gancho_atencao_inicial']}")
+        return creative_data
+
+    def _align_card_message(
+        self, creative_data: dict, config: dict, campaign_ctx: dict, golpe_obj: dict
+    ) -> dict:
+        """Garante que o card golpista reflita o tipo de ameaça da campanha."""
+        golpe_id = config.get("golpe_id", "")
+        frase_ref = (campaign_ctx.get("frase_golpista") or golpe_obj.get("frase_golpista", "")).strip()
+        card = (creative_data.get("texto_card_notificacao") or "").strip()
+        if not frase_ref:
+            return creative_data
+
+        sinais_por_golpe = {
+            "grooming": ("foto", "segredo", "bonit", "perf", "conta", "manda", "lind"),
+            "pix_fantasma": ("pix", "transfer", "urgent", "pag", "dinheiro", "valor"),
+            "falso_parente": ("pix", "número", "troquei", "salva", "filho", "neto"),
+            "falsa_central": ("banco", "central", "senha", "conta", "bloque"),
+            "phishing": ("clique", "link", "http", "bit.ly", "confirm", "cadastr"),
+            "clonagem_whatsapp": ("código", "codigo", "sms", "verific", "6 dígit", "6 digit"),
+        }
+        sinais = sinais_por_golpe.get(golpe_id, ())
+        if sinais and not any(s in card.lower() for s in sinais):
+            creative_data["texto_card_notificacao"] = frase_ref
+            print(f"⚠️ Card golpista alinhado ao contexto ({golpe_id})")
+        return creative_data
+
+    def _inject_phone_message_in_scene(
+        self, creative_data: dict, campaign_ctx: dict, golpe_obj: dict
+    ) -> dict:
+        """Instrui o gerador de imagem/vídeo a mostrar a mensagem exata do golpe na tela do celular."""
+        msg = (creative_data.get("texto_card_notificacao") or "").strip()
+        if not msg:
+            msg = (campaign_ctx.get("frase_golpista") or golpe_obj.get("frase_golpista", "")).strip()
+        if not msg:
+            return creative_data
+        msg_show = msg[:140] + ("…" if len(msg) > 140 else "")
+        clause = (
+            f'Phone screen MUST show readable WhatsApp 1:1 chat with this exact suspicious '
+            f'incoming message in a green bubble (Portuguese): "{msg_show}"'
+        )
+        creative_data["phone_screen_clause"] = clause
+        cena = creative_data.get("direcao_arte_emocional", "")
+        if msg_show[:40].lower() not in cena.lower():
+            creative_data["direcao_arte_emocional"] = f"{cena.rstrip()}. {clause}"
         return creative_data
 
     def _build_ambiente(self, publico_slug: str) -> str:
@@ -545,6 +619,8 @@ class CampaignOrchestrator:
         creative_data["direcao_arte_emocional"] = self._build_art_direction(
             golpe_obj, creative_data, config, campaign_ctx
         )
+        creative_data = self._align_card_message(creative_data, config, campaign_ctx, golpe_obj)
+        creative_data = self._inject_phone_message_in_scene(creative_data, campaign_ctx, golpe_obj)
         creative_data = self.visual_variety.enrich(creative_data, config, self.context_data)
 
         if config.get("publico_slug") == "empresarios":
@@ -583,7 +659,8 @@ class CampaignOrchestrator:
         creative_data["campaign_combo"] = campaign_ctx.get("combo_key", "")
         preset = resolve_channel_preset(config.get("canal", ""), config.get("midia", ""))
         creative_data["preset_midia"] = preset
-        return self._enforce_product_truth(creative_data)
+        creative_data = self._enforce_product_truth(creative_data)
+        return self._sanitize_headline(creative_data, campaign_ctx)
 
     def _generate_creative_data(
         self, config: dict, golpe_obj: dict, instrucoes_extras: str = ""
@@ -658,13 +735,16 @@ class CampaignOrchestrator:
             "- Nome da marca: sempre 'Guardian AI' (pronúncia em inglês).\n"
             "- NUNCA inclua URL, domínio ou guardian-ai.app na narração.\n\n"
             + "REGRAS OBRIGATÓRIAS DE OUTPUT (JSON estrito):\n"
-            "1. gancho_atencao_inicial: MANCHETE visceral em MAIÚSCULAS, máx 10 palavras.\n"
+            "1. gancho_atencao_inicial: MANCHETE visceral em MAIÚSCULAS, máx 10 palavras. "
+            "Contraste GRUPO x PRIVADO de forma clara (ex.: 'NÃO É NO GRUPO — É NO PRIVADO DO ALUNO'). "
+            "PROIBIDO frases contraditórias como 'não acontece na conversa privada, é no privado'.\n"
             f"2. desenvolvimento_copy: Roteiro PAS com {preset['copy_duration']}. "
             f"Tom: {preset['copy_tone']}.{regra_chars} "
             f"Mencione Guardian AI como solução de detecção e alerta. "
             f"NÃO inclua URL na narração — o fechamento será adicionado automaticamente.\n"
             "3. chamada_para_acao_cta: Comando curto em MAIÚSCULAS.\n"
-            "4. texto_card_notificacao: APENAS a mensagem REAL do golpista no WhatsApp.\n"
+            "4. texto_card_notificacao: APENAS a mensagem REAL do golpista no WhatsApp — "
+            "use a frase_golpista do contexto como base, adaptando só o tom informal.\n"
             "5. frase_destaque_golpista: Frase-chave do golpista para destacar no card.\n"
             "6. genero_personagem_visual: DEVE respeitar GUARDRAILS e o protagonista do CONTEXTO NARRATIVO "
             "(escola=diretor/professor; empresa=comerciante; pais=pai/mãe; idoso=65+).\n"

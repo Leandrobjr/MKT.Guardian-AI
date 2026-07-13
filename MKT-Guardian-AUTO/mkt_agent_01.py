@@ -572,7 +572,10 @@ class MediaFactory:
             input_image_path, output_path, headline, alerta, solucao, cta, url, frases_destaque,
         )
 
-    def _build_visual_prompt(self, creative_data: dict) -> str:
+    def _build_visual_prompt(self, creative_data: dict, max_chars: int = 2900) -> str:
+        """Monta o prompt visual com prioridade: cena e regras obrigatórias nunca são
+        cortadas; estilo/proibições cedem espaço primeiro se o texto passar de max_chars
+        (a API Kling rejeita prompts acima de ~3072 caracteres com HTTP 400)."""
         cena = creative_data.get("direcao_arte_emocional") or (
             "Documentary photorealistic photo of an ordinary Brazilian person in everyday clothes "
             "at home, holding a smartphone showing the WhatsApp chat screen with green message bubbles."
@@ -584,29 +587,38 @@ class MediaFactory:
             "estilo_fotografico",
             "Photorealistic documentary advertising, natural daylight, Brazilian everyday environment.",
         )
-        partes = [cena.strip(), estilo.strip()]
-        if obrigatorias:
-            partes.append("MANDATORY: " + " ".join(obrigatorias))
-        if proibicoes:
-            partes.append("FORBIDDEN: " + " ".join(proibicoes))
         preset = creative_data.get("preset_midia") or {}
-        ratio_hint = preset.get("visual_ratio_hint")
-        if ratio_hint:
-            partes.append(ratio_hint)
-        else:
-            partes.append(
-                "Vertical 9:16 composition, all subjects fully visible without crop, "
-                "clean image with no text overlays (text added later in post-production)."
-            )
-        vid = creative_data.get("visual_variation_id")
-        if vid:
-            partes.append(
-                f"MANDATORY UNIQUENESS: Campaign visual {vid}. "
-                "Distinct individual face, outfit and room — never repeat generic stock look."
-            )
-        if "Vídeo" in creative_data.get("tipo_midia_selecionada", ""):
-            partes.append(motion_prompt_suffix())
-        return " ".join(partes)
+        ratio_hint = preset.get("visual_ratio_hint") or (
+            "Vertical 9:16 composition, all subjects fully visible without crop, "
+            "clean image with no text overlays (text added later in post-production)."
+        )
+        is_video = "Vídeo" in creative_data.get("tipo_midia_selecionada", "")
+        motion = motion_prompt_suffix() if is_video else ""
+        # Identidade única da campanha já é garantida pelo sufixo do VisualVarietyEngine
+        # embutido em `cena` (evita duplicar instrução de unicidade no prompt).
+
+        essenciais = [cena.strip()]
+        phone_clause = (creative_data.get("phone_screen_clause") or "").strip()
+        if phone_clause:
+            essenciais.append(phone_clause)
+        if obrigatorias:
+            essenciais.append("MANDATORY: " + " ".join(obrigatorias))
+        essenciais.append(ratio_hint)
+        if motion:
+            essenciais.append(motion)
+
+        opcionais = [estilo.strip()]
+        if proibicoes:
+            opcionais.append("FORBIDDEN: " + " ".join(proibicoes))
+
+        prompt = " ".join(essenciais + opcionais)
+        if len(prompt) > max_chars:
+            prompt = " ".join(essenciais + opcionais[:1])
+        if len(prompt) > max_chars:
+            prompt = " ".join(essenciais)
+        if len(prompt) > max_chars:
+            prompt = prompt[:max_chars].rsplit(" ", 1)[0]
+        return prompt
 
     def _slug_filename(self, text: str) -> str:
         slug = re.sub(r"[^a-z0-9]+", "_", text.lower().strip())
@@ -1015,7 +1027,12 @@ class MediaFactory:
 
         headers = kling_headers()
         preset = self.preset_midia or {}
-        kling_prompt = f"{prompt} {motion_prompt_suffix()}"
+        # `prompt` já inclui motion_prompt_suffix() (ver _build_visual_prompt) — não duplicar,
+        # senão o texto pode passar do limite de ~3072 caracteres aceito pela API Kling.
+        kling_prompt = prompt
+        print(f"📏 Kling prompt: {len(kling_prompt)} caracteres")
+        if len(kling_prompt) > 3000:
+            print("⚠️ Prompt próximo do limite Kling (máx. 3072) — truncado automaticamente.")
         payload = {
             "prompt": kling_prompt,
             "settings": {

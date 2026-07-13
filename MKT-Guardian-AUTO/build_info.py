@@ -1,7 +1,7 @@
 """Versão do build — exibida no startup para confirmar git pull."""
 
-MEDIA_FACTORY_VERSION = "18.3"
-ORCHESTRATOR_VERSION = "4.4"
+MEDIA_FACTORY_VERSION = "18.4"
+ORCHESTRATOR_VERSION = "4.5"
 MIN_GIT_COMMIT_PREFIX = "fbc6e11"  # FFmpeg nativo + overlay PNG
 
 

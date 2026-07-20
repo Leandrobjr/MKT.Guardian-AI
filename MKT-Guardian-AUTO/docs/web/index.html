@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>MKT Guardian AI — Fábrica de Campanhas</title>
+  <meta name="description" content="Área restrita da Fábrica de Campanhas de Marketing do Guardian AI APP. Uso interno mediante autenticação." />
+  <meta name="robots" content="noindex, nofollow" />
+  <style>
+    :root {
+      --navy: #0b1424;
+      --navy-mid: #132038;
+      --card: #0f172a;
+      --green: #34d399;
+      --green-dark: #10b981;
+      --text: #f8fafc;
+      --muted: #94a3b8;
+      --line: rgba(148, 163, 184, 0.25);
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: "Segoe UI", system-ui, sans-serif;
+      color: var(--text);
+      background:
+        radial-gradient(ellipse 80% 50% at 50% -10%, rgba(52, 211, 153, 0.18), transparent),
+        linear-gradient(165deg, var(--navy) 0%, var(--navy-mid) 55%, #071018 100%);
+      display: flex;
+      flex-direction: column;
+    }
+    main {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 2rem 1.25rem;
+    }
+    .panel {
+      width: min(420px, 100%);
+      padding: 2rem 1.75rem;
+      background: rgba(15, 23, 42, 0.72);
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      backdrop-filter: blur(10px);
+    }
+    .brand {
+      font-size: 0.75rem;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: var(--green);
+      margin: 0 0 0.5rem;
+    }
+    h1 {
+      margin: 0 0 0.75rem;
+      font-size: 1.55rem;
+      line-height: 1.25;
+      font-weight: 700;
+    }
+    .lead {
+      margin: 0 0 1.5rem;
+      color: var(--muted);
+      font-size: 0.95rem;
+      line-height: 1.5;
+    }
+    .notice {
+      margin: 0 0 1.25rem;
+      padding: 0.85rem 1rem;
+      border-left: 3px solid var(--green);
+      background: rgba(52, 211, 153, 0.08);
+      color: #e2e8f0;
+      font-size: 0.88rem;
+      line-height: 1.45;
+    }
+    label {
+      display: block;
+      font-size: 0.8rem;
+      color: var(--muted);
+      margin-bottom: 0.35rem;
+    }
+    input[type="email"],
+    input[type="password"] {
+      width: 100%;
+      margin-bottom: 1rem;
+      padding: 0.75rem 0.85rem;
+      border-radius: 10px;
+      border: 1px solid var(--line);
+      background: rgba(7, 16, 24, 0.7);
+      color: var(--text);
+      font-size: 1rem;
+    }
+    input:focus {
+      outline: 2px solid rgba(52, 211, 153, 0.45);
+      border-color: var(--green);
+    }
+    .accept {
+      display: flex;
+      gap: 0.6rem;
+      align-items: flex-start;
+      margin: 0.25rem 0 1.25rem;
+      font-size: 0.82rem;
+      color: var(--muted);
+      line-height: 1.4;
+    }
+    .accept a { color: var(--green); }
+    button {
+      width: 100%;
+      border: 0;
+      border-radius: 999px;
+      padding: 0.85rem 1rem;
+      background: linear-gradient(180deg, var(--green), var(--green-dark));
+      color: var(--navy);
+      font-weight: 700;
+      font-size: 0.95rem;
+      cursor: pointer;
+    }
+    button:disabled {
+      opacity: 0.45;
+      cursor: not-allowed;
+    }
+    .links {
+      margin-top: 1.25rem;
+      text-align: center;
+      font-size: 0.82rem;
+    }
+    .links a {
+      color: var(--muted);
+      text-decoration: none;
+      margin: 0 0.4rem;
+    }
+    .links a:hover { color: var(--green); }
+    footer {
+      padding: 1rem 1.25rem 1.5rem;
+      text-align: center;
+      font-size: 0.75rem;
+      color: var(--muted);
+      line-height: 1.55;
+      border-top: 1px solid var(--line);
+    }
+    footer a { color: var(--green); text-decoration: none; }
+  </style>
+</head>
+<body>
+  <main>
+    <section class="panel" aria-labelledby="titulo-login">
+      <p class="brand">Guardian AI · Uso interno</p>
+      <h1 id="titulo-login">Fábrica de Campanhas de Marketing</h1>
+      <p class="lead">Área restrita MKT-GUARDIAN-AUTO para criação e aprovação de campanhas do Guardian AI APP.</p>
+
+      <p class="notice">
+        Ao entrar, você acessa a <strong>Plataforma de Campanhas MKT Guardian AI</strong> (uso interno).
+        Esta área <strong>não</strong> é o aplicativo Guardian AI APP.
+      </p>
+
+      <!-- Substitua action pelo endpoint real de autenticação do site -->
+      <form method="post" action="#" id="form-login">
+        <label for="email">E-mail</label>
+        <input id="email" name="email" type="email" autocomplete="username" required />
+
+        <label for="senha">Senha</label>
+        <input id="senha" name="senha" type="password" autocomplete="current-password" required />
+
+        <label class="accept">
+          <input type="checkbox" id="aceite" name="aceite" required />
+          <span>
+            Li e aceito os
+            <a href="./termos_mkt.html">Termos de Uso</a>
+            e a
+            <a href="./privacidade_mkt.html">Política de Privacidade</a>
+            da Plataforma de Campanhas.
+          </span>
+        </label>
+
+        <button type="submit" id="btn-entrar" disabled>Entrar</button>
+      </form>
+
+      <p class="links">
+        <a href="./termos_mkt.html">Termos da Plataforma</a>
+        ·
+        <a href="./privacidade_mkt.html">Privacidade da Plataforma</a>
+      </p>
+    </section>
+  </main>
+
+  <footer>
+    Termos e privacidade do <strong>app</strong> Guardian AI: consulte os documentos oficiais em
+    <a href="https://guardian-ai.app">guardian-ai.app</a>.<br />
+    Documentos desta fábrica:
+    <a href="./termos_mkt.html">Termos MKT</a> ·
+    <a href="./privacidade_mkt.html">Privacidade MKT</a><br />
+    Operador: L&amp;M ADMINISTRAÇÃO E PARTICIPAÇÕES LTDA — CNPJ 27.629.805/0001-55 —
+    <a href="mailto:admin@guardian-ai.app">admin@guardian-ai.app</a>
+  </footer>
+
+  <script>
+    const aceite = document.getElementById("aceite");
+    const btn = document.getElementById("btn-entrar");
+    aceite.addEventListener("change", () => {
+      btn.disabled = !aceite.checked;
+    });
+  </script>
+</body>
+</html>

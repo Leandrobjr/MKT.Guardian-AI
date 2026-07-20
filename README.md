@@ -1,5 +1,7 @@
 # 🚀 MKT Guardian AI - Agência de Marketing Digital Autônoma
 
+> **Apresentação institucional e base para site:** veja [MKT-Guardian-AUTO/README_INSTITUCIONAL.md](MKT-Guardian-AUTO/README_INSTITUCIONAL.md)
+
 Agência completa composta por 6 agentes de IA especializados para lançamento e escala de produtos digitais.
 
 ## 📁 Estrutura da Agência

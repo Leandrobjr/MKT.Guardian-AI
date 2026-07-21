@@ -10,8 +10,8 @@
 Estes Termos de Uso regem o acesso e a utilização da **Plataforma de Campanhas MKT Guardian AI** (também referida como **MKT-GUARDIAN-AUTO** ou **Fábrica de Campanhas de Marketing**), disponível em [https://guardian-ai.app/MKT-GUARDIAN-AUTO](https://guardian-ai.app/MKT-GUARDIAN-AUTO).
 
 **Operador / responsável:**  
-**L&M ADMINISTRAÇÃO E PARTICIPAÇÕES LTDA**  
-CNPJ: **27.629.805/0001-55**  
+**LEANDRO BOTACIN JÚNIOR**  
+CPF: **067.710.908-33**  
 E-mail: [admin@guardian-ai.app](mailto:admin@guardian-ai.app)
 
 A Plataforma está vinculada ao produto **Guardian AI APP** ([https://guardian-ai.app](https://guardian-ai.app)), mas **não substitui** os Termos de Uso nem a Política de Privacidade do aplicativo principal. O uso do app Guardian AI (proteção no WhatsApp) continua regido pelos documentos próprios do app.
@@ -94,7 +94,7 @@ Mediante autorização válida, o usuário pode:
 
 ## 8. Propriedade intelectual
 
-8.1. O software, fluxos, documentação técnica e identidade da Plataforma pertencem ao **Operador** (L&M ADMINISTRAÇÃO E PARTICIPAÇÕES LTDA), salvo componentes de terceiros sob suas respectivas licenças.
+8.1. O software, fluxos, documentação técnica e identidade da Plataforma pertencem ao **Operador** (LEANDRO BOTACIN JÚNIOR), salvo componentes de terceiros sob suas respectivas licenças.
 
 8.2. Os **criativos** produzidos para campanhas do Guardian AI APP pertencem à empresa / operação Guardian AI, observadas as regras de uso das APIs de geração.
 
@@ -147,7 +147,7 @@ Ao autenticar-se e utilizar a Plataforma de Campanhas MKT Guardian AI, o usuári
 
 ---
 
-**L&M ADMINISTRAÇÃO E PARTICIPAÇÕES LTDA** · CNPJ 27.629.805/0001-55  
+**LEANDRO BOTACIN JÚNIOR** · CPF 067.710.908-33  
 Contato: [admin@guardian-ai.app](mailto:admin@guardian-ai.app)
 
 *Documento exclusivo da Plataforma de Campanhas (MKT-GUARDIAN-AUTO). Não se confunde com os Termos do aplicativo Guardian AI APP.*

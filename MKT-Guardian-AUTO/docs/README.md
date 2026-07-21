@@ -17,8 +17,8 @@ Pasta com conteúdo pronto para publicar em:
 
 ## Operador
 
-L&M ADMINISTRAÇÃO E PARTICIPAÇÕES LTDA  
-CNPJ: 27.629.805/0001-55  
+LEANDRO BOTACIN JÚNIOR  
+CPF: 067.710.908-33  
 Contato: admin@guardian-ai.app  
 Foro: Goiânia — GO
 

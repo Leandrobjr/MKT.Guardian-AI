@@ -22,8 +22,8 @@ Os dados e a privacidade do app principal continuam regidos pela Política de Pr
 ## 2. Quem trata os dados
 
 **Controlador:**  
-**L&M ADMINISTRAÇÃO E PARTICIPAÇÕES LTDA**  
-CNPJ: **27.629.805/0001-55**  
+**LEANDRO BOTACIN JÚNIOR**  
+CPF: **067.710.908-33**  
 E-mail: [admin@guardian-ai.app](mailto:admin@guardian-ai.app)
 
 O Controlador trata os dados dos **operadores autorizados** (pessoas com login na Plataforma de Campanhas) e dos registros técnicos necessários à operação segura do serviço.
@@ -155,7 +155,7 @@ O navegador pode permitir bloquear cookies; nesse caso, o login ou a sessão pod
 Dúvidas sobre esta Política ou sobre dados pessoais tratados na Plataforma de Campanhas:
 
 **E-mail:** [admin@guardian-ai.app](mailto:admin@guardian-ai.app)  
-**Controlador:** L&M ADMINISTRAÇÃO E PARTICIPAÇÕES LTDA — CNPJ 27.629.805/0001-55  
+**Controlador:** LEANDRO BOTACIN JÚNIOR — CPF 067.710.908-33  
 **Foro de referência:** Goiânia — GO, Brasil
 
 ---
@@ -171,7 +171,7 @@ Recomenda-se a consulta periódica deste documento.
 
 **Última atualização:** 20 de julho de 2026
 
-**L&M ADMINISTRAÇÃO E PARTICIPAÇÕES LTDA** · CNPJ 27.629.805/0001-55  
+**LEANDRO BOTACIN JÚNIOR** · CPF 067.710.908-33  
 Contato: [admin@guardian-ai.app](mailto:admin@guardian-ai.app)
 
 *Documento exclusivo da Plataforma de Campanhas (MKT-GUARDIAN-AUTO). Não se confunde com a Política de Privacidade do aplicativo Guardian AI APP.*

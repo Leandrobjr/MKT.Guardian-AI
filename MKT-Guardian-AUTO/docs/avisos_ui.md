@@ -20,7 +20,7 @@ Links:
 
 > Termos e privacidade do **app** Guardian AI: consulte os documentos oficiais em [guardian-ai.app](https://guardian-ai.app).  
 > Documentos desta fábrica: [Termos MKT](https://guardian-ai.app/MKT-GUARDIAN-AUTO/termos_mkt) · [Privacidade MKT](https://guardian-ai.app/MKT-GUARDIAN-AUTO/privacidade_mkt)  
-> Operador: L&M ADMINISTRAÇÃO E PARTICIPAÇÕES LTDA — CNPJ 27.629.805/0001-55 — [admin@guardian-ai.app](mailto:admin@guardian-ai.app)
+> Operador: LEANDRO BOTACIN JÚNIOR — CPF 067.710.908-33 — [admin@guardian-ai.app](mailto:admin@guardian-ai.app)
 
 ---
 

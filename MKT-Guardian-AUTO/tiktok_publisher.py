@@ -13,11 +13,17 @@ from __future__ import annotations
 import os
 from typing import Any
 
-from dotenv import load_dotenv
+from env_loader import load_project_env
 
-load_dotenv()
+load_project_env()
 
 TOKEN_URL = "https://open.tiktokapis.com/v2/oauth/token/"
+
+
+def _env_redirect_uri() -> str:
+    return (
+        (os.getenv("TIKTOK_REDIRECT_URI") or os.getenv("TIKTOK_REDIRECT_URL") or "").strip()
+    )
 
 
 class TikTokPublisher:
@@ -27,6 +33,7 @@ class TikTokPublisher:
         self.access_token = (os.getenv("TIKTOK_ACCESS_TOKEN") or "").strip()
         self.refresh_token = (os.getenv("TIKTOK_REFRESH_TOKEN") or "").strip()
         self.open_id = (os.getenv("TIKTOK_OPEN_ID") or "").strip()
+        self.redirect_uri = _env_redirect_uri()
 
         if not self.access_token:
             raise EnvironmentError(

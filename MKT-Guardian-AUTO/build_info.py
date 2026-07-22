@@ -1,7 +1,7 @@
 """Versão do build — exibida no startup para confirmar git pull."""
 
 MEDIA_FACTORY_VERSION = "18.4"
-ORCHESTRATOR_VERSION = "4.5"
+ORCHESTRATOR_VERSION = "4.6"
 MIN_GIT_COMMIT_PREFIX = "fbc6e11"  # FFmpeg nativo + overlay PNG
 
 
@@ -26,6 +26,6 @@ def print_build_banner(base_dir: str) -> None:
         f"Fábrica v{MEDIA_FACTORY_VERSION} | git {git_hash}"
     )
     print(
-        "   Esperado: Fábrica v16.0+ | TikTok narração 1.18x + auto-fit ~18s. "
+        "   Esperado: Orquestrador v4.6+ | Etapa 6 com aprovação final via terminal (opção 4). "
         "Se não aparecer, rode: git pull origin main"
     )

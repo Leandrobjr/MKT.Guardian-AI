@@ -29,6 +29,11 @@ try:
 except ImportError:
     MetaPublisher = None
 
+try:
+    from tiktok_publisher import TikTokPublisher
+except ImportError:
+    TikTokPublisher = None
+
 class CampaignOrchestrator:
     BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
@@ -52,6 +57,7 @@ class CampaignOrchestrator:
         self.telegram_timeout = int(os.getenv("TELEGRAM_TIMEOUT", "3600"))
         self.telegram = None
         self.publisher = None
+        self.tiktok_publisher = None
 
     def _init_telegram(self) -> bool:
         if TelegramApproval is None:
@@ -73,6 +79,17 @@ class CampaignOrchestrator:
             return True
         except EnvironmentError as e:
             print(f"⚠️ Meta Publisher desativado: {e}")
+            return False
+
+    def _init_tiktok_publisher(self) -> bool:
+        if TikTokPublisher is None:
+            print("⚠️ tiktok_publisher.py não encontrado — publicação TikTok desativada.")
+            return False
+        try:
+            self.tiktok_publisher = TikTokPublisher()
+            return True
+        except EnvironmentError as e:
+            print(f"⚠️ TikTok Publisher desativado: {e}")
             return False
 
     def _load_markdown_context(self) -> str:
@@ -879,6 +896,37 @@ class CampaignOrchestrator:
         print("⚠️ Opção inválida. Use 1, 2 ou 3.")
         return {"action": "retry"}
 
+    def _aprovar_asset_terminal(
+        self, creative_data: dict, config: dict, job_id: str, asset_path: str
+    ) -> dict:
+        """Aprovação final do criativo (vídeo/imagem pronto) direto no terminal (Desktop) —
+        equivalente à aprovação do Telegram, executada antes do Gestor de Tráfego."""
+        print("\n" + "=" * 70)
+        print("📋 APROVAÇÃO FINAL DO CRIATIVO (vídeo/imagem pronto — antes do Gestor de Tráfego)")
+        print("=" * 70)
+        print(f"Canal: {config.get('canal', '—')}")
+        print(f"Headline: {creative_data.get('gancho_atencao_inicial', '')}")
+        print(f"\nRoteiro: {creative_data.get('desenvolvimento_copy', '')[:400]}")
+        print(f"\nCTA botão: {creative_data.get('texto_botao_conversao', creative_data.get('chamada_para_acao_cta', ''))}")
+        print(f"\n🎬 Arquivo para revisar: {asset_path}")
+        print(f"Job: {job_id}")
+        print("\n[1] ✅ Aprovar e seguir para publicação")
+        print("[2] ✏️ Melhorar (reescrever copy — regenera vídeo/áudio)")
+        print("[3] ❌ Rejeitar campanha")
+        op = input("Escolha (1/2/3): ").strip()
+        if op == "1":
+            return {"action": "approve"}
+        if op == "3":
+            return {"action": "reject", "motivo": "asset_rejeitado_terminal"}
+        if op == "2":
+            feedback = self._ler_melhoria_terminal()
+            if feedback:
+                return {"action": "improve", "prompt": feedback}
+            print("⚠️ Melhoria vazia — tente novamente ou escolha [1] ou [3].")
+            return {"action": "retry"}
+        print("⚠️ Opção inválida. Use 1, 2 ou 3.")
+        return {"action": "retry"}
+
     def _solicitar_aprovacao_estoria(
         self, config: dict, creative_data: dict, revisao: int, story_attempt: int
     ) -> dict:
@@ -1029,14 +1077,16 @@ class CampaignOrchestrator:
         objetivo_final = "Instalação do Aplicativo (Downloads)" if o_escolhido == "1" else "Geração de Leads Qualificados"
 
         print("\n📲 ETAPA 6: Fluxo após gerar o criativo:")
-        print("[1] Apenas salvar arquivos localmente (sem Telegram)")
+        print("[1] Apenas salvar arquivos localmente (sem aprovação, sem Telegram)")
         print("[2] Salvar + Aprovação via Telegram (recomendado)")
-        print("[3] Salvar + Telegram + Postar no Instagram após APROVAR")
+        print("[3] Salvar + Telegram + Postar automaticamente após APROVAR")
+        print("[4] Aprovar aqui mesmo (terminal) + Postar automaticamente após APROVAR")
         f_escolhido = input("Digite o número da opção desejada: ").strip()
         fluxo_map = {
-            "1": {"aprovacao_telegram": False, "postar_instagram": False},
-            "2": {"aprovacao_telegram": True, "postar_instagram": False},
-            "3": {"aprovacao_telegram": True, "postar_instagram": True},
+            "1": {"aprovacao_telegram": False, "aprovacao_terminal": False, "postar_instagram": False},
+            "2": {"aprovacao_telegram": True, "aprovacao_terminal": False, "postar_instagram": False},
+            "3": {"aprovacao_telegram": True, "aprovacao_terminal": False, "postar_instagram": True},
+            "4": {"aprovacao_telegram": False, "aprovacao_terminal": True, "postar_instagram": True},
         }
         fluxo = fluxo_map.get(f_escolhido, fluxo_map["2"])
 
@@ -1050,6 +1100,7 @@ class CampaignOrchestrator:
             "canal": canal_final,
             "objetivo": objetivo_final,
             "aprovacao_telegram": fluxo["aprovacao_telegram"],
+            "aprovacao_terminal": fluxo["aprovacao_terminal"],
             "postar_instagram": fluxo["postar_instagram"],
         }
 
@@ -1087,7 +1138,10 @@ class CampaignOrchestrator:
             else:
                 self._init_telegram()
         if config.get("postar_instagram"):
-            self._init_publisher()
+            if "tiktok" in config.get("canal", "").lower():
+                self._init_tiktok_publisher()
+            else:
+                self._init_publisher()
 
         memoria_resumo = self.memory.format_for_prompt(limit_correcoes=3)
         if memoria_resumo:
@@ -1120,7 +1174,14 @@ class CampaignOrchestrator:
                     return
                 assets_resultado = self.media_factory.generate_campaign_assets(creative_data)
 
-            if not config.get("aprovacao_telegram") or not self.telegram:
+            usar_telegram_aprovacao = bool(config.get("aprovacao_telegram") and self.telegram)
+            # Se o Telegram foi solicitado mas não inicializou (ex.: token ausente), cai para o
+            # terminal em vez de pular a aprovação — evita publicar automaticamente sem ninguém revisar.
+            usar_terminal_aprovacao = bool(
+                config.get("aprovacao_terminal")
+                or (config.get("aprovacao_telegram") and not self.telegram)
+            )
+            if not (usar_telegram_aprovacao or usar_terminal_aprovacao):
                 aprovado = True
                 break
 
@@ -1143,20 +1204,27 @@ class CampaignOrchestrator:
                     )
 
             job_id = f"{assets_resultado.get('basename', uuid.uuid4().hex[:8])}_r{revisao}"
-            audio_para_aprovacao = None
-            if not asset_path.lower().endswith(".mp4"):
-                audio_file = assets_resultado.get("audio_file", "")
-                if audio_file and os.path.isfile(audio_file):
-                    audio_para_aprovacao = audio_file
-            acao = self.telegram.aprovar_sincronamente(
-                asset_path=asset_path,
-                headline=creative_data["gancho_atencao_inicial"],
-                copy=creative_data["desenvolvimento_copy"],
-                job_id=job_id,
-                timeout_segundos=self.telegram_timeout,
-                audio_path=audio_para_aprovacao,
-            )
-            print(f"📲 Decisão Telegram: {acao['action']}")
+
+            if usar_telegram_aprovacao:
+                audio_para_aprovacao = None
+                if not asset_path.lower().endswith(".mp4"):
+                    audio_file = assets_resultado.get("audio_file", "")
+                    if audio_file and os.path.isfile(audio_file):
+                        audio_para_aprovacao = audio_file
+                acao = self.telegram.aprovar_sincronamente(
+                    asset_path=asset_path,
+                    headline=creative_data["gancho_atencao_inicial"],
+                    copy=creative_data["desenvolvimento_copy"],
+                    job_id=job_id,
+                    timeout_segundos=self.telegram_timeout,
+                    audio_path=audio_para_aprovacao,
+                )
+                print(f"📲 Decisão Telegram: {acao['action']}")
+            else:
+                acao = self._aprovar_asset_terminal(creative_data, config, job_id, asset_path)
+                while acao["action"] == "retry":
+                    acao = self._aprovar_asset_terminal(creative_data, config, job_id, asset_path)
+                print(f"🖥️ Decisão terminal: {acao['action']}")
 
             if acao["action"] == "approve":
                 self.memory.registrar_aprovado(
@@ -1239,18 +1307,48 @@ class CampaignOrchestrator:
 
         self.traffic_manager.structure_advertising_campaign(creative_data, assets_resultado)
 
-        if config.get("postar_instagram") and self.publisher:
+        if config.get("postar_instagram"):
             asset_path = self._resolve_primary_asset(assets_resultado)
-            if asset_path:
+            canal_tiktok = "tiktok" in config.get("canal", "").lower()
+            if not asset_path:
+                print("⚠️ Nenhum asset disponível para publicar.")
+            elif canal_tiktok:
+                if not self.tiktok_publisher:
+                    aviso = "⚠️ Publicação TikTok não configurada (verifique TIKTOK_ACCESS_TOKEN no .env)."
+                    print(aviso)
+                    if self.telegram:
+                        self.telegram.notificar_sync(aviso)
+                else:
+                    caption = self._montar_caption_instagram(creative_data)
+                    try:
+                        resultado = self.tiktok_publisher.publish_video(asset_path, caption)
+                        if resultado.get("ok"):
+                            msg = f"✅ Publicado no TikTok!\nID: `{resultado.get('publish_id', '')}`"
+                            print(msg)
+                            if self.telegram:
+                                self.telegram.notificar_sync(msg)
+                        else:
+                            print(f"❌ Falha ao publicar no TikTok: {resultado.get('erro')}")
+                    except NotImplementedError as e:
+                        aviso = (
+                            f"⚠️ Publicação automática no TikTok ainda não está pronta ({e}).\n"
+                            f"O arquivo está salvo em: {asset_path}"
+                        )
+                        print(aviso)
+                        if self.telegram:
+                            self.telegram.notificar_sync(aviso)
+            elif self.publisher:
                 caption = self._montar_caption_instagram(creative_data)
                 resultado = self.publisher.postar_asset(asset_path, caption)
                 if resultado.get("ok"):
+                    msg = f"✅ Publicado no Instagram!\nID: `{resultado.get('post_id')}`"
+                    print(msg)
                     if self.telegram:
-                        self.telegram.notificar_sync(
-                            f"✅ Publicado no Instagram!\nID: `{resultado.get('post_id')}`"
-                        )
+                        self.telegram.notificar_sync(msg)
                 else:
                     print(f"❌ Falha ao publicar: {resultado.get('erro')}")
+            else:
+                print("⚠️ Publicador Meta não configurado.")
 
         print("\n======================================================================")
         print("🏁 [PIPELINE DA CAMPANHA CONCLUÍDO COM SUCESSO]")
@@ -1262,8 +1360,10 @@ class CampaignOrchestrator:
         print(f"🔗 Link: {creative_data.get('link_conversao', 'https://guardian-ai.app')}")
         print(f"🎯 Canal: {config['canal']}")
         print(f"📈 Objetivo: {config['objetivo']}")
-        if config.get("aprovacao_telegram"):
-            print("✅ Status: APROVADO pelo administrador")
+        if usar_telegram_aprovacao:
+            print("✅ Status: APROVADO pelo administrador (via Telegram)")
+        elif usar_terminal_aprovacao:
+            print("✅ Status: APROVADO pelo administrador (via terminal/Desktop)")
         print("======================================================================\n")
 
 if __name__ == "__main__":

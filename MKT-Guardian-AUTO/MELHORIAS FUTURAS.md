@@ -120,4 +120,14 @@ Token com `instagram_content_publish` e `instagram_basic`.
 
 ---
 
+## 2. Melhoria da criatividade e memória de campanhas (macro)
+
+**Status:** Planejado — ver documento completo
+
+**Arquivo:** [`PLANO MELHORIA CRIATIVIDADE.md`](PLANO%20MELHORIA%20CRIATIVIDADE.md)
+
+**Resumo:** memória anti-repetição, rotação de headlines, casting visual (aparência bem apresentada), biblioteca de golpes reais (`GOLPES WHATSAPP.md`), feedback que respeita tipo de estória. Implementação em 6 fases (0–6); MVP em ~2 semanas (Fases 0–3).
+
+---
+
 *Última atualização: 2026-07-30*

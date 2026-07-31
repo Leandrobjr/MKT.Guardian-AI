@@ -205,17 +205,17 @@ APPEARANCE STANDARD (mandatory):
 
 ## 4. Fases de implementação
 
-### Fase 0 — Quick wins (1–2 dias) ⚡
+### Fase 0 — Quick wins (1–2 dias) ⚡ ✅ Concluída (2026-07-30)
 
-| # | Tarefa | Arquivo(s) | Impacto |
+| # | Tarefa | Arquivo(s) | Status |
 |---|---|---|---|
-| 0.1 | Reforçar diretriz visual “bem apresentado, sem pobreza” | `guardian_base.json`, `_build_ambiente()` | Imagem |
-| 0.2 | Registrar prompts Kling em `imagens_prompts.jsonl` | `mkt_agent_01.py` | Anti-repeat vídeo |
-| 0.3 | `format_for_prompt(publico, golpe)` filtrado | `agent_memory.py`, orchestrator | Memória contextual |
-| 0.4 | Headline fallback: rotação `ganchos[i]` não usado | `campaign_orchestrator.py` | Headlines |
-| 0.5 | Temperature headline 0.7 / resto 0.45 | `campaign_orchestrator.py` | Copy |
+| 0.1 | Reforçar diretriz visual “bem apresentado, sem pobreza” | `guardian_base.json`, `_build_ambiente()`, `visual_variety.py` | ✅ |
+| 0.2 | Registrar prompts Kling em `imagens_prompts.jsonl` | `mkt_agent_01.py` | ✅ |
+| 0.3 | `format_for_prompt(publico, golpe)` filtrado | `agent_memory.py`, orchestrator | ✅ |
+| 0.4 | Headline fallback: rotação `ganchos[i]` + gancho prioritário | `campaign_orchestrator.py` | ✅ |
+| 0.5 | Temperature copy 0.7 | `campaign_orchestrator.py` | ✅ |
 
-**Critério de aceite:** 3 campanhas seguidas mesmo combo → headlines e cenas visivelmente diferentes.
+**Versão:** Orquestrador v4.7 | Fábrica v18.5
 
 ---
 

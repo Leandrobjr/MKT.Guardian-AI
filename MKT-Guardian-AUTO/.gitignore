@@ -8,4 +8,5 @@ output_campanha/
 .bot_running.lock
 contexto_negocio/memoria/*.jsonl
 contexto_negocio/memoria/genero_alternancia.json
+contexto_negocio/memoria/ganchos_rotacao.json
 !contexto_negocio/memoria/*.jsonl.example

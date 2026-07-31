@@ -269,8 +269,10 @@ class CampaignOrchestrator:
         creative_data["texto_card_solucao"] = card_solucao_text()
         return creative_data
 
-    def _sanitize_headline(self, creative_data: dict, campaign_ctx: dict) -> dict:
-        """Substitui manchetes contraditórias ou quebradas pelo gancho do contexto da campanha."""
+    def _sanitize_headline(
+        self, creative_data: dict, campaign_ctx: dict, config: dict
+    ) -> dict:
+        """Substitui manchetes contraditórias ou quebradas por gancho rotativo do combo."""
         headline = (creative_data.get("gancho_atencao_inicial") or "").strip()
         broken = [
             r"privad[oa][^.!?]{0,30}privad[oa]",  # "privada... privado" redundante
@@ -279,11 +281,59 @@ class CampaignOrchestrator:
             r"não acontece[^.!?]{0,40}no privado",
         ]
         if any(re.search(p, headline, re.IGNORECASE) for p in broken):
-            ganchos = campaign_ctx.get("ganchos") or []
-            if ganchos:
-                creative_data["gancho_atencao_inicial"] = ganchos[0].upper()
+            gancho = self._pick_rotated_gancho(campaign_ctx, config, advance=False)
+            if gancho:
+                creative_data["gancho_atencao_inicial"] = gancho.upper()
                 print(f"⚠️ Manchete corrigida → {creative_data['gancho_atencao_inicial']}")
         return creative_data
+
+    def _ganchos_state_path(self) -> str:
+        return os.path.join(self.BASE_DIR, "contexto_negocio", "memoria", "ganchos_rotacao.json")
+
+    def _load_ganchos_state(self) -> dict:
+        path = self._ganchos_state_path()
+        if not os.path.isfile(path):
+            return {}
+        try:
+            with open(path, encoding="utf-8") as f:
+                return json.load(f)
+        except (json.JSONDecodeError, OSError):
+            return {}
+
+    def _save_ganchos_state(self, state: dict) -> None:
+        try:
+            with open(self._ganchos_state_path(), "w", encoding="utf-8") as f:
+                json.dump(state, f, ensure_ascii=False, indent=2)
+        except OSError:
+            pass
+
+    def _pick_rotated_gancho(
+        self, campaign_ctx: dict, config: dict, advance: bool = True
+    ) -> str | None:
+        """Rotaciona ganchos do combo para evitar sempre a mesma manchete."""
+        cached = config.get("_gancho_rotativo")
+        if cached:
+            return cached
+
+        ganchos = [g for g in (campaign_ctx.get("ganchos") or []) if g]
+        if not ganchos:
+            return None
+
+        if not advance:
+            return ganchos[0]
+
+        combo = f"{config.get('publico_slug', '')}:{config.get('golpe_id', '')}"
+        state = self._load_ganchos_state()
+        last_idx = int(state.get(combo, -1))
+        next_idx = (last_idx + 1) % len(ganchos)
+        gancho = ganchos[next_idx]
+
+        state[combo] = next_idx
+        self._save_ganchos_state(state)
+        config["_gancho_rotativo"] = gancho
+        print(f"🎯 Gancho rotativo ({next_idx + 1}/{len(ganchos)}): {gancho[:70]}...")
+
+        return gancho
 
     def _align_card_message(
         self, creative_data: dict, config: dict, campaign_ctx: dict, golpe_obj: dict
@@ -344,12 +394,29 @@ class CampaignOrchestrator:
         if publico_slug == "idosos":
             return (
                 "Clean well-kept Brazilian home living room, tidy painted walls, pleasant natural daylight, "
-                "modest comfortable retirement setting — not kitchen, not worn-out poverty, not peeling paint."
+                "comfortable modest middle-income retirement setting — neat appearance, not kitchen, "
+                "not worn-out poverty, not peeling paint."
             )
-        return (
-            "Clean well-kept Brazilian home, tidy painted walls, pleasant natural daylight, "
-            "relatable working-class comfort — not luxury mansion, not worn-out poverty, not peeling paint."
-        )
+        ambientes = [
+            (
+                "Clean well-kept Brazilian home living room with sofa and TV stand, tidy painted walls, "
+                "pleasant natural daylight, middle-income comfort — not luxury mansion, not poverty."
+            ),
+            (
+                "Bright Brazilian home balcony or varanda with simple furniture, plants, tidy walls, "
+                "natural daylight, neat middle-income apartment aesthetic."
+            ),
+            (
+                "Organized Brazilian home office corner or dining table used as desk, tidy shelves, "
+                "pleasant daylight, clean casual professional-at-home feel."
+            ),
+            (
+                "Modern modest Brazilian kitchen-living open plan, clean counters, painted walls, "
+                "natural light — neat and dignified, not luxury, not poverty signals."
+            ),
+        ]
+        idx = hash(publico_slug) % len(ambientes)
+        return ambientes[idx]
 
     def _build_publico_scene(self, publico_slug: str, golpe_id: str, genero: str = "") -> str | None:
         """Cena visual alinhada ao ICP; sobrescreve direção genérica do golpe quando necessário.
@@ -553,6 +620,13 @@ class CampaignOrchestrator:
             lines.append(f"- Alternância de sexo: {alt['regra']}")
             if alt.get("excecao"):
                 lines.append(f"  Exceção: {alt['excecao']}")
+        dv = self.context_data.get("DIRETRIZES_VISUAIS", {})
+        lines.append(
+            "- APARÊNCIA VISUAL: brasileiros bem apresentados, roupa casual limpa e cuidada, "
+            "ambiente organizado classe média — sem sinais de pobreza extrema e sem luxo."
+        )
+        if dv.get("estilo_fotografico"):
+            lines.append(f"- Estilo foto: {dv['estilo_fotografico']}")
         return "\n".join(lines)
 
     def _resolve_genero_campanha(self, creative_data: dict, config: dict) -> str:
@@ -677,7 +751,7 @@ class CampaignOrchestrator:
         preset = resolve_channel_preset(config.get("canal", ""), config.get("midia", ""))
         creative_data["preset_midia"] = preset
         creative_data = self._enforce_product_truth(creative_data)
-        return self._sanitize_headline(creative_data, campaign_ctx)
+        return self._sanitize_headline(creative_data, campaign_ctx, config)
 
     def _generate_creative_data(
         self, config: dict, golpe_obj: dict, instrucoes_extras: str = ""
@@ -687,13 +761,19 @@ class CampaignOrchestrator:
         ganchos_ref = campaign_ctx.get("ganchos") or golpe_obj.get("ganchos", [golpe_obj.get("gancho_modelo", "")])
         frase_golpista = campaign_ctx.get("frase_golpista") or golpe_obj.get("frase_golpista", "")
         publico_slug = config.get("publico_slug", "")
+        golpe_id = config.get("golpe_id", "")
         produto = self.context_data.get("PRODUTO_E_POSICIONAMENTO", {})
         foco_whatsapp = produto.get(
             "foco_exclusivo",
             "Guardian AI protege EXCLUSIVAMENTE o WhatsApp — pessoal e WhatsApp Business.",
         )
 
-        memoria_txt = self.memory.format_for_prompt()
+        gancho_prioritario = self._pick_rotated_gancho(campaign_ctx, config, advance=True)
+
+        memoria_txt = self.memory.format_for_prompt(
+            publico=publico_slug,
+            golpe=golpe_id,
+        )
         preset = resolve_channel_preset(config.get("canal", ""), config.get("midia", ""))
         contexto_injetado = (
             f"DIRETRIZES DE CAMPANHA SELECIONADAS:\n"
@@ -702,7 +782,13 @@ class CampaignOrchestrator:
             f"- Ameaça/Golpe Abordado: {config['golpe']}\n"
             f"- Frase real que o golpista enviaria no WhatsApp (base para o card): {frase_golpista}\n"
             f"- Ganchos de referência (inspire-se, não copie literalmente): {' | '.join(ganchos_ref)}\n"
-            f"- Canal de Distribuição: {config['canal']}\n"
+            + (
+                f"- GANCHO PRIORITÁRIO DESTA CAMPANHA (ângulo obrigatório, palavras novas): "
+                f"{gancho_prioritario}\n"
+                if gancho_prioritario
+                else ""
+            )
+            + f"- Canal de Distribuição: {config['canal']}\n"
             f"- Tipo de Mídia: {config['midia']}\n"
             f"- Preset técnico: {preset['label']}\n"
             f"- Duração alvo da narração: {preset['copy_duration']}\n"
@@ -773,7 +859,7 @@ class CampaignOrchestrator:
 
         config_creative = types.GenerateContentConfig(
             system_instruction=system_instruction,
-            temperature=0.45,
+            temperature=0.7,
             response_mime_type="application/json",
             response_schema={
                 "type": "OBJECT",
@@ -1143,7 +1229,11 @@ class CampaignOrchestrator:
             else:
                 self._init_publisher()
 
-        memoria_resumo = self.memory.format_for_prompt(limit_correcoes=3)
+        memoria_resumo = self.memory.format_for_prompt(
+            publico=config.get("publico_slug", ""),
+            golpe=config.get("golpe_id", ""),
+            limit_correcoes=3,
+        )
         if memoria_resumo:
             print(f"🧠 Memória carregada ({len(memoria_resumo.splitlines())} regras aprendidas)")
 

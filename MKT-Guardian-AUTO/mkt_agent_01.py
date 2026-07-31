@@ -906,7 +906,9 @@ class MediaFactory:
         if "Vídeo" in formato_midia:
             print("🎬 Solicitando clipe Kling AI...")
             video_bruto_path = (
-                self._generate_kling_video(publicidade_prompt, names["kling_raw"])
+                self._generate_kling_video(
+                    publicidade_prompt, names["kling_raw"], basename=names["basename"]
+                )
                 if (self.kling_key or os.getenv("KLING_ACCESS_KEY"))
                 else ""
             )
@@ -1008,7 +1010,9 @@ class MediaFactory:
             "base_image_file": base_image_path if os.path.exists(base_image_path) else "",
         }
 
-    def _generate_kling_video(self, prompt: str, raw_output_path: str) -> str:
+    def _generate_kling_video(
+        self, prompt: str, raw_output_path: str, basename: str = ""
+    ) -> str:
         if not self.kling_key and not os.getenv("KLING_ACCESS_KEY"):
             print("❌ Kling: KLING_API_KEY ausente no .env")
             return ""
@@ -1087,6 +1091,8 @@ class MediaFactory:
                         with open(raw_output_path, "wb") as f:
                             f.write(requests.get(video_url, timeout=120).content)
                         print(f"✅ Kling concluiu em {int(time.time() - inicio)}s")
+                        if basename:
+                            self.visual_variety.register_generated(prompt, basename)
                         return raw_output_path
                     print("❌ Kling succeeded mas sem URL de vídeo.")
                     return ""

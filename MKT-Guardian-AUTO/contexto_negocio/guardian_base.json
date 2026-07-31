@@ -252,10 +252,11 @@
     }
   },
   "DIRETRIZES_VISUAIS": {
-    "estilo_fotografico": "Documentary photorealistic advertising photography, Brazilian everyday life, clean well-kept homes with tidy walls, pleasant natural daylight, relatable working-class comfort, authentic human skin texture, 50mm lens shallow depth of field.",
+    "estilo_fotografico": "Documentary photorealistic advertising photography, Brazilian middle-income everyday life, clean well-kept homes with tidy painted walls, pleasant natural daylight, neat groomed subjects in clean casual clothing, authentic human skin texture, 50mm lens shallow depth of field.",
     "regras_obrigatorias": [
       "Every phone screen MUST show the authentic WhatsApp chat interface with green message bubbles.",
-      "Scene must depict real Brazilians in clean, pleasant everyday environments: tidy home, kitchen, living room — not luxury, not poverty.",
+      "Scene must depict real Brazilians in clean, pleasant everyday environments: tidy living room, home office, balcony — not luxury mansion, not poverty aesthetics.",
+      "Subjects must look neat and well-presented: clean pressed casual clothes (simple blouse, polo, chinos, clean jeans), groomed hair — relatable middle-income Brazil, never ragged or visibly worn-out clothing.",
       "Walls must be well-kept and painted, not peeling or heavily worn.",
       "People dressed in normal clean casual clothes — not ragged, not high fashion.",
       "Gender in image MUST match gender in scam message (linda=menina, lindo=menino).",
@@ -266,7 +267,8 @@
       "AD-SAFE: face, hands and phone fully visible in the TOP 65% of frame; keep the BOTTOM 30% simple/low-detail (plain wall or soft blur) for a text overlay added later."
     ],
     "proibicoes": [
-      "NO peeling paint, cracked walls, extreme poverty aesthetics, or elitist luxury mansions.",
+      "NO peeling paint, cracked walls, dirty environments, stained clothes, extreme poverty aesthetics, or elitist luxury mansions.",
+      "NO subjects that look unkempt, homeless, or shockingly poor — aim for dignified everyday middle-income appearance.",
       "NO stock photo tech backgrounds with human face pasted on top.",
       "NO generic hacker in hoodie, server rooms, or abstract digital security imagery.",
       "NO bank app screens, Instagram, Telegram or other messaging apps.",

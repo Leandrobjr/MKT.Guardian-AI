@@ -183,6 +183,8 @@ class VisualVarietyEngine:
         sufixo = (
             f"{genero_lock}"
             f"Approximately {persona['idade']} years old, from {persona['cidade']}. "
+            f"Neat groomed appearance, clean casual clothing (pressed shirt or blouse, clean jeans or chinos), "
+            f"middle-income Brazilian aesthetic — dignified everyday look, never ragged or poverty signals. "
             f"{genero_hint + '. ' if genero_hint else ''}"
             f"{shot} {lighting} "
             f"Unique campaign visual ID {variation_id}. {anti_repeat}"

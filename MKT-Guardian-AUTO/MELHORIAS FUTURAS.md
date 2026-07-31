@@ -128,6 +128,8 @@ Token com `instagram_content_publish` e `instagram_basic`.
 
 **Resumo:** memória anti-repetição, rotação de headlines, casting visual (aparência bem apresentada), biblioteca de golpes reais (`GOLPES WHATSAPP.md`), feedback que respeita tipo de estória. Implementação em 6 fases (0–6); MVP em ~2 semanas (Fases 0–3).
 
+**Fase 0:** ✅ concluída (Orquestrador v4.7) — ver plano para detalhes.
+
 ---
 
 *Última atualização: 2026-07-30*

@@ -87,28 +87,79 @@ class AgentMemory:
             "motivo": motivo,
         })
 
-    def format_for_prompt(self, limit_correcoes: int = 8) -> str:
-        """Texto injetado no prompt Gemini — regras aprendidas."""
+    def _filter_by_combo(
+        self, registros: list[dict], publico: str, golpe: str, limit: int
+    ) -> list[dict]:
+        if not publico and not golpe:
+            return registros[-limit:]
+        filtrados = [
+            r for r in registros
+            if (not publico or r.get("publico") == publico)
+            and (not golpe or r.get("golpe") == golpe)
+        ]
+        if filtrados:
+            return filtrados[-limit:]
+        return registros[-limit:]
+
+    def headlines_usadas(self, publico: str, golpe: str, limit: int = 10) -> list[str]:
+        """Headlines aprovadas do mesmo combo — para blocklist no prompt."""
+        todos = self._load_recent(self._aprovados, 200)
+        filtrados = self._filter_by_combo(todos, publico, golpe, limit)
+        headlines: list[str] = []
+        for a in filtrados:
+            h = (a.get("headline") or "").strip()
+            if h and h not in headlines:
+                headlines.append(h)
+        return headlines[:limit]
+
+    def format_for_prompt(
+        self,
+        publico: str = "",
+        golpe: str = "",
+        limit_correcoes: int = 8,
+    ) -> str:
+        """Texto injetado no prompt Gemini — regras aprendidas (filtradas por combo)."""
         partes: list[str] = []
-        correcoes = self._load_recent(self._correcoes, limit_correcoes)
+        correcoes = self._filter_by_combo(
+            self._load_recent(self._correcoes, limit_correcoes * 3),
+            publico,
+            golpe,
+            limit_correcoes,
+        )
         if correcoes:
-            partes.append("CORREÇÕES DO ADMINISTRADOR (não repetir):")
+            combo = f"{publico}/{golpe}" if publico or golpe else "geral"
+            partes.append(f"CORREÇÕES DO ADMINISTRADOR — combo {combo} (não repetir):")
             for c in correcoes:
                 fb = c.get("feedback", c.get("problema", ""))
-                pub = c.get("publico", "")
                 if fb:
-                    partes.append(f"- [{pub}] {fb}")
+                    partes.append(f"- {fb}")
 
-        rejeitados = self._load_recent(self._rejeitados, 5)
+        headlines = self.headlines_usadas(publico, golpe, limit=8)
+        if headlines:
+            partes.append("\nHEADLINES JÁ USADAS NESTE COMBO (NÃO REPETIR — crie manchete nova):")
+            for h in headlines:
+                partes.append(f"- {h[:100]}")
+
+        rejeitados = self._filter_by_combo(
+            self._load_recent(self._rejeitados, 20),
+            publico,
+            golpe,
+            5,
+        )
         if rejeitados:
             partes.append("\nPADRÕES REJEITADOS:")
             for r in rejeitados:
-                partes.append(f"- [{r.get('publico', '')}] {r.get('motivo', 'rejeitado')}")
+                partes.append(f"- {r.get('motivo', 'rejeitado')}")
 
-        aprovados = self._load_recent(self._aprovados, 3)
+        aprovados = self._filter_by_combo(
+            self._load_recent(self._aprovados, 20),
+            publico,
+            golpe,
+            2,
+        )
         if aprovados:
-            partes.append("\nREFERÊNCIAS APROVADAS (inspire-se no tom):")
+            partes.append("\nREFERÊNCIAS APROVADAS (inspire-se no tom, não copie a manchete):")
             for a in aprovados:
-                partes.append(f"- [{a.get('publico', '')}] {a.get('headline', '')[:80]}")
+                partes.append(f"- {a.get('headline', '')[:80]}")
 
         return "\n".join(partes)

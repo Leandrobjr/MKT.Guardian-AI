@@ -7,11 +7,13 @@ import os
 import time
 
 import requests
-from dotenv import load_dotenv
 
-load_dotenv()
+from env_loader import load_project_env
+
+load_project_env()
 
 GRAPH_BASE = "https://graph.facebook.com/v21.0"
+RUPLOAD_BASE = "https://rupload.facebook.com/ig-api-upload/v21.0"
 
 
 class MetaPublisher:
@@ -24,6 +26,27 @@ class MetaPublisher:
             raise EnvironmentError(
                 "META_ACCESS_TOKEN e META_IG_USER_ID precisam estar no .env"
             )
+
+    @staticmethod
+    def _meta_error(response: requests.Response) -> str:
+        try:
+            body = response.json()
+            err = body.get("error", {})
+            msg = err.get("message", response.text)
+            code = err.get("code")
+            sub = err.get("error_subcode")
+            user = err.get("error_user_msg")
+            detail = f"{response.status_code} — {msg}"
+            if code is not None:
+                detail += f" (code={code}"
+                if sub is not None:
+                    detail += f", subcode={sub}"
+                detail += ")"
+            if user:
+                detail += f" — {user}"
+            return detail
+        except Exception:
+            return f"{response.status_code} — {response.text[:300]}"
 
     def _upload_para_imgbb(self, caminho_imagem: str) -> str | None:
         if not self.imgbb_key:
@@ -45,30 +68,39 @@ class MetaPublisher:
             print(f"❌ [ImgBB] Falha: {e}")
             return None
 
-    def _upload_video_meta(self, caminho_video: str) -> str | None:
+    def _upload_video_resumable(self, caminho_video: str, caption: str) -> str | None:
+        """Upload local via protocolo resumável (Instagram Graph API)."""
         tamanho = os.path.getsize(caminho_video)
         print(f"📤 [Meta] Upload vídeo ({tamanho // 1024} KB)...")
 
-        init_url = f"{GRAPH_BASE}/{self.ig_user}/video_reels"
         try:
             r = requests.post(
-                init_url,
-                data={"upload_phase": "start", "access_token": self.token},
+                f"{GRAPH_BASE}/{self.ig_user}/media",
+                data={
+                    "upload_type": "resumable",
+                    "media_type": "REELS",
+                    "caption": caption[:2200],
+                    "share_to_feed": "true",
+                    "access_token": self.token,
+                },
                 timeout=30,
             )
-            r.raise_for_status()
-            resp = r.json()
-            video_id = resp.get("video_id")
-            upload_url = resp.get("upload_url")
-            if not video_id or not upload_url:
+            if not r.ok:
+                print(f"❌ [Meta] Falha init container: {self._meta_error(r)}")
                 return None
+            container_id = r.json().get("id")
+            if not container_id:
+                print(f"❌ [Meta] Resposta sem container id: {r.text[:300]}")
+                return None
+            print(f"📦 [Meta] Container criado: {container_id}")
         except Exception as e:
             print(f"❌ [Meta] Falha init upload: {e}")
             return None
 
+        upload_url = f"{RUPLOAD_BASE}/{container_id}"
         try:
             with open(caminho_video, "rb") as f:
-                requests.post(
+                up = requests.post(
                     upload_url,
                     headers={
                         "Authorization": f"OAuth {self.token}",
@@ -77,50 +109,52 @@ class MetaPublisher:
                     },
                     data=f,
                     timeout=300,
-                ).raise_for_status()
+                )
+            if not up.ok:
+                print(f"❌ [Meta] Falha transferência: {self._meta_error(up)}")
+                return None
+            print("✅ [Meta] Vídeo transferido para servidores Meta.")
         except Exception as e:
             print(f"❌ [Meta] Falha transferência: {e}")
             return None
 
-        return video_id
+        return container_id
 
-    def postar_reel(self, caminho_video: str, caption: str) -> dict:
-        video_id = self._upload_video_meta(caminho_video)
-        if not video_id:
-            return {"ok": False, "erro": "Falha no upload do vídeo."}
-
-        try:
-            r = requests.post(
-                f"{GRAPH_BASE}/{self.ig_user}/media",
-                data={
-                    "media_type": "REELS",
-                    "video_id": video_id,
-                    "caption": caption[:2200],
-                    "share_to_feed": "true",
-                    "access_token": self.token,
-                },
-                timeout=60,
-            )
-            r.raise_for_status()
-            container_id = r.json().get("id")
-        except Exception as e:
-            return {"ok": False, "erro": f"Falha ao criar container: {e}"}
-
-        for _ in range(12):
-            time.sleep(10)
+    def _aguardar_container(self, container_id: str) -> dict | None:
+        for tentativa in range(18):
+            if tentativa:
+                time.sleep(10)
             try:
                 status_r = requests.get(
                     f"{GRAPH_BASE}/{container_id}",
-                    params={"fields": "status_code", "access_token": self.token},
+                    params={
+                        "fields": "status_code,status",
+                        "access_token": self.token,
+                    },
                     timeout=15,
                 )
-                status_code = status_r.json().get("status_code", "")
+                if not status_r.ok:
+                    continue
+                payload = status_r.json()
+                status_code = payload.get("status_code", "")
                 if status_code == "FINISHED":
-                    break
+                    return None
                 if status_code in ("ERROR", "EXPIRED"):
-                    return {"ok": False, "erro": status_r.json()}
+                    return {"ok": False, "erro": payload}
+                if tentativa == 0:
+                    print("⏳ [Meta] Processando vídeo...")
             except Exception:
                 pass
+        return {"ok": False, "erro": "Timeout aguardando processamento do vídeo."}
+
+    def postar_reel(self, caminho_video: str, caption: str) -> dict:
+        container_id = self._upload_video_resumable(caminho_video, caption)
+        if not container_id:
+            return {"ok": False, "erro": "Falha no upload do vídeo."}
+
+        erro = self._aguardar_container(container_id)
+        if erro:
+            return erro
 
         try:
             r = requests.post(
@@ -128,7 +162,8 @@ class MetaPublisher:
                 data={"creation_id": container_id, "access_token": self.token},
                 timeout=30,
             )
-            r.raise_for_status()
+            if not r.ok:
+                return {"ok": False, "erro": self._meta_error(r)}
             post_id = r.json().get("id")
             print(f"✅ [Meta] Reel publicado! ID: {post_id}")
             return {"ok": True, "post_id": post_id}
@@ -150,14 +185,16 @@ class MetaPublisher:
                 },
                 timeout=30,
             )
-            r.raise_for_status()
+            if not r.ok:
+                return {"ok": False, "erro": self._meta_error(r)}
             container_id = r.json().get("id")
             r2 = requests.post(
                 f"{GRAPH_BASE}/{self.ig_user}/media_publish",
                 data={"creation_id": container_id, "access_token": self.token},
                 timeout=30,
             )
-            r2.raise_for_status()
+            if not r2.ok:
+                return {"ok": False, "erro": self._meta_error(r2)}
             post_id = r2.json().get("id")
             print(f"✅ [Meta] Imagem publicada! ID: {post_id}")
             return {"ok": True, "post_id": post_id}

@@ -2,7 +2,7 @@
 
 **Objetivo:** elevar qualidade, diversidade e coerência dos posts — memória real de campanhas, headlines variadas, casting visual aspiracional (sem elitismo), golpes reais do dia a dia, e feedback que respeite a intenção do operador.
 
-**Status:** Fases 0–4 concluídas. **Fase 4 (Biblioteca de golpes) concluída** — v5.3.
+**Status:** Fases 0–5 concluídas. **Fase 5 (Feedback narrativo) concluída** — v5.4.
 
 **Referências:** `agent_memory.py`, `visual_variety.py`, `campaign_context_engine.py`, `campaign_orchestrator.py`, `feedback_router.py`, `contexto_negocio/GOLPES WHATSAPP.md`, `campanha_context_matrix.json`, `guardian_base.json`.
 
@@ -271,14 +271,15 @@ APPEARANCE STANDARD (mandatory):
 
 ---
 
-### Fase 5 — Feedback e override narrativo (3 dias)
+### Fase 5 — Feedback e override narrativo (3 dias) ✅ v5.4
 
-| # | Tarefa | Entregável |
-|---|---|---|
-| 5.1 | Categorias narrativa/golpe/visual/headline | `feedback_router.py` |
-| 5.2 | `narrative_override` temporário | orchestrator |
-| 5.3 | Correções tagueadas na memória | `agent_memory.py` |
-| 5.4 | Mensagem clara quando pedido conflita com menu | UX terminal |
+| # | Tarefa | Entregável | Status |
+|---|---|---|---|
+| 5.1 | Categorias narrativa/golpe/visual/headline | `feedback_router.py` | ✅ |
+| 5.2 | `narrative_override` temporário | orchestrator | ✅ |
+| 5.3 | Correções tagueadas na memória | `agent_memory.py` | ✅ |
+| 5.4 | Mensagem clara quando pedido conflita com menu | UX terminal | ✅ |
+| 5.5 | Testes unitários | `tests/test_feedback_router.py` | ✅ |
 
 ---
 

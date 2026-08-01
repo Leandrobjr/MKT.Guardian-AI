@@ -13,7 +13,7 @@ from traffic_manager import TrafficManager
 from agent_memory import AgentMemory
 from campaign_history import CampaignHistory
 from creative_brief import HeadlineRotator
-from feedback_router import classify_improvement, describe_plan
+from feedback_router import classify_improvement, describe_plan, correction_tag, format_menu_conflict
 from visual_variety import VisualVarietyEngine
 from channel_presets import resolve_channel_preset, format_preset_summary
 from tts_narration import strip_written_site_urls, card_solucao_text, NARRATION_CLOSING
@@ -553,6 +553,84 @@ class CampaignOrchestrator:
         config.pop("_gancho_rotativo", None)
         print("🔓 Travas de gênero/gancho removidas — aplicando sua instrução narrativa.")
 
+    def _resolve_golpe_obj(self, golpe_id: str, fallback: dict | None = None) -> dict:
+        obj = next(
+            (g for g in self.context_data.get("TIPOS_DE_GOLPE", []) if g.get("id") == golpe_id),
+            None,
+        )
+        return obj or fallback or {}
+
+    def _refresh_campaign_context(self, config: dict, golpe_obj: dict) -> dict:
+        """Re-resolve matriz + biblioteca de golpes (respeita narrative_override)."""
+        override = config.get("narrative_override") or {}
+        pub = override.get("publico_slug") or config.get("publico_slug", "geral")
+        golpe_id = override.get("golpe_id") or config.get("golpe_id", "")
+        golpe_obj = self._resolve_golpe_obj(golpe_id, golpe_obj)
+
+        ctx = self.context_engine.resolve(pub, golpe_id, golpe_obj, self.context_data)
+        ctx = self.scam_library.apply_to_context(ctx, golpe_id, pub)
+        if override:
+            ctx["narrative_override_active"] = True
+            if override.get("publico_slug"):
+                ctx["effective_publico_slug"] = override["publico_slug"]
+            if override.get("golpe_id"):
+                ctx["effective_golpe_id"] = override["golpe_id"]
+        config["_campaign_context"] = ctx
+        return ctx
+
+    def _apply_narrative_override(self, config: dict, feedback: str, golpe_obj: dict, plan: dict) -> dict | None:
+        """Aplica override temporário de ICP/golpe a partir do feedback MELHORAR."""
+        override = plan.get("narrative_override") or {}
+        if not override and not plan.get("narrative"):
+            return None
+        if override:
+            config["narrative_override"] = override
+            print(
+                format_menu_conflict(
+                    config.get("publico_slug", ""),
+                    config.get("golpe_id", ""),
+                    override,
+                )
+            )
+            ctx = self._refresh_campaign_context(config, golpe_obj)
+            print(self.context_engine.summary_line(ctx))
+            return override
+        if plan.get("narrative"):
+            config["narrative_override"] = {"note": feedback.strip()[:300]}
+            print("📖 Override narrativo genérico — instrução livre prevalece sobre matriz fixa.")
+        return config.get("narrative_override")
+
+    def _apply_golpe_variant(self, config: dict, golpe_obj: dict) -> dict:
+        """Rotaciona variante de golpe (frase_golpista) mantendo golpe_id do menu."""
+        golpe_id = config.get("golpe_id", "")
+        pub = (config.get("narrative_override") or {}).get("publico_slug") or config.get("publico_slug", "")
+        ctx = self._refresh_campaign_context(config, golpe_obj)
+        print(
+            f"🔄 Nova variante de golpe: {ctx.get('scam_variant_titulo', '')} — "
+            f"{(ctx.get('frase_golpista') or '')[:65]}..."
+        )
+        return ctx
+
+    def _regenerate_headline_only(
+        self, creative_data: dict, config: dict, golpe_obj: dict, feedback: str = ""
+    ) -> dict:
+        """Troca manchete via rotator — mantém roteiro e prepara recomposição de overlay."""
+        campaign_ctx = config.get("_campaign_context", {})
+        if feedback.strip():
+            config["_headline_feedback"] = feedback.strip()
+        gancho, idx = self.headline_rotator.pick_gancho(campaign_ctx, config, advance=True)
+        if gancho:
+            creative_data["gancho_atencao_inicial"] = gancho
+            creative_data["headline_escolhida"] = gancho
+            ganchos_list = [g for g in (campaign_ctx.get("ganchos") or []) if g]
+            pos = idx + 1 if idx >= 0 else 1
+            total = len(ganchos_list) or "?"
+            print(f"📰 Nova manchete ({pos}/{total}): {gancho[:80]}...")
+        creative_data = self.headline_rotator.apply_headline_diversity(
+            creative_data, campaign_ctx, config
+        )
+        return creative_data
+
     def _accumulate_instrucoes(self, config: dict, feedback: str, key: str = "_instrucoes_acumuladas") -> str:
         feedback = feedback.strip()
         if not feedback:
@@ -712,8 +790,8 @@ class CampaignOrchestrator:
         campaign_ctx = config.get("_campaign_context", {})
         ganchos_ref = campaign_ctx.get("ganchos") or golpe_obj.get("ganchos", [golpe_obj.get("gancho_modelo", "")])
         frase_golpista = campaign_ctx.get("frase_golpista") or golpe_obj.get("frase_golpista", "")
-        publico_slug = config.get("publico_slug", "")
-        golpe_id = config.get("golpe_id", "")
+        publico_slug = campaign_ctx.get("effective_publico_slug") or config.get("publico_slug", "")
+        golpe_id = campaign_ctx.get("effective_golpe_id") or config.get("golpe_id", "")
         produto = self.context_data.get("PRODUTO_E_POSICIONAMENTO", {})
         foco_whatsapp = produto.get(
             "foco_exclusivo",
@@ -721,7 +799,7 @@ class CampaignOrchestrator:
         )
 
         gancho_prioritario = None
-        if not instrucoes_extras.strip():
+        if not instrucoes_extras.strip() and not config.get("narrative_override"):
             ganchos_list = [g for g in (campaign_ctx.get("ganchos") or []) if g]
             gancho_prioritario, gancho_idx = self.headline_rotator.pick_gancho(
                 campaign_ctx, config, advance=True
@@ -1055,12 +1133,16 @@ class CampaignOrchestrator:
                     return False, None
                 instrucoes = self._accumulate_instrucoes(config, feedback, "_instrucoes_estoria")
                 self._unlock_creative_if_requested(config, feedback)
+                plan = classify_improvement(feedback)
+                self._apply_narrative_override(config, feedback, golpe_obj, plan)
+                tagged = f"{correction_tag(plan)} {feedback}"
                 self.memory.registrar_correcao(
                     config.get("publico_slug", ""),
                     config.get("golpe_id", ""),
-                    f"[estoria-pre-producao] {feedback}",
+                    tagged,
                     self._story_job_id(config, revisao, story_attempt),
                     story_attempt,
+                    categoria=plan.get("primary_category", "narrativa"),
                 )
                 print(f"📝 Melhoria registrada — regerando estória (tentativa {story_attempt}/{self.max_revisoes})...")
                 if self.telegram:
@@ -1393,16 +1475,41 @@ class CampaignOrchestrator:
                 print(f"🔧 Plano de correção: {describe_plan(plan)}")
                 if plan.get("narrative"):
                     print("📖 Detectada mudança de ESTÓRIA — regerando copy completa (não só imagem).")
+                self._apply_narrative_override(config, feedback, golpe_obj, plan)
 
                 self._unlock_creative_if_requested(config, feedback)
 
                 self.memory.registrar_correcao(
                     config.get("publico_slug", ""),
                     config.get("golpe_id", ""),
-                    f"[{describe_plan(plan)}] {feedback}",
+                    f"{correction_tag(plan)} {feedback}",
                     assets_resultado.get("basename", ""),
                     revisao,
+                    categoria=plan.get("primary_category", "copy"),
                 )
+
+                if plan.get("headline_only") and creative_data:
+                    if self.telegram:
+                        self.telegram.notificar_sync(
+                            "📰 *Manchete* — nova headline + overlay (roteiro mantido)..."
+                        )
+                    creative_data = self._regenerate_headline_only(
+                        creative_data, config, golpe_obj, feedback
+                    )
+                    recompose_next = True
+                    instrucoes_melhoria = ""
+                    continue
+
+                if plan.get("golpe") and not plan.get("narrative"):
+                    self._apply_golpe_variant(config, golpe_obj)
+                    if self.telegram:
+                        self.telegram.notificar_sync(
+                            "🔄 *Variante de golpe* — nova frase no card, regerando copy..."
+                        )
+                    instrucoes_melhoria = self._accumulate_instrucoes(
+                        config, feedback, "_instrucoes_melhoria"
+                    )
+                    continue
 
                 if plan["recompose_only"] or (
                     plan["layout"] and not plan["regenerate_copy"] and not plan["regenerate_visual"]

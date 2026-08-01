@@ -9,6 +9,7 @@ Arquivos em contexto_negocio/memoria/ (append-only JSONL):
 
 import json
 import os
+import re
 from datetime import datetime
 
 
@@ -45,15 +46,42 @@ class AgentMemory:
         feedback: str,
         basename: str = "",
         revisao: int = 0,
+        categoria: str = "",
     ) -> None:
+        tag = categoria.strip("[]") if categoria else ""
         self._append(self._correcoes, {
             "tipo": "correcao_admin",
             "publico": publico,
             "golpe": golpe,
             "feedback": feedback,
+            "categoria": tag or self._infer_categoria(feedback),
             "basename": basename,
             "revisao": revisao,
         })
+
+    @staticmethod
+    def _infer_categoria(feedback: str) -> str:
+        m = re.search(r"\[(\w+)\]", feedback or "")
+        if m:
+            return m.group(1)
+        return "copy"
+
+    def correcoes_por_categoria(
+        self,
+        publico: str = "",
+        golpe: str = "",
+        categoria: str = "",
+        limit: int = 5,
+    ) -> list[dict]:
+        rows = self._filter_by_combo(
+            self._load_recent(self._correcoes, limit * 6),
+            publico,
+            golpe,
+            limit * 3,
+        )
+        if categoria:
+            rows = [r for r in rows if r.get("categoria") == categoria]
+        return rows[-limit:]
 
     def registrar_aprovado(
         self,
@@ -132,7 +160,9 @@ class AgentMemory:
             for c in correcoes:
                 fb = c.get("feedback", c.get("problema", ""))
                 if fb:
-                    partes.append(f"- {fb}")
+                    cat = c.get("categoria", "")
+                    prefix = f"[{cat}] " if cat else ""
+                    partes.append(f"- {prefix}{fb}")
 
         headlines = self.headlines_usadas(publico, golpe, limit=8)
         if headlines:

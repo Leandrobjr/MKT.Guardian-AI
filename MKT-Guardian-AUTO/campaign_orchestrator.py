@@ -629,6 +629,26 @@ class CampaignOrchestrator:
             lines.append(f"- Estilo foto: {dv['estilo_fotografico']}")
         return "\n".join(lines)
 
+    def _unlock_creative_if_requested(self, config: dict, feedback: str) -> None:
+        """Libera travas de gênero/gancho quando o admin pede mudança narrativa explícita."""
+        from feedback_router import _has_narrative_intent
+
+        if not feedback or not _has_narrative_intent(feedback.lower()):
+            return
+        config.pop("_genero_locked", None)
+        config.pop("_personagem_locked", None)
+        config.pop("_gancho_rotativo", None)
+        print("🔓 Travas de gênero/gancho removidas — aplicando sua instrução narrativa.")
+
+    def _accumulate_instrucoes(self, config: dict, feedback: str, key: str = "_instrucoes_acumuladas") -> str:
+        feedback = feedback.strip()
+        if not feedback:
+            return config.get(key, "")
+        prev = config.get(key, "")
+        merged = f"{prev}\n• {feedback}".strip() if prev else feedback
+        config[key] = merged
+        return merged
+
     def _lock_creative_identity(self, config: dict, creative_data: dict) -> None:
         """Preserva gênero/personagem após estória aprovada — evita troca na correção visual."""
         config["_genero_locked"] = creative_data.get("genero_campanha", "")
@@ -787,15 +807,27 @@ class CampaignOrchestrator:
             "Guardian AI protege EXCLUSIVAMENTE o WhatsApp — pessoal e WhatsApp Business.",
         )
 
-        gancho_prioritario = self._pick_rotated_gancho(campaign_ctx, config, advance=True)
+        gancho_prioritario = None
+        if not instrucoes_extras.strip():
+            gancho_prioritario = self._pick_rotated_gancho(campaign_ctx, config, advance=True)
 
         memoria_txt = self.memory.format_for_prompt(
             publico=publico_slug,
             golpe=golpe_id,
         )
         preset = resolve_channel_preset(config.get("canal", ""), config.get("midia", ""))
+
+        bloco_admin = ""
+        if instrucoes_extras.strip():
+            bloco_admin = (
+                "⚠️ INSTRUÇÕES DO ADMINISTRADOR (PRIORIDADE MÁXIMA — SOBRESCREVEM gancho rotativo, "
+                "memória e sugestões automáticas se houver conflito):\n"
+                f"{instrucoes_extras.strip()}\n\n"
+            )
+
         contexto_injetado = (
-            f"DIRETRIZES DE CAMPANHA SELECIONADAS:\n"
+            bloco_admin
+            + f"DIRETRIZES DE CAMPANHA SELECIONADAS:\n"
             f"- Público-Alvo: {config['publico']}\n"
             f"- Slug ICP: {publico_slug}\n"
             f"- Ameaça/Golpe Abordado: {config['golpe']}\n"
@@ -827,12 +859,9 @@ class CampaignOrchestrator:
             f"{self.md_context[:12000] if self.md_context else ''}\n"
         )
         if memoria_txt:
-            contexto_injetado += f"\nMEMÓRIA — REGRAS APRENDIDAS (prioridade máxima):\n{memoria_txt}\n"
-        if instrucoes_extras:
-            contexto_injetado += (
-                f"\nINSTRUÇÕES DE MELHORIA DO ADMINISTRADOR (prioridade absoluta):\n"
-                f"{instrucoes_extras}\n"
-            )
+            contexto_injetado += f"\nMEMÓRIA — REGRAS APRENDIDAS:\n{memoria_txt}\n"
+        if instrucoes_extras.strip():
+            print(f"📌 Instrução do admin aplicada ao redator:\n{instrucoes_extras.strip()[:500]}")
 
         roteiro = framework.get("roteiro_narracao_modelo", {})
         roteiro_txt = "\n".join(f"   - {k}: {v}" for k, v in roteiro.items())
@@ -873,6 +902,8 @@ class CampaignOrchestrator:
             "7. texto_card_solucao: IGNORE este campo — será substituído automaticamente por: "
             f"'{card_solucao_text()}'\n"
             "8. publico_alvo_icp: Descrição resumida do público.\n"
+            "Se houver INSTRUÇÕES DO ADMINISTRADOR no início do prompt, elas VENCEM sobre "
+            "gancho prioritário, ganchos de referência e memória.\n"
             "Retorne JSON estrito."
         )
 
@@ -957,11 +988,11 @@ class CampaignOrchestrator:
     def _ler_melhoria_terminal(self) -> str:
         """Leitura de melhoria no terminal — equivalente ao MELHORAR do Telegram."""
         print("\n✏️ MELHORAR ESTÓRIA")
-        print("Descreva o que mudar. Exemplos:")
-        print("  • Produto: não falar em grupos — Guardian alerta só no privado (1:1)")
-        print("  • Headline mais urgente / roteiro mais curto")
-        print("  • Trocar personagem ou cenário (ex.: diretor escolar, não mãe)")
-        print("  • Ajustar mensagem do golpista ou CTA")
+        print("Descreva o que mudar. Seja específico. Exemplos:")
+        print("  • Estória: focar no golpe PIX com pai de família (não mãe)")
+        print("  • Headline mais urgente / roteiro mais curto e com sentido real")
+        print("  • Trocar protagonista para diretor escolar (ambiente escola)")
+        print("  • Imagem: pessoa bem vestida, casa clara (só visual — diga 'imagem')")
         print("Digite sua melhoria (linha vazia + Enter para enviar):\n")
         lines: list[str] = []
         while True:
@@ -1096,7 +1127,8 @@ class CampaignOrchestrator:
                 if story_attempt > self.max_revisoes:
                     print(f"❌ Limite de {self.max_revisoes} revisões da estória atingido.")
                     return False, None
-                instrucoes = feedback
+                instrucoes = self._accumulate_instrucoes(config, feedback, "_instrucoes_estoria")
+                self._unlock_creative_if_requested(config, feedback)
                 self.memory.registrar_correcao(
                     config.get("publico_slug", ""),
                     config.get("golpe_id", ""),
@@ -1368,8 +1400,13 @@ class CampaignOrchestrator:
                         "ignore botões de previews anteriores até o novo preview chegar."
                     )
                 feedback = acao.get("prompt", "")
+                print(f"📌 Você pediu: {feedback}")
                 plan = classify_improvement(feedback)
                 print(f"🔧 Plano de correção: {describe_plan(plan)}")
+                if plan.get("narrative"):
+                    print("📖 Detectada mudança de ESTÓRIA — regerando copy completa (não só imagem).")
+
+                self._unlock_creative_if_requested(config, feedback)
 
                 self.memory.registrar_correcao(
                     config.get("publico_slug", ""),
@@ -1424,7 +1461,9 @@ class CampaignOrchestrator:
                     self.telegram.notificar_sync(
                         f"📝 Regerando *{describe_plan(plan)}* com suas instruções..."
                     )
-                instrucoes_melhoria = feedback
+                instrucoes_melhoria = self._accumulate_instrucoes(
+                    config, feedback, "_instrucoes_melhoria"
+                )
                 continue
 
             motivo = acao.get("motivo", acao["action"])

@@ -90,27 +90,67 @@ def pick_coherent_gancho(ganchos: list[str], frase: str, start_idx: int = 0) -> 
     return gancho, idx
 
 
-def infer_protagonist_gender(creative_data: dict) -> str:
-    """Infere gênero visual do protagonista — personagem, roteiro e tratamento (Seu/Dona/Mãe/Pai)."""
-    gp = (creative_data.get("genero_personagem_visual") or "").lower()
-    masc_gp = ("homem", "masculino", "senhor", "aposentado homem", "vô", "vovo", "avô")
-    fem_gp = ("mulher", "feminino", "senhora", "aposentada", "vó", "avó", "dona")
-    if any(k in gp for k in masc_gp):
-        return "masculino"
-    if any(k in gp for k in fem_gp):
-        return "feminino"
+SEU_POSSESSIVE = frozenset({
+    "whatsapp", "celular", "telefone", "dinheiro", "patrimonio", "patrimônio",
+    "pix", "link", "conta", "app", "aplicativo", "privado", "grupo", "numero",
+    "número", "banco", "cartao", "cartão", "email", "e-mail", "computador",
+    "aporte", "investimento", "cadastro", "nome", "filho", "filha", "filhos",
+})
 
-    alvo = (
-        creative_data.get("texto_card_notificacao", "") + " "
-        + creative_data.get("gancho_atencao_inicial", "") + " "
-        + creative_data.get("desenvolvimento_copy", "")
-    ).lower()
-    fem = bool(re.search(r"\bm[ãa]e\b|\bvov[óo]\b|\bav[óo]\b|\btitia\b|\bsogra\b|\bdona\s+\w+", alvo))
-    masc = bool(re.search(r"\bpai\b|\bvov[ôo]\b|\bav[ôo]\b|\btitio\b|\bsogro\b|\bseu\s+\w+", alvo))
-    if fem and not masc:
+
+def _gender_from_personagem_field(gp: str) -> str:
+    if not gp:
+        return ""
+    if re.search(r"\b(idosa|mulher|feminino|senhora|aposentada)\b", gp):
         return "feminino"
-    if masc and not fem:
+    if re.search(r"\b(idoso|homem|masculino|senhor|aposentado)\b", gp):
         return "masculino"
+    return ""
+
+
+def _gender_from_roteiro(roteiro: str) -> str:
+    if not roteiro:
+        return ""
+    r = roteiro.lower()
+    if re.search(r"\bdona\s+\w+", r):
+        return "feminino"
+    m = re.search(r"\b(?:o\s+)?seu\s+(\w+)", r)
+    if m and m.group(1).lower() not in SEU_POSSESSIVE:
+        return "masculino"
+    if re.search(r"\bm[ãa]e\b|\bvov[óo]\b|\bav[óo]\b|\btitia\b|\bsogra\b", r):
+        return "feminino"
+    if re.search(r"\bpai\b|\bvov[ôo]\b|\bav[ôo]\b|\btitio\b|\bsogro\b", r):
+        return "masculino"
+    tem_dela = bool(re.search(r"\bdela\b|\bela\b", r))
+    tem_dele = bool(re.search(r"\bdele\b", r))
+    if tem_dela and not tem_dele:
+        return "feminino"
+    if tem_dele and not tem_dela:
+        return "masculino"
+    return ""
+
+
+def infer_protagonist_gender(creative_data: dict) -> str:
+    """Infere gênero visual — personagem > roteiro > headline (sem falso 'seu WhatsApp')."""
+    from_field = _gender_from_personagem_field(
+        (creative_data.get("genero_personagem_visual") or "").lower()
+    )
+    if from_field:
+        return from_field
+
+    from_roteiro = _gender_from_roteiro(creative_data.get("desenvolvimento_copy", ""))
+    if from_roteiro:
+        return from_roteiro
+
+    aux = (
+        creative_data.get("gancho_atencao_inicial", "") + " "
+        + creative_data.get("texto_card_notificacao", "")
+    ).lower()
+    if re.search(r"\bm[ãa]e\b|\bdona\s+\w+", aux):
+        return "feminino"
+    if re.search(r"\bpai\b", aux):
+        return "masculino"
+
     gc = creative_data.get("genero_campanha", "")
     return gc if gc in ("feminino", "masculino") else ""
 

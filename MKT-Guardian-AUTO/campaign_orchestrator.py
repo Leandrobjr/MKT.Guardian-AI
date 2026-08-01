@@ -508,6 +508,19 @@ class CampaignOrchestrator:
 
         return None
 
+    def _enforce_gender_coherence(self, creative_data: dict) -> dict:
+        """Garante que genero_campanha, cena e casting batem com roteiro/personagem."""
+        inferred = infer_protagonist_gender(creative_data)
+        current = creative_data.get("genero_campanha", "")
+        if inferred and current and inferred != current:
+            print(
+                f"⚠️ Gênero visual corrigido: {current} → {inferred} "
+                f"(coerente com roteiro/personagem)"
+            )
+        if inferred:
+            creative_data["genero_campanha"] = inferred
+        return creative_data
+
     def _detect_visual_gender(self, creative_data: dict) -> str:
         """Gênero da PESSOA retratada — roteiro, personagem e tratamento (Mãe/Pai/Seu/Dona)."""
         return infer_protagonist_gender(creative_data)
@@ -654,7 +667,8 @@ class CampaignOrchestrator:
 
     def _lock_creative_identity(self, config: dict, creative_data: dict) -> None:
         """Preserva gênero/personagem após estória aprovada — evita troca na correção visual."""
-        config["_genero_locked"] = creative_data.get("genero_campanha", "")
+        inferred = infer_protagonist_gender(creative_data)
+        config["_genero_locked"] = inferred or creative_data.get("genero_campanha", "")
         config["_personagem_locked"] = creative_data.get("genero_personagem_visual", "")
 
     def _apply_locked_identity(self, creative_data: dict, config: dict) -> dict:
@@ -749,6 +763,7 @@ class CampaignOrchestrator:
         creative_data = self._apply_locked_identity(creative_data, config)
         creative_data = self._harmonize_gender_copy(creative_data, campaign_ctx)
         creative_data["genero_campanha"] = self._resolve_genero_campanha(creative_data, config)
+        creative_data = self._enforce_gender_coherence(creative_data)
         creative_data["tipo_midia_selecionada"] = config["midia"]
         creative_data["canal_veiculacao_selecionado"] = config["canal"]
         creative_data["direcao_arte_emocional"] = self._build_art_direction(

@@ -14,8 +14,20 @@ class TestProtagonistGender(unittest.TestCase):
         data = {"genero_personagem_visual": "Idoso (Homem, 72 anos)"}
         self.assertEqual(infer_protagonist_gender(data), "masculino")
 
-    def test_mulher_no_campo_personagem(self):
-        data = {"genero_personagem_visual": "Idosa (Mulher, 68 anos)"}
+    def test_dona_helena_com_headline_seu_whatsapp(self):
+        """Headline 'SEU WHATSAPP' não deve anular Dona Helena no roteiro."""
+        data = {
+            "genero_personagem_visual": "Idosa (68 anos)",
+            "gancho_atencao_inicial": "GOLPISTA PEDIU APORTE URGENTE VIA PIX NO SEU WHATSAPP",
+            "desenvolvimento_copy": (
+                "Aos 68 anos, Dona Helena quase perdeu a economia de uma vida inteira. "
+                "Um contato enviou promessa de lucro no privado do WhatsApp dela."
+            ),
+        }
+        self.assertEqual(infer_protagonist_gender(data), "feminino")
+
+    def test_idosa_sem_mulher_explicita(self):
+        data = {"genero_personagem_visual": "Idosa (68 anos)"}
         self.assertEqual(infer_protagonist_gender(data), "feminino")
 
     def test_seu_carlos_no_roteiro(self):

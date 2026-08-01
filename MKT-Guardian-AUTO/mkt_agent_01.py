@@ -963,7 +963,10 @@ class MediaFactory:
         texto_audio_tts = self._build_narration_for_tts(creative_data)
         voz_pura_path = self._generate_audio(texto_audio_tts, names["voice_raw"], self.preset_midia)
         if not self._audio_ok(voz_pura_path):
-            print("❌ CRÍTICO: Narração não gerada — verifique ELEVENLABS_API_KEY e créditos.")
+            print(
+                "❌ CRÍTICO: Narração não gerada — rode: python3 elevenlabs_check.py "
+                "(não é sempre falta de créditos; pode ser voice_id ou parâmetro speed)."
+            )
         voz_pura_path = self._fit_narration_to_preset(voz_pura_path, names["voice_raw"])
         audio_final_path = self._mix_background_track(
             voz_pura_path, canal_veiculacao, names["audio"], self.preset_midia,
@@ -1396,9 +1399,59 @@ class MediaFactory:
         print(f"⚠️ Ajuste de velocidade falhou — usando narração original: {result.stderr[-120:]}")
         return audio_path
 
+    def _parse_elevenlabs_error(self, response: requests.Response) -> str:
+        try:
+            body = response.json()
+            detail = body.get("detail") or body
+            if isinstance(detail, dict):
+                msg = detail.get("message") or detail.get("status") or str(detail)
+            elif isinstance(detail, list) and detail:
+                msg = detail[0].get("msg", str(detail[0]))
+            else:
+                msg = str(detail)
+        except Exception:
+            msg = response.text[:300]
+        hint = ""
+        low = msg.lower()
+        if response.status_code in (401, 403):
+            hint = " — verifique ELEVENLABS_API_KEY no .env"
+        elif "quota" in low or "credit" in low or "character" in low:
+            hint = " — créditos/caracteres esgotados no plano ElevenLabs"
+        elif "voice" in low and "not found" in low:
+            hint = f" — voice_id inválido ({self.voice_id})"
+        elif "speed" in low or "voice_settings" in low:
+            hint = " — parâmetro de voz rejeitado (tentando fallback sem speed)"
+        return f"HTTP {response.status_code}: {msg}{hint}"
+
+    def _elevenlabs_request(self, text: str, speed: float, stability: float, style: float) -> requests.Response:
+        url = f"https://api.elevenlabs.io/v1/text-to-speech/{self.voice_id}"
+        headers = {
+            "Accept": "audio/mpeg",
+            "Content-Type": "application/json",
+            "xi-api-key": self.elevenlabs_key,
+        }
+        voice_settings = {
+            "stability": stability,
+            "similarity_boost": 0.9,
+            "style": style,
+        }
+        if speed and abs(speed - 1.0) > 0.01:
+            voice_settings["speed"] = speed
+        data = {
+            "text": text,
+            "model_id": "eleven_multilingual_v2",
+            "voice_settings": voice_settings,
+        }
+        return requests.post(url, json=data, headers=headers, timeout=120)
+
     def _generate_audio(self, text: str, output_path: str | None = None, preset: dict | None = None) -> str:
         path = output_path or os.path.join(self.work_dir, "voz_pura.mp3")
         os.makedirs(os.path.dirname(path), exist_ok=True)
+        if os.path.isfile(path):
+            try:
+                os.remove(path)
+            except OSError:
+                pass
         if not self.elevenlabs_key:
             print("❌ Chave ElevenLabs ausente no .env. Use ELEVENLABS_API_KEY (ou ELEVEN_LABS_API_KEY).")
             return path
@@ -1407,28 +1460,24 @@ class MediaFactory:
         stability = float(preset.get("eleven_stability", 0.4))
         style = float(preset.get("eleven_style", 0.45))
         print(f"🎙️ Gerando narração ({len(text)} chars, velocidade {speed}x)...")
-        url = f"https://api.elevenlabs.io/v1/text-to-speech/{self.voice_id}"
-        headers = {"Accept": "audio/mpeg", "Content-Type": "application/json", "xi-api-key": self.elevenlabs_key}
-        data = {
-            "text": text,
-            "model_id": "eleven_multilingual_v2",
-            "voice_settings": {
-                "stability": stability,
-                "similarity_boost": 0.9,
-                "style": style,
-                "speed": speed,
-            },
-        }
         try:
-            response = requests.post(url, json=data, headers=headers, timeout=120)
-            if response.status_code == 200 and len(response.content) > 1000:
-                with open(path, "wb") as f:
-                    f.write(response.content)
-                print(f"✅ Narração: {len(response.content) // 1024} KB, ~{self._get_audio_duration(path):.0f}s")
-            else:
-                print(f"❌ ElevenLabs HTTP {response.status_code}: {response.text[:300]}")
+            response = self._elevenlabs_request(text, speed, stability, style)
+            if response.status_code != 200 or len(response.content) <= 1000:
+                err = self._parse_elevenlabs_error(response)
+                if "speed" in err.lower() and abs(speed - 1.0) > 0.01:
+                    print(f"⚠️ ElevenLabs rejeitou speed={speed} — retry sem speed...")
+                    response = self._elevenlabs_request(text, 1.0, stability, style)
+                    if response.status_code != 200 or len(response.content) <= 1000:
+                        print(f"❌ ElevenLabs {self._parse_elevenlabs_error(response)}")
+                        return path
+                else:
+                    print(f"❌ ElevenLabs {err}")
+                    return path
+            with open(path, "wb") as f:
+                f.write(response.content)
+            print(f"✅ Narração: {len(response.content) // 1024} KB, ~{self._get_audio_duration(path):.0f}s")
         except Exception as e:
-            print(f"❌ ElevenLabs erro: {e}")
+            print(f"❌ ElevenLabs erro de rede: {e}")
         return path
 
     def _mix_background_track(

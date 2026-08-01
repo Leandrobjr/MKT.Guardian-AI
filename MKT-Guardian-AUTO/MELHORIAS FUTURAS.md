@@ -132,7 +132,7 @@ Token com `instagram_content_publish` e `instagram_basic`.
 
 **Fase 1:** ✅ concluída (Orquestrador v5.0) — `campaign_history.py`, anti-repetição no prompt.
 
-**Próxima:** Fase 2 — Headlines e ganchos (`HeadlineRotator`, expandir matriz).
+**Próxima:** Fase 3 — Casting visual (24 personas, ambientes rotativos).
 
 ---
 

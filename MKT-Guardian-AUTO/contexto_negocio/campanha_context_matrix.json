@@ -24,7 +24,12 @@
       "ganchos": [
         "O 'NETO' QUE PEDIU PIX NÃO ERA O NETO DELA.",
         "'VÓ, TROQUEI DE NÚMERO.' FOI ASSIM QUE PERDERAM A APOSENTADORIA.",
-        "ELA ACHOU QUE AJUDAVA O FILHO. ERA UM GOLPISTA."
+        "ELA ACHOU QUE AJUDAVA O FILHO. ERA UM GOLPISTA.",
+        "UM ÁUDIO NO PRIVADO PARECIA DO NETO. A VOZ ERA DE OUTRA PESSOA.",
+        "R$ 12 MIL DA APOSENTADORIA SUMIRAM EM UM PIX 'URGENTE'.",
+        "O GOLPISTA SABIA O NOME DO NETO — MAS NÃO ERA ELE.",
+        "'NÃO CONTA PRO MEU PAI.' CLÁSSICO DO FALSO PARENTESCO.",
+        "ELA SALVOU O NOVO NÚMERO. PERDEU A POUPANÇA DA VIDA."
       ],
       "frase_golpista": "Oi vó, troquei de número, salva aí. Preciso de um PIX urgente, depois te explico pessoalmente."
     },
@@ -32,10 +37,16 @@
       "angulo_narrativa": "Idosos cuidando de netos expostos a estranhos no WhatsApp — ângulo avô/avó, não pai/mãe jovem.",
       "ganchos": [
         "O ESTRANHO QUE MANDOU MENSAGEM PRIVADA PRO NETO TINHA 50 ANOS.",
-        "ENQUANTO A AVÓ DORMIA, ALGUÉM PEDIA FOTOS DO NETO NO PRIVADO."
+        "ENQUANTO A AVÓ DORMIA, ALGUÉM PEDIA FOTOS DO NETO NO PRIVADO.",
+        "PREDADOR NO WHATSAPP PRIVADO — NÃO NO GRUPO DA FAMÍLIA.",
+        "A AVÓ DESCOBRIU CONVERSA SECRETA NO CELULAR DO NETO.",
+        "'NÃO CONTA PRA VOVÓ.' FRASE DE ALERTA NO CHAT PRIVADO.",
+        "ESTRANHO MANDOU LINK NO PRIVADO DO ADOLESCENTE — AVÓ INTERVEIO.",
+        "GROOMING COMEÇA NO 1:1 — NÃO NO GRUPO DE PRIMOS.",
+        "NETO QUASE ENVIOU FOTO. ALGUÉM NO PRIVADO PEDIU 'SEGREDO'."
       ],
       "frase_golpista": "oi, achei seu número... posso te mandar uma foto? não conta pra ninguém",
-      "persona_visual": "avó ou avô brasileiro(a) (65-82 anos) preocupado(a)"
+      "persona_visual": "avô ou avó brasileiro(a) (65-82 anos) preocupado(a)"
     }
   },
   "pais": {
@@ -56,7 +67,12 @@
       "ganchos": [
         "ELE DISSE QUE TINHA 12 ANOS. TINHA 43.",
         "ENQUANTO VOCÊ LÊ ISTO, UM ESTRANHO PODE ESTAR FALANDO COM SEU FILHO NO PRIVADO",
-        "'NÃO CONTA PRA SUA MÃE.' A FRASE QUE ANTECEDE UMA TRAGÉDIA"
+        "'NÃO CONTA PRA SUA MÃE.' A FRASE QUE ANTECEDE UMA TRAGÉDIA",
+        "PREDADOR PEDIU FOTO NO PRIVADO — NÃO NO GRUPO DA ESCOLA.",
+        "SEU FILHO RECEBEU 'OI SUMIDO' DE NÚMERO DESCONHECIDO.",
+        "LINK SUSPEITO NO CHAT PRIVADO — ANTES QUE CLIQUE.",
+        "ADULTO SE PASSOU POR COLEGA NO WHATSAPP 1:1.",
+        "MENSAGEM 'APAGA DEPOIS DE LER' NO PRIVADO DO ADOLESCENTE."
       ],
       "frase_golpista": "vc é muito linda... não conta pra ninguém que a gente conversa, é nosso segredo 😉 manda uma foto sua?",
       "direcao_arte_emocional": "Documentary photorealistic photo of a Brazilian mother (35-50) checking her teenage daughter's smartphone showing PRIVATE WhatsApp chat (1:1) with suspicious grooming message, daughter (girl, 10-17) visible in background, worried mother expression, clean tidy home",
@@ -66,7 +82,13 @@
     "falso_parente": {
       "ganchos": [
         "'MÃE, TROQUEI DE NÚMERO.' FOI ASSIM QUE ROUBARAM R$ 8 MIL DELA.",
-        "O 'FILHO' QUE PEDIU DINHEIRO NÃO ERA O FILHO DELA"
+        "O 'FILHO' QUE PEDIU DINHEIRO NÃO ERA O FILHO DELA",
+        "ÁUDIO FALSO NO PRIVADO — VOZ PARECIDA, GOLPE REAL.",
+        "PIX 'URGENTE' DO 'FILHO' ERA GOLPISTA.",
+        "ELA TRANSFERIU ANTES DE LIGAR PRO FILHO DE VERDADE.",
+        "GOLPISTA SABIA APELIDO DA FAMÍLIA — NÃO ERA PARENTESCO.",
+        "NOVO NÚMERO SALVO. CONTA ZERADA.",
+        "'MÃE, ESTOU COM VERGONHA.' MANIPULAÇÃO EMOCIONAL NO PRIVADO."
       ]
     }
   },
@@ -91,21 +113,39 @@
     "pix_fantasma": {
       "ganchos": [
         "UM PIX DO CAIXA DA LOJA CAIU NA CONTA DE UM GOLPISTA.",
-        "O 'CLIENTE' QUE PEDIU ESTORNO ERA UM FRAUDADOR."
+        "O 'CLIENTE' QUE PEDIU ESTORNO ERA UM FRAUDADOR.",
+        "COMPROVANTE FALSO NO PRIVADO — LOJA PERDEU R$ 15 MIL.",
+        "GOLPISTA MANDOU QR CODE FALSO NO WHATSAPP BUSINESS.",
+        "'FINANCEIRO' PEDIU PIX DE VOLTA — ERA FRAUDE.",
+        "ESTORNO FALSO: CLIENTE REAL NUNCA COMPROU.",
+        "CNPJ CLONADO EM COBRANÇA NO PRIVADO.",
+        "CAIXA CONFIOU NO PRINT. CONTA ERRADA."
       ],
       "frase_golpista": "Olá, sou do financeiro. Identificamos cobrança duplicada no seu CNPJ. Confirme o PIX de estorno para este número agora."
     },
     "clonagem_whatsapp": {
       "ganchos": [
         "CLONARAM O WHATSAPP BUSINESS E PEDIRAM PIX AOS CLIENTES.",
-        "EM MINUTOS, O NÚMERO DA LOJA VIRou ARMA DE GOLPE."
+        "EM MINUTOS, O NÚMERO DA LOJA VIRou ARMA DE GOLPE.",
+        "CÓDIGO SMS NO PRIVADO — CLONAGEM EM ANDAMENTO.",
+        "CLIENTES RECEBERAM COBRANÇA DO NÚMERO 'OFICIAL' CLONADO.",
+        "GOLPISTA PEDIU CÓDIGO DE VERIFICAÇÃO NO CHAT.",
+        "LOJA PERDEU ACESSO AO WHATSAPP BUSINESS.",
+        "SEU NÚMERO COMERCIAL PEDIU PIX — ERA CLONE.",
+        "VERIFICAÇÃO EM DUAS ETAPAS NÃO ATIVADA — PREJUÍZO."
       ]
     },
     "grooming": {
       "angulo_narrativa": "Comerciante alerta sobre golpista se passando por menor em conversa privada — ângulo profissional.",
       "ganchos": [
         "UM 'CLIENTE MENOR' NO PRIVADO DO WHATSAPP BUSINESS ERA UM ADULTO.",
-        "GOLPISTA SE PASSOU POR FILHO DE CLIENTE EM MENSAGEM DIRETA."
+        "GOLPISTA SE PASSOU POR FILHO DE CLIENTE EM MENSAGEM DIRETA.",
+        "ADULTO FINGIU SER ADOLESCENTE NO 1:1 COM A LOJA.",
+        "MENSAGEM 'SOU FILHO DA CLIENTE' NO PRIVADO — GOLPE.",
+        "ESTRANHO PEDIU DADOS DE MENOR VIA WHATSAPP BUSINESS.",
+        "LINK SUSPEITO ENVIADO COMO 'PEDIDO ESCOLAR'.",
+        "GOLPISTA USOU FOTO DE PERFIL DE CRIANÇA.",
+        "COMERCIANTE QUASE CAÍU EM GOLPE EMOCIONAL NO PRIVADO."
       ],
       "frase_golpista": "oi, sou o filho da dona Maria que compra aí... minha mãe pediu pra eu falar com vc em particular",
       "direcao_arte_emocional": "Documentary photorealistic photo of a Brazilian shop owner (35-55) behind store counter reviewing PRIVATE WhatsApp Business chat with suspicious message from fake minor, commercial workspace, worried expression"
@@ -136,7 +176,12 @@
       "ganchos": [
         "GROOMING NÃO É NO GRUPO DA TURMA — É NO PRIVADO DO ALUNO.",
         "A ESCOLA ALERTOU OS PAIS: PREDADORES USAM MENSAGEM DIRETA.",
-        "SEM GUARDIAN AI, O PRIVADO DO WHATSAPP DO SEU FILHO FICA DESPROTEGIDO."
+        "SEM GUARDIAN AI, O PRIVADO DO WHATSAPP DO SEU FILHO FICA DESPROTEGIDO.",
+        "ESTRANHO MANDOU 'OI SUMIDO' NO PRIVADO DO ALUNO — NÃO NO GRUPO.",
+        "DIRETOR ALERTA: LINK SUSPEITO CHEGA NO 1:1, NÃO NA TURMA.",
+        "PAIS PRECISAM MONITORAR O PRIVADO — ESCOLA NÃO VÊ GRUPOS.",
+        "ALUNO QUASE CLICOU EM LINK NO CHAT PRIVADO.",
+        "PREDADOR PEDIU FOTO NO PRIVADO — ESCOLA ORIENTOU AS FAMÍLIAS."
       ],
       "gancho_modelo": "Escola alerta: grooming atinge alunos no WhatsApp privado",
       "frase_golpista": "oi, vi seu perfil... vc é muito bonita 😊 não conta pra ninguém da escola, manda uma foto sua?",
@@ -151,7 +196,13 @@
     "phishing": {
       "ganchos": [
         "UM LINK FALSO DA 'SECRETARIA' CHEGOU NO PRIVADO DOS PAIS.",
-        "O 'COMUNICADO OFICIAL' NO WHATSAPP ERA GOLPE — MENSAGEM DIRETA."
+        "O 'COMUNICADO OFICIAL' NO WHATSAPP ERA GOLPE — MENSAGEM DIRETA.",
+        "BIT.LY SUSPEITO NO PRIVADO — FINGIA SER ESCOLA.",
+        "PAIS CLICARAM EM 'ATUALIZAR CADASTRO' — ERA PHISHING.",
+        "LINK 'BOLETIM DIGITAL' ROUBOU DADOS NO PRIVADO.",
+        "GOLPISTA COPIOU LOGO DA ESCOLA EM MSG 1:1.",
+        "FORMULÁRIO FALSO PEDIU CPF NO WHATSAPP PRIVADO.",
+        "SECRETARIA REAL NUNCA MANDA LINK ASSIM NO PRIVADO."
       ],
       "frase_golpista": "Secretaria Escolar: comunicado urgente no seu privado. Clique para confirmar dados do aluno: bit.ly/escola-dados",
       "direcao_arte_emocional": "Documentary photorealistic photo of a Brazilian school director in administrative office, holding a smartphone at chest height with both hands clearly visible, reviewing a PRIVATE WhatsApp message with suspicious phishing link pretending to be school announcement"
@@ -159,7 +210,13 @@
     "clonagem_whatsapp": {
       "ganchos": [
         "CLONARAM O WHATSAPP DA ESCOLA E PEDIRAM MENSALIDADE NO PRIVADO.",
-        "O NÚMERO OFICIAL DA ESCOLA FOI SEQUESTRADO — GOLPISTAS MANDARAM MSG DIRETA AOS PAIS."
+        "O NÚMERO OFICIAL DA ESCOLA FOI SEQUESTRADO — GOLPISTAS MANDARAM MSG DIRETA AOS PAIS.",
+        "CÓDIGO DE VERIFICAÇÃO PEDIDO NO PRIVADO — CLONAGEM.",
+        "PAIS RECEBERAM PIX DA 'ESCOLA' — NÚMERO CLONADO.",
+        "SECRETARIA PERDEU ACESSO AO WHATSAPP INSTITUCIONAL.",
+        "GOLPISTA SE PASSOU PELA COORDENAÇÃO NO 1:1.",
+        "MENSALIDADE FALSA NO PRIVADO DE CENTENAS DE PAIS.",
+        "VERIFICAÇÃO EM DUAS ETAPAS AUSENTE — CONTA SEQUESTRADA."
       ],
       "frase_golpista": "Aqui é da secretaria: enviamos código de verificação. Digite os 6 dígitos nesta conversa para confirmar."
     },
@@ -167,21 +224,39 @@
       "angulo_narrativa": "Golpista envia mensagem PRIVADA fingindo ser responsável de aluno pedindo PIX — escola alerta famílias.",
       "ganchos": [
         "O 'PAI' QUE PEDIU PIX NO PRIVADO NÃO ERA PAI DE NENHUM ALUNO.",
-        "GOLPISTA MANDOU MSG DIRETA SE PASSANDO POR RESPONSÁVEL."
+        "GOLPISTA MANDOU MSG DIRETA SE PASSANDO POR RESPONSÁVEL.",
+        "FALSO PAI PEDIU TAXA ESCOLAR URGENTE NO 1:1.",
+        "ESCOLA ALERTOU: PIX NO PRIVADO NÃO É DA SECRETARIA.",
+        "RESPONSÁVEL FALSO USAVA NOME DE ALUNO REAL.",
+        "GOLPISTA SABIA TURMA E SÉRIE — NÃO ERA PAI.",
+        "ÁUDIO 'SOU PAI DO JOÃO' NO PRIVADO — FRAUDE.",
+        "FAMÍLIA QUASE TRANSFERIU ANTES DE CONFIRMAR NA ESCOLA."
       ],
       "frase_golpista": "Oi, sou pai do João da turma. Troquei de número. Preciso pagar taxa escolar urgente via PIX, pode ajudar?"
     },
     "pix_fantasma": {
       "ganchos": [
         "PIX FALSO DE 'MENSALIDADE' NO PRIVADO ROUBOU FAMÍLIAS.",
-        "A ESCOLA ALERTOU: GOLPISTA MANDOU COBRANÇA FALSA NO WHATSAPP DIRETO."
+        "A ESCOLA ALERTOU: GOLPISTA MANDOU COBRANÇA FALSA NO WHATSAPP DIRETO.",
+        "DESCONTO FALSO DE MATRÍCULA NO PRIVADO — GOLPE.",
+        "QR CODE DE MENSALIDADE ERA FRAUDULENTO.",
+        "SECRETARIA NUNCA COBRA PIX ASSIM NO 1:1.",
+        "PAIS PAGARAM BOLETO FALSO VIA LINK NO PRIVADO.",
+        "GOLPISTA USOU NOME DA ESCOLA EM COBRANÇA DIRETA.",
+        "COMPROVANTE FALSO CONFIRMOU PAGAMENTO INEXISTENTE."
       ],
       "frase_golpista": "Secretaria: mensalidade com desconto só hoje. Faça o PIX para este número e envie o comprovante aqui no privado."
     },
     "falsa_central": {
       "ganchos": [
         "O 'SUPORTE DO BANCO' QUE LIGOU PARA A ESCOLA ERA GOLPISTA.",
-        "FALSA CENTRAL PEDIU SENHA DA CONTA ESCOLAR PELO WHATSAPP PRIVADO."
+        "FALSA CENTRAL PEDIU SENHA DA CONTA ESCOLAR PELO WHATSAPP PRIVADO.",
+        "GOLPISTA SE PASSOU POR GERENTE DO BANCO NO 1:1.",
+        "ESCOLA QUASE CONFIRMOU 'BLOQUEIO DE CONTA' FALSO.",
+        "LINK DE 'SEGURANÇA BANCÁRIA' NO PRIVADO — PHISHING.",
+        "FALSA CENTRAL PEDIU TOKEN SMS DA CONTA INSTITUCIONAL.",
+        "GOLPE DO SUPORTE: URGÊNCIA NO WHATSAPP PRIVADO.",
+        "DIRETOR QUASE REPASSOU DADOS BANCÁRIOS NO CHAT."
       ],
       "frase_golpista": "Central de segurança: detectamos fraude na conta da escola. Confirme a senha do Internet Banking nesta conversa."
     }

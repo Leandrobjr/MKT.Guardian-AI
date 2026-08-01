@@ -107,6 +107,11 @@ class CampaignHistory:
             "combo": self._combo_key(publico, golpe),
             "headline": headline,
             "headline_hash": headline_hash(headline),
+            "headline_escolhida": (
+                creative_data.get("headline_escolhida")
+                or config.get("_gancho_rotativo")
+                or ""
+            )[:200],
             "copy_hook": copy[:200],
             "visual_hash": visual_hash(cena, pid),
             "persona_id": pid,

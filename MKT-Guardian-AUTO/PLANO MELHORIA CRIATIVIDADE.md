@@ -233,14 +233,16 @@ APPEARANCE STANDARD (mandatory):
 
 ---
 
-### Fase 2 — Headlines e ganchos (2–3 dias)
+### Fase 2 — Headlines e ganchos (2–3 dias) ✅ Concluída (2026-08-01)
 
-| # | Tarefa | Entregável |
-|---|---|---|
-| 2.1 | Expandir ganchos (8+ por combo) de GOLPES WHATSAPP | `campanha_context_matrix.json` |
-| 2.2 | `HeadlineRotator` | `creative_brief.py` |
-| 2.3 | Pós-validação: rejeitar headline >70% similar à última | similaridade Jaccard ou embedding leve |
-| 2.4 | Log `headline_escolhida` no histórico | rastreabilidade |
+| # | Tarefa | Entregável | Status |
+|---|---|---|---|
+| 2.1 | Expandir ganchos (8+ por combo) de GOLPES WHATSAPP | `campanha_context_matrix.json` | ✅ |
+| 2.2 | `HeadlineRotator` | `creative_brief.py` | ✅ |
+| 2.3 | Pós-validação: rejeitar headline >70% similar à última | Jaccard em `apply_headline_diversity` | ✅ |
+| 2.4 | Log `headline_escolhida` no histórico | `campaign_history.py` | ✅ |
+
+**Versão:** Orquestrador v5.1 | Fábrica v18.9
 
 ---
 

@@ -12,6 +12,7 @@ from mkt_agent_01 import MediaFactory
 from traffic_manager import TrafficManager
 from agent_memory import AgentMemory
 from campaign_history import CampaignHistory
+from creative_brief import HeadlineRotator
 from feedback_router import classify_improvement, describe_plan
 from visual_variety import VisualVarietyEngine
 from channel_presets import resolve_channel_preset, format_preset_summary
@@ -53,6 +54,7 @@ class CampaignOrchestrator:
         self.traffic_manager = TrafficManager()
         self.memory = AgentMemory(self.BASE_DIR)
         self.history = CampaignHistory(self.BASE_DIR)
+        self.headline_rotator = HeadlineRotator(self.BASE_DIR, self.history)
         self.visual_variety = VisualVarietyEngine(self.BASE_DIR)
         self.context_engine = CampaignContextEngine(self.BASE_DIR)
         self.max_revisoes = int(os.getenv("MAX_REVISOES", "3"))
@@ -274,68 +276,9 @@ class CampaignOrchestrator:
     def _sanitize_headline(
         self, creative_data: dict, campaign_ctx: dict, config: dict
     ) -> dict:
-        """Substitui manchetes contraditórias ou quebradas por gancho rotativo do combo."""
-        headline = (creative_data.get("gancho_atencao_inicial") or "").strip()
-        broken = [
-            r"privad[oa][^.!?]{0,30}privad[oa]",  # "privada... privado" redundante
-            r"conversa privada[^.!?]{0,25}no privado",
-            r"chat privado[^.!?]{0,25}no privado",
-            r"não acontece[^.!?]{0,40}no privado",
-        ]
-        if any(re.search(p, headline, re.IGNORECASE) for p in broken):
-            gancho = self._pick_rotated_gancho(campaign_ctx, config, advance=False)
-            if gancho:
-                creative_data["gancho_atencao_inicial"] = gancho.upper()
-                print(f"⚠️ Manchete corrigida → {creative_data['gancho_atencao_inicial']}")
-        return creative_data
-
-    def _ganchos_state_path(self) -> str:
-        return os.path.join(self.BASE_DIR, "contexto_negocio", "memoria", "ganchos_rotacao.json")
-
-    def _load_ganchos_state(self) -> dict:
-        path = self._ganchos_state_path()
-        if not os.path.isfile(path):
-            return {}
-        try:
-            with open(path, encoding="utf-8") as f:
-                return json.load(f)
-        except (json.JSONDecodeError, OSError):
-            return {}
-
-    def _save_ganchos_state(self, state: dict) -> None:
-        try:
-            with open(self._ganchos_state_path(), "w", encoding="utf-8") as f:
-                json.dump(state, f, ensure_ascii=False, indent=2)
-        except OSError:
-            pass
-
-    def _pick_rotated_gancho(
-        self, campaign_ctx: dict, config: dict, advance: bool = True
-    ) -> str | None:
-        """Rotaciona ganchos do combo para evitar sempre a mesma manchete."""
-        cached = config.get("_gancho_rotativo")
-        if cached:
-            return cached
-
-        ganchos = [g for g in (campaign_ctx.get("ganchos") or []) if g]
-        if not ganchos:
-            return None
-
-        if not advance:
-            return ganchos[0]
-
-        combo = f"{config.get('publico_slug', '')}:{config.get('golpe_id', '')}"
-        state = self._load_ganchos_state()
-        last_idx = int(state.get(combo, -1))
-        next_idx = (last_idx + 1) % len(ganchos)
-        gancho = ganchos[next_idx]
-
-        state[combo] = next_idx
-        self._save_ganchos_state(state)
-        config["_gancho_rotativo"] = gancho
-        print(f"🎯 Gancho rotativo ({next_idx + 1}/{len(ganchos)}): {gancho[:70]}...")
-
-        return gancho
+        return self.headline_rotator.apply_headline_diversity(
+            creative_data, campaign_ctx, config
+        )
 
     def _align_card_message(
         self, creative_data: dict, config: dict, campaign_ctx: dict, golpe_obj: dict
@@ -811,7 +754,14 @@ class CampaignOrchestrator:
 
         gancho_prioritario = None
         if not instrucoes_extras.strip():
-            gancho_prioritario = self._pick_rotated_gancho(campaign_ctx, config, advance=True)
+            ganchos_list = [g for g in (campaign_ctx.get("ganchos") or []) if g]
+            gancho_prioritario, gancho_idx = self.headline_rotator.pick_gancho(
+                campaign_ctx, config, advance=True
+            )
+            if gancho_prioritario and ganchos_list:
+                total = len(ganchos_list)
+                pos = gancho_idx + 1 if gancho_idx >= 0 else 1
+                print(f"🎯 Gancho rotativo ({pos}/{total}): {gancho_prioritario[:70]}...")
 
         memoria_txt = self.memory.format_for_prompt(
             publico=publico_slug,

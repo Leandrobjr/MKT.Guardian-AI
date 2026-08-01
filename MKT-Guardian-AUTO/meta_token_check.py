@@ -188,13 +188,23 @@ def main() -> int:
         now = datetime.now(tz=timezone.utc).timestamp()
         dias = (expires_at - now) / 86400
         if dias <= 0:
-            print(f"   ⚠️  EXPIRADO há {abs(dias):.1f} dia(s)")
-        elif dias < 7:
-            print(f"   ⚠️  Expira em {dias:.1f} dia(s) — renove em breve")
+            print(f"   ❌ EXPIRADO há {abs(dias):.1f} dia(s)")
+        elif dias < 1:
+            horas = dias * 24
+            print(f"   ❌ Token CURTO — expira em ~{horas:.1f}h (NÃO é long-lived de 60 dias)")
         elif dias < 30:
-            print(f"   ⚠️  Restam ~{dias:.0f} dias (pode ser token curto trocado)")
+            print(f"   ❌ Restam apenas ~{dias:.0f} dias — provavelmente NÃO é long-lived")
         else:
             print(f"   ✓ Restam ~{dias:.0f} dias (long-lived OK)")
+
+    # Comparar raiz vs AUTO quando ambos existem
+    root_tok = _read_meta_from_env(ENV_ROOT).get("META_ACCESS_TOKEN", "")
+    auto_tok = _read_meta_from_env(ENV_AUTO).get("META_ACCESS_TOKEN", "")
+    if root_tok and auto_tok and root_tok != auto_tok:
+        print("\n🚨 DICOTOMIA: dois tokens diferentes nos .env")
+        print(f"   Raiz (../.env):  {_token_fingerprint(root_tok)}")
+        print(f"   AUTO (./.env):   {_token_fingerprint(auto_tok)}  ← ESTE está em uso")
+        print("   O long-lived do curl deve ir na raiz E rm MKT-Guardian-AUTO/.env")
 
     needed = {"instagram_basic", "instagram_content_publish"}
     missing = needed - set(scopes)
@@ -229,7 +239,23 @@ def main() -> int:
     if missing:
         print("RESULTADO: token válido mas SEM permissão de publicação.")
         return 1
-    print("RESULTADO: token OK para publicar.")
+
+    dias_restantes = None
+    if expires_at:
+        dias_restantes = (expires_at - datetime.now(tz=timezone.utc).timestamp()) / 86400
+
+    if root_tok and auto_tok and root_tok != auto_tok:
+        print("RESULTADO: ERRADO — AUTO/.env sobrescreve o long-lived da raiz.")
+        print("   rm MKT-Guardian-AUTO/.env  &&  python3 meta_token_check.py")
+        return 1
+
+    if dias_restantes is not None and dias_restantes < 30:
+        print("RESULTADO: ERRADO — token CURTO (~horas), não long-lived (60 dias).")
+        print("   Cole o access_token do curl (expires_in: 5183999) em ../.env")
+        print("   Confira se termina com …GpMkx (ou sufixo do SEU curl), não …PaL4SU")
+        return 1
+
+    print("RESULTADO: token OK para publicar (long-lived confirmado).")
     return 0
 
 

@@ -56,6 +56,16 @@ class MetaPublisher:
                         "Renove (long-lived 60 dias) e atualize o .env no Linux."
                     ),
                 }
+            if exp:
+                dias = (exp - time.time()) / 86400
+                if dias < 30:
+                    return {
+                        "ok": False,
+                        "erro": (
+                            f"Token expira em ~{dias:.1f} dias — não é long-lived (60d). "
+                            "Cole o token do curl (expires_in: 5183999) e rm AUTO/.env"
+                        ),
+                    }
             scopes = set(data.get("scopes") or [])
             needed = {"instagram_basic", "instagram_content_publish"}
             if not needed.issubset(scopes):

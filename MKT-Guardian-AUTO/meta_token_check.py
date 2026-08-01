@@ -9,18 +9,20 @@ Uso (Linux):
 
 from __future__ import annotations
 
-import json
 import os
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
 import requests
+from dotenv import dotenv_values
 
 from env_loader import load_project_env
 
 GRAPH_BASE = "https://graph.facebook.com/v21.0"
 PKG_DIR = Path(__file__).resolve().parent
+ENV_ROOT = PKG_DIR.parent / ".env"
+ENV_AUTO = PKG_DIR / ".env"
 
 
 def _fmt_ts(ts: int | None) -> str:
@@ -32,48 +34,105 @@ def _fmt_ts(ts: int | None) -> str:
 
 def _token_fingerprint(token: str) -> str:
     if len(token) < 16:
-        return "(token curto demais ou ausente)"
+        return "(ausente ou curto demais)"
     return f"{token[:10]}…{token[-6:]}"
 
 
-def _env_sources() -> list[str]:
-    paths = [PKG_DIR.parent / ".env", PKG_DIR / ".env"]
-    return [str(p) for p in paths if p.is_file()]
+def _read_meta_from_env(path: Path) -> dict[str, str]:
+    if not path.is_file():
+        return {}
+    raw = dotenv_values(path)
+    keys = (
+        "META_ACCESS_TOKEN",
+        "META_IG_USER_ID",
+        "META_APP_ID",
+        "META_APP_SECRET",
+    )
+    return {k: (raw.get(k) or "").strip() for k in keys if (raw.get(k) or "").strip()}
+
+
+def _audit_env_files() -> tuple[Path | None, dict[str, str]]:
+    """Mostra fingerprint por arquivo e retorna (arquivo_vencedor, vars_efetivas)."""
+    print("\n📁 Auditoria por arquivo .env:")
+    per_file: list[tuple[Path, dict[str, str]]] = []
+    for label, path in (("raiz", ENV_ROOT), ("AUTO", ENV_AUTO)):
+        if not path.is_file():
+            print(f"   • {path}")
+            print("     (não existe)")
+            continue
+        mtime = datetime.fromtimestamp(path.stat().st_mtime).strftime(
+            "%Y-%m-%d %H:%M:%S"
+        )
+        vals = _read_meta_from_env(path)
+        tok = vals.get("META_ACCESS_TOKEN", "")
+        print(f"   • {path}")
+        print(f"     modificado: {mtime}")
+        print(f"     META_ACCESS_TOKEN: {_token_fingerprint(tok)}")
+        if vals.get("META_IG_USER_ID"):
+            print(f"     META_IG_USER_ID: {vals['META_IG_USER_ID']}")
+        per_file.append((path, vals))
+
+    winner: Path | None = None
+    effective: dict[str, str] = {}
+    if ENV_AUTO.is_file():
+        winner = ENV_AUTO
+        effective = _read_meta_from_env(ENV_AUTO)
+        if ENV_ROOT.is_file():
+            root_tok = _read_meta_from_env(ENV_ROOT).get("META_ACCESS_TOKEN", "")
+            auto_tok = effective.get("META_ACCESS_TOKEN", "")
+            print("\n⚠️  DOIS .env detectados — AUTO/.env SOBRESCREVE ../.env")
+            if root_tok and auto_tok and root_tok != auto_tok:
+                print("   → Tokens DIFERENTES: o da raiz está sendo IGNORADO.")
+            elif root_tok and auto_tok and root_tok == auto_tok:
+                print("   → Mesmo token nos dois arquivos (redundante).")
+            print(f"\n   🎯 Token EFETIVO vem de: {ENV_AUTO}")
+            print("   Para usar só a raiz: rm MKT-Guardian-AUTO/.env")
+    elif ENV_ROOT.is_file():
+        winner = ENV_ROOT
+        effective = _read_meta_from_env(ENV_ROOT)
+        print(f"\n   🎯 Token EFETIVO vem de: {ENV_ROOT}")
+    else:
+        print("\n❌ Nenhum .env com META_ACCESS_TOKEN encontrado.")
+
+    return winner, effective
 
 
 def main() -> int:
-    load_project_env()
+    winner_path, from_files = _audit_env_files()
 
+    load_project_env()
     token = os.getenv("META_ACCESS_TOKEN", "").strip()
     ig_user = os.getenv("META_IG_USER_ID", "").strip()
     app_id = os.getenv("META_APP_ID", "").strip()
     app_secret = os.getenv("META_APP_SECRET", "").strip()
 
-    print("=" * 60)
+    print("\n" + "=" * 60)
     print("META TOKEN CHECK — Guardian AI")
     print("=" * 60)
 
-    env_files = _env_sources()
-    if env_files:
-        print("\n📁 Arquivos .env encontrados (ordem de carga):")
-        for p in env_files:
-            mtime = datetime.fromtimestamp(Path(p).stat().st_mtime).strftime(
-                "%Y-%m-%d %H:%M:%S"
-            )
-            print(f"   • {p}  (modificado: {mtime})")
-        if len(env_files) == 2:
-            print("   → MKT-Guardian-AUTO/.env SOBRESCREVE ../.env")
-    else:
-        print("\n⚠️  Nenhum .env encontrado na raiz do clone nem em AUTO/")
-
-    print(f"\n🔑 META_ACCESS_TOKEN: {_token_fingerprint(token)}")
+    print(f"\n🔑 Token carregado pelo Python: {_token_fingerprint(token)}")
     print(f"📸 META_IG_USER_ID: {ig_user or '(não definido)'}")
 
+    file_tok = from_files.get("META_ACCESS_TOKEN", "")
+    if file_tok and token and file_tok != token:
+        print(
+            "\n⚠️  Shell com export antigo? "
+            "Feche o terminal ou rode: unset META_ACCESS_TOKEN"
+        )
+
+    if token.startswith("EAAoJmoNlc"):
+        print(
+            "\n⚠️  Este prefixo (EAAoJmoNlc…) é o token que expirou em 30/07. "
+            "Gere um token NOVO no Graph API Explorer — não reutilize este."
+        )
+
     if not token:
-        print("\n❌ META_ACCESS_TOKEN ausente. Edite o .env no Linux e rode de novo.")
+        print("\n❌ META_ACCESS_TOKEN ausente após carregar .env.")
         return 1
 
-    # debug_token — app token preferível; senão usa o próprio user token
+    if winner_path:
+        print(f"\n📂 Arquivo em uso: {winner_path}")
+
     app_token = f"{app_id}|{app_secret}" if app_id and app_secret else token
     try:
         r = requests.get(
@@ -89,8 +148,12 @@ def main() -> int:
     if "error" in body and "data" not in body:
         err = body["error"]
         print(f"\n❌ debug_token: {err.get('message')} (code={err.get('code')})")
-        print("\n💡 Se a mensagem fala em 'Session has expired', o token no .env")
-        print("   do LINUX está expirado — renove e cole no arquivo correto.")
+        print("\n💡 A Meta rejeitou ESTE token literal. Próximos passos:")
+        print("   1) rm ~/Documentos/Guardian-AI/MKT_Guardian-AI/MKT-Guardian-AUTO/.env")
+        print("   2) Graph API Explorer → token NOVO (não o EAAoJmoNlc…)")
+        print("   3) Troque por long-lived (curl fb_exchange_token)")
+        print("   4) Cole só em MKT_Guardian-AI/.env")
+        print("   5) python3 meta_token_check.py")
         return 1
 
     data = body.get("data", {})
@@ -112,8 +175,10 @@ def main() -> int:
             print(f"   ⚠️  EXPIRADO há {abs(dias):.1f} dia(s)")
         elif dias < 7:
             print(f"   ⚠️  Expira em {dias:.1f} dia(s) — renove em breve")
+        elif dias < 30:
+            print(f"   ⚠️  Restam ~{dias:.0f} dias (pode ser token curto trocado)")
         else:
-            print(f"   ✓ Restam ~{dias:.0f} dias (long-lived)")
+            print(f"   ✓ Restam ~{dias:.0f} dias (long-lived OK)")
 
     needed = {"instagram_basic", "instagram_content_publish"}
     missing = needed - set(scopes)
@@ -143,23 +208,11 @@ def main() -> int:
 
     print("\n" + "=" * 60)
     if not is_valid:
-        print("RESULTADO: token INVÁLIDO — atualize META_ACCESS_TOKEN no .env do Linux.")
-        print("\nRenovação long-lived (60 dias):")
-        print("  1) Graph API Explorer → token curto EAA... com instagram_content_publish")
-        print("  2) Troque por long-lived:")
-        print("     curl \"https://graph.facebook.com/v21.0/oauth/access_token?")
-        print("       grant_type=fb_exchange_token&")
-        print("       client_id=SEU_APP_ID&")
-        print("       client_secret=SEU_APP_SECRET&")
-        print("       fb_exchange_token=TOKEN_CURTO\"")
-        print("  3) Cole o access_token retornado em META_ACCESS_TOKEN")
-        print("  4) Rode: python3 meta_token_check.py  (deve mostrar ~60 dias)")
+        print("RESULTADO: token INVÁLIDO.")
         return 1
-
     if missing:
         print("RESULTADO: token válido mas SEM permissão de publicação.")
         return 1
-
     print("RESULTADO: token OK para publicar.")
     return 0
 

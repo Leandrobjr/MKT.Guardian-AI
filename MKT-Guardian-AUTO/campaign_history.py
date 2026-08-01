@@ -27,6 +27,8 @@ def visual_hash(direcao_arte: str, persona_id: str = "") -> str:
 
 
 def _persona_id(creative_data: dict) -> str:
+    if creative_data.get("persona_id"):
+        return str(creative_data["persona_id"])
     persona = creative_data.get("persona_visual") or {}
     if isinstance(persona, dict) and persona.get("nome"):
         prof = persona.get("profissao", "")

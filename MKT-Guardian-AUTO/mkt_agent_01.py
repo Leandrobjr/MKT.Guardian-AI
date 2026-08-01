@@ -1124,9 +1124,10 @@ class MediaFactory:
 
         headers = kling_headers()
         preset = self.preset_midia or {}
-        # `prompt` já inclui motion_prompt_suffix() (ver _build_visual_prompt) — não duplicar,
-        # senão o texto pode passar do limite de ~3072 caracteres aceito pela API Kling.
         kling_prompt = prompt
+        if self.visual_variety.is_duplicate_prompt(kling_prompt):
+            print("[!] Prompt Kling similar a campanha recente — variacao aplicada.")
+            kling_prompt = (prompt + self.visual_variety.kling_variation_suffix())[:3000]
         print(f"📏 Kling prompt: {len(kling_prompt)} caracteres")
         if len(kling_prompt) > 3000:
             print("⚠️ Prompt próximo do limite Kling (máx. 3072) — truncado automaticamente.")
@@ -1185,7 +1186,9 @@ class MediaFactory:
                             f.write(requests.get(video_url, timeout=120).content)
                         print(f"✅ Kling concluiu em {int(time.time() - inicio)}s")
                         if basename:
-                            self.visual_variety.register_generated(prompt, basename)
+                            self.visual_variety.register_generated(
+                                kling_prompt, basename, engine="kling"
+                            )
                         return raw_output_path
                     print("❌ Kling succeeded mas sem URL de vídeo.")
                     return ""
@@ -1494,10 +1497,12 @@ class MediaFactory:
         ]
 
         print(f"🎨 Gerando imagem ({self.model_imagem})...")
-        for attempt, suffix in enumerate(retry_suffixes[:2]):
+        for attempt, suffix in enumerate(retry_suffixes[:3]):
             attempt_prompt = full_prompt + suffix
             if attempt > 0:
                 print(f"🔁 Tentativa {attempt + 1} com prompt alternativo (diversidade visual)...")
+            if attempt > 0 and self.visual_variety.is_duplicate_prompt(attempt_prompt):
+                attempt_prompt += " Unique variation seed " + str(random.randint(1000, 9999))
             try:
                 response = self.client.models.generate_content(
                     model=self.model_imagem,
@@ -1511,8 +1516,13 @@ class MediaFactory:
                     if part.inline_data and part.inline_data.data:
                         with open(output_path, "wb") as f:
                             f.write(part.inline_data.data)
+                        is_new = self.visual_variety.register_generated(
+                            attempt_prompt, basename, engine="gemini"
+                        )
+                        if not is_new and attempt < 2:
+                            print("[!] Hash de prompt duplicado — nova tentativa...")
+                            continue
                         print(f"✅ Imagem: {output_path}")
-                        self.visual_variety.register_generated(attempt_prompt, basename)
                         return
                 raise ValueError("Gemini retornou candidato sem dados de imagem")
             except Exception as e:

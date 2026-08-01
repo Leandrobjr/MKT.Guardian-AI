@@ -2,7 +2,7 @@
 
 **Objetivo:** elevar qualidade, diversidade e coerência dos posts — memória real de campanhas, headlines variadas, casting visual aspiracional (sem elitismo), golpes reais do dia a dia, e feedback que respeite a intenção do operador.
 
-**Status:** Proposta — aguardando aprovação para implementação por fases.
+**Status:** Fases 0–2 concluídas. **Fase 3 (Casting visual) concluída** — v5.2.
 
 **Referências:** `agent_memory.py`, `visual_variety.py`, `campaign_context_engine.py`, `campaign_orchestrator.py`, `feedback_router.py`, `contexto_negocio/GOLPES WHATSAPP.md`, `campanha_context_matrix.json`, `guardian_base.json`.
 
@@ -246,15 +246,16 @@ APPEARANCE STANDARD (mandatory):
 
 ---
 
-### Fase 3 — Casting visual (3–4 dias)
+### Fase 3 — Casting visual (3–4 dias) ✅ v5.2
 
-| # | Tarefa | Entregável |
-|---|---|---|
-| 3.1 | 24 personas enriquecidas | `guardian_base.json` |
-| 3.2 | `VisualCastingDirector.pick_persona()` anti-repeat | `visual_variety.py` |
-| 3.3 | 6 ambientes rotativos por ICP | `campaign_orchestrator.py` |
-| 3.4 | Retry Kling/Gemini se hash duplicado | `mkt_agent_01.py` |
-| 3.5 | QA visual: checklist terminal pós-geração | log opcional |
+| # | Tarefa | Entregável | Status |
+|---|---|---|---|
+| 3.1 | 28 personas enriquecidas | `guardian_base.json` | ✅ |
+| 3.2 | `VisualCastingDirector.pick_persona()` anti-repeat | `visual_variety.py` | ✅ |
+| 3.3 | 6 ambientes rotativos por ICP | `campaign_orchestrator.py` | ✅ |
+| 3.4 | Retry Kling/Gemini se hash duplicado | `mkt_agent_01.py` | ✅ |
+| 3.5 | QA visual: checklist terminal pós-geração | log opcional | ✅ |
+| 3.6 | Testes unitários | `tests/test_visual_casting.py` | ✅ |
 
 ---
 

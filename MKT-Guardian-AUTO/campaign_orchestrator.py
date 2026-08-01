@@ -55,7 +55,7 @@ class CampaignOrchestrator:
         self.memory = AgentMemory(self.BASE_DIR)
         self.history = CampaignHistory(self.BASE_DIR)
         self.headline_rotator = HeadlineRotator(self.BASE_DIR, self.history)
-        self.visual_variety = VisualVarietyEngine(self.BASE_DIR)
+        self.visual_variety = VisualVarietyEngine(self.BASE_DIR, self.history)
         self.context_engine = CampaignContextEngine(self.BASE_DIR)
         self.max_revisoes = int(os.getenv("MAX_REVISOES", "3"))
         self.telegram_timeout = int(os.getenv("TELEGRAM_TIMEOUT", "3600"))
@@ -325,43 +325,7 @@ class CampaignOrchestrator:
         return creative_data
 
     def _build_ambiente(self, publico_slug: str) -> str:
-        if publico_slug == "empresarios":
-            return (
-                "Clean organized Brazilian small business interior — neighborhood shop, commercial counter, "
-                "back office with invoices or stock shelves, pleasant natural daylight, relatable working commerce, "
-                "NOT home kitchen, NOT residential cooking area, NOT luxury corporate skyscraper."
-            )
-        if publico_slug == "escolas":
-            return (
-                "Clean Brazilian school administrative office or staff room, bulletin board, books, "
-                "pleasant daylight, professional educational environment, NOT home kitchen, NOT bedroom."
-            )
-        if publico_slug == "idosos":
-            return (
-                "Clean well-kept Brazilian home living room, tidy painted walls, pleasant natural daylight, "
-                "comfortable modest middle-income retirement setting — neat appearance, not kitchen, "
-                "not worn-out poverty, not peeling paint."
-            )
-        ambientes = [
-            (
-                "Clean well-kept Brazilian home living room with sofa and TV stand, tidy painted walls, "
-                "pleasant natural daylight, middle-income comfort — not luxury mansion, not poverty."
-            ),
-            (
-                "Bright Brazilian home balcony or varanda with simple furniture, plants, tidy walls, "
-                "natural daylight, neat middle-income apartment aesthetic."
-            ),
-            (
-                "Organized Brazilian home office corner or dining table used as desk, tidy shelves, "
-                "pleasant daylight, clean casual professional-at-home feel."
-            ),
-            (
-                "Modern modest Brazilian kitchen-living open plan, clean counters, painted walls, "
-                "natural light — neat and dignified, not luxury, not poverty signals."
-            ),
-        ]
-        idx = hash(publico_slug) % len(ambientes)
-        return ambientes[idx]
+        return self.visual_variety.pick_ambiente(publico_slug)
 
     def _build_publico_scene(self, publico_slug: str, golpe_id: str, genero: str = "") -> str | None:
         """Cena visual alinhada ao ICP; sobrescreve direção genérica do golpe quando necessário.
@@ -1292,6 +1256,7 @@ class CampaignOrchestrator:
                 if not ok_estoria or not creative_data:
                     return
                 assets_resultado = self.media_factory.generate_campaign_assets(creative_data)
+                self.visual_variety.print_qa_checklist(creative_data)
 
             usar_telegram_aprovacao = bool(config.get("aprovacao_telegram") and self.telegram)
             # Se o Telegram foi solicitado mas não inicializou (ex.: token ausente), cai para o

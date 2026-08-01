@@ -35,7 +35,7 @@ def main() -> int:
     print("VALIDACAO MKT GUARDIAN — CRIATIVIDADE (Fases 1-5)")
     print("=" * 60)
     print_build_banner(BASE)
-    print(f"  Versao esperada: v5.4+ | Atual: v{ORCHESTRATOR_VERSION}")
+    print(f"  Versao esperada: v5.5+ | Atual: v{ORCHESTRATOR_VERSION}")
     ok_all = True
 
     for rel in (
@@ -60,15 +60,15 @@ def main() -> int:
     ok_all &= check("Novos golpe_id Fase 4", novos.issubset(ids), str(novos & ids))
 
     lib = ScamLibrary(BASE)
-        ok_all &= check("Variantes golpes >= 20", lib.count_variants() >= 20, str(lib.count_variants()))
-        emp = lib.pick_variant("link_malicioso", "empresarios")
-        emp_vid = (emp or {}).get("variant_id", "")
-        emp_frase = ((emp or {}).get("frase_golpista") or "").lower()
-        ok_all &= check(
-            "Variante B2B empresarios",
-            bool(emp and ("b2b" in emp_vid or "fornecedor" in emp_vid or "fornecedor" in emp_frase)),
-            emp_vid,
-        )
+    ok_all &= check("Variantes golpes >= 20", lib.count_variants() >= 20, str(lib.count_variants()))
+    emp = lib.pick_variant("link_malicioso", "empresarios")
+    emp_vid = (emp or {}).get("variant_id", "")
+    emp_frase = ((emp or {}).get("frase_golpista") or "").lower()
+    ok_all &= check(
+        "Variante B2B empresarios",
+        bool(emp and ("b2b" in emp_vid or "fornecedor" in emp_vid or "fornecedor" in emp_frase)),
+        emp_vid,
+    )
 
     hist = CampaignHistory(BASE)
     ve = VisualVarietyEngine(BASE, hist)

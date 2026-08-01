@@ -2,6 +2,15 @@
   "_defaults": {
     "grooming": {
       "narrativa_parental": false
+    },
+    "link_malicioso": {
+      "narrativa_parental": false
+    },
+    "falso_emprego": {
+      "narrativa_parental": false
+    },
+    "falso_investimento": {
+      "narrativa_parental": false
     }
   },
   "idosos": {
@@ -47,6 +56,42 @@
       ],
       "frase_golpista": "oi, achei seu número... posso te mandar uma foto? não conta pra ninguém",
       "persona_visual": "avô ou avó brasileiro(a) (65-82 anos) preocupado(a)"
+    },
+    "link_malicioso": {
+      "ganchos": [
+        "ELA CLICOU NO LINK. PERDEU A APOSENTADORIA INTEIRA.",
+        "ENCOMENDA 'RETIDA' NO WHATSAPP ERA GOLPE — LINK FALSO.",
+        "O APK DE 'SEGURANÇA' INSTALOU SPYWARE NO CELULAR DELA.",
+        "PROMOÇÃO FALSA NO PRIVADO ROUBOU DADOS BANCÁRIOS.",
+        "LINK DE 'ATUALIZAÇÃO' ERA MALWARE DISFARÇADO.",
+        "GOLPISTA MANDOU BRINDE FALSO — UM CLIQUE BASTOU.",
+        "TAXA DE ENCOMENDA FALSA NO PRIVADO — IDOSO PERDEU R$ 800.",
+        "SORTEIO FALSO NO WHATSAPP PEDIU CADASTRO COMPLETO."
+      ]
+    },
+    "falso_emprego": {
+      "ganchos": [
+        "VAGA HOME OFFICE FALSA COBROU TAXA ANTES DO SALÁRIO.",
+        "PROMETERAM RENDA EXTRA — PEDIU PIX DE 'TREINAMENTO'.",
+        "FALSO RH NO WHATSAPP ROUBOU DOCUMENTOS DO APOSENTADO.",
+        "EMPREGO FALSO NO PRIVADO — PREJUÍZO DE R$ 500.",
+        "GOLPISTA PEDIU TAXA DE ADMISSÃO VIA PIX.",
+        "VAGA 'MULTINACIONAL' ERA ARMADILHA NO WHATSAPP.",
+        "TRABALHO PELO CELULAR VIRou GOLPE FINANCEIRO.",
+        "CADASTRO FALSO PEDIU CPF E CONTA BANCÁRIA."
+      ]
+    },
+    "falso_investimento": {
+      "ganchos": [
+        "15% AO DIA NO WHATSAPP — APOSENTADORIA PERDIDA.",
+        "GRUPO VIP DE 'INVESTIMENTO' ERA GOLPE NO PRIVADO.",
+        "ROBÔ DE CRIPTO FALSO ESVAZIOU A POUPANÇA DELA.",
+        "LUCRO GARANTIDO NO CHAT — PREJUÍZO REAL.",
+        "GOLPISTA PEDIU APORTE URGENTE VIA PIX.",
+        "PRINTS FALSOS DE LUCRO NO WHATSAPP 1:1.",
+        "INVESTIMENTO 'EXCLUSIVO' NO PRIVADO — FRAUDE.",
+        "PROMESSA DE RENDA DOBRADA EM 7 DIAS — GOLPE."
+      ]
     }
   },
   "pais": {
@@ -89,6 +134,42 @@
         "GOLPISTA SABIA APELIDO DA FAMÍLIA — NÃO ERA PARENTESCO.",
         "NOVO NÚMERO SALVO. CONTA ZERADA.",
         "'MÃE, ESTOU COM VERGONHA.' MANIPULAÇÃO EMOCIONAL NO PRIVADO."
+      ]
+    },
+    "link_malicioso": {
+      "ganchos": [
+        "SEU FILHO QUASE CLICOU NO LINK — ERA GOLPE NO PRIVADO.",
+        "LINK SUSPEITO NO WHATSAPP 1:1 — ANTES QUE CLIQUE.",
+        "FALSA ENCOMENDA NO PRIVADO PEDIU TAXA URGENTE.",
+        "APK FALSO DE 'SEGURANÇA' INSTALADO PELO FILHO.",
+        "PROMOÇÃO FALSA NO CHAT PRIVADO DO ADOLESCENTE.",
+        "GOLPISTA MANDOU LINK DE 'SORTEIO' NO 1:1.",
+        "UM CLIQUE NO PRIVADO — DADOS DA FAMÍLIA ROUBADOS.",
+        "LINK 'ATUALIZAR CADASTRO' ERA PHISHING NO WHATSAPP."
+      ]
+    },
+    "falso_emprego": {
+      "ganchos": [
+        "VAGA FALSA NO WHATSAPP COBROU TAXA DO SEU FILHO.",
+        "HOME OFFICE FALSO PEDIU PIX ANTES DE CONTRATAR.",
+        "GOLPISTA SE PASSOU POR RH NO PRIVADO.",
+        "EMPREGO 'GARANTIDO' NO CHAT — ERA FRAUDE.",
+        "TAXA DE TREINAMENTO FALSA VIA WHATSAPP 1:1.",
+        "DOCUMENTOS DO FILHO ROUBADOS POR FALSO RECRUTADOR.",
+        "RENDA EXTRA NO PRIVADO VIRou PREJUÍZO.",
+        "CADASTRO FALSO PEDIU DADOS BANCÁRIOS URGENTE."
+      ]
+    },
+    "falso_investimento": {
+      "ganchos": [
+        "SEU FILHO ENTROU EM GRUPO VIP FALSO NO WHATSAPP.",
+        "INVESTIMENTO 'GARANTIDO' NO PRIVADO — GOLPE.",
+        "CRIPTO FALSA NO CHAT 1:1 ROUBOU ECONOMIA DA FAMÍLIA.",
+        "ROBÔ DE INVESTIMENTO NO WHATSAPP — PREJUÍZO TOTAL.",
+        "GOLPISTA PEDIU APORTO VIA PIX NO PRIVADO.",
+        "LUCRO IMPOSSÍVEL PROMETIDO NO WHATSAPP DIRETO.",
+        "GRUPO SECRETO DE 'INVESTIMENTO' ERA ARMADILHA.",
+        "PRINT FALSO DE LUCRO CONVENCEU A TRANSFERIR."
       ]
     }
   },
@@ -149,6 +230,42 @@
       ],
       "frase_golpista": "oi, sou o filho da dona Maria que compra aí... minha mãe pediu pra eu falar com vc em particular",
       "direcao_arte_emocional": "Documentary photorealistic photo of a Brazilian shop owner (35-55) behind store counter reviewing PRIVATE WhatsApp Business chat with suspicious message from fake minor, commercial workspace, worried expression"
+    },
+    "link_malicioso": {
+      "ganchos": [
+        "LINK FALSO DE FORNECEDOR NO WHATSAPP BUSINESS — LOJA CLICOU.",
+        "APK FALSO DE 'SEGURANÇA' INSTALADO NO CELULAR COMERCIAL.",
+        "ENCOMENDA 'RETIDA' NO PRIVADO — GOLPE NO CAIXA.",
+        "PROMOÇÃO FALSA NO 1:1 ROUBOU DADOS DO NEGÓCIO.",
+        "GOLPISTA MANDOU LINK DE ATUALIZAÇÃO FALSA.",
+        "PHISHING DISFARÇADO DE CLIENTE NO WHATSAPP BUSINESS.",
+        "UM CLIQUE NO PRIVADO — CONTA BANCÁRIA COMPROMETIDA.",
+        "MALWARE VIA LINK NO CHAT COMERCIAL."
+      ]
+    },
+    "falso_emprego": {
+      "ganchos": [
+        "VAGA FALSA PARA FUNCIONÁRIO — GOLPISTA PEDIU TAXA.",
+        "FALSO RH NO WHATSAPP BUSINESS COBROU ADMISSÃO.",
+        "GOLPE DE EMPREGO MIRA PEQUENOS COMERCIANTES.",
+        "HOME OFFICE FALSO NO PRIVADO — PREJUÍZO NO CAIXA.",
+        "DOCUMENTOS DO NEGÓCIO ROUBADOS POR FALSO RECRUTADOR.",
+        "TAXA DE TREINAMENTO FALSA VIA PIX COMERCIAL.",
+        "GOLPISTA SE PASSOU POR PARCEIRO DE RH.",
+        "CADASTRO FALSO PEDIU CNPJ E DADOS BANCÁRIOS."
+      ]
+    },
+    "falso_investimento": {
+      "ganchos": [
+        "GRUPO VIP FALSO NO WHATSAPP — COMERCIANTE PERDEU R$ 20 MIL.",
+        "INVESTIMENTO 'GARANTIDO' NO PRIVADO DO NEGÓCIO.",
+        "CRIPTO FALSA NO 1:1 ESVAZIOU CAIXA DA LOJA.",
+        "ROBÔ DE INVESTIMENTO NO WHATSAPP BUSINESS — GOLPE.",
+        "GOLPISTA PEDIU APORTO URGENTE VIA PIX COMERCIAL.",
+        "LUCRO IMPOSSÍVEL PROMETIDO NO CHAT PRIVADO.",
+        "PRINT FALSO DE LUCRO CONVENCEU O EMPRESÁRIO.",
+        "OPORTUNIDADE 'EXCLUSIVA' NO PRIVADO — FRAUDE."
+      ]
     }
   },
   "escolas": {
@@ -259,6 +376,42 @@
         "DIRETOR QUASE REPASSOU DADOS BANCÁRIOS NO CHAT."
       ],
       "frase_golpista": "Central de segurança: detectamos fraude na conta da escola. Confirme a senha do Internet Banking nesta conversa."
+    },
+    "link_malicioso": {
+      "ganchos": [
+        "LINK FALSO DE 'COMUNICADO ESCOLAR' NO PRIVADO DOS PAIS.",
+        "PHISHING DISFARÇADO DE SECRETARIA — MENSAGEM 1:1.",
+        "PAIS CLICARAM EM LINK FALSO — DADOS ROUBADOS.",
+        "BIT.LY SUSPEITO NO WHATSAPP PRIVADO DA ESCOLA.",
+        "FORMULÁRIO FALSO PEDIU CPF NO CHAT DIRETO.",
+        "GOLPISTA COPIOU LOGO DA ESCOLA EM LINK MALICIOSO.",
+        "ATUALIZAÇÃO CADASTRAL FALSA NO PRIVADO.",
+        "ENCOMENDA ESCOLAR 'RETIDA' — LINK FRAUDULENTO."
+      ]
+    },
+    "falso_emprego": {
+      "ganchos": [
+        "VAGA FALSA PARA ESTÁGIO ESCOLAR NO WHATSAPP PRIVADO.",
+        "GOLPISTA OFERECEU EMPREGO A ALUNO — PEDIU TAXA.",
+        "HOME OFFICE FALSO MIRA ADOLESCENTES NO 1:1.",
+        "FALSO RH PEDIU DOCUMENTOS NO CHAT PRIVADO.",
+        "ESCOLA ALERTOU: EMPREGO FALSO CIRCULA NO WHATSAPP.",
+        "TAXA DE ADMISSÃO FALSA VIA PIX NO PRIVADO.",
+        "GOLPISTA SE PASSOU POR EMPRESA PARCEIRA DA ESCOLA.",
+        "CADASTRO FALSO PEDIU DADOS DE MENORES."
+      ]
+    },
+    "falso_investimento": {
+      "ganchos": [
+        "GRUPO VIP FALSO MIRA PAIS DE ALUNOS NO WHATSAPP.",
+        "INVESTIMENTO 'GARANTIDO' NO PRIVADO — GOLPE.",
+        "ESCOLA ALERTOU: CRIPTO FALSA CIRCULA ENTRE FAMÍLIAS.",
+        "GOLPISTA PEDIU APORTO VIA PIX NO 1:1.",
+        "PROMESSA DE LUCRO NO WHATSAPP PRIVADO — FRAUDE.",
+        "ROBÔ DE INVESTIMENTO FALSO NO CHAT DIRETO.",
+        "PAIS QUASE TRANSFERIRAM PARA GRUPO FALSO.",
+        "PRINT DE LUCRO FALSO NO WHATSAPP — ARMADILHA."
+      ]
     }
   }
 }

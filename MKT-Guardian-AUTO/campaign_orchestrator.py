@@ -18,7 +18,7 @@ from visual_variety import VisualVarietyEngine
 from channel_presets import resolve_channel_preset, format_preset_summary
 from tts_narration import strip_written_site_urls, card_solucao_text, NARRATION_CLOSING
 from build_info import ORCHESTRATOR_VERSION, print_build_banner
-from campaign_context_engine import CampaignContextEngine
+from scam_library import ScamLibrary
 from story_approval import format_story_telegram, story_keyboard
 
 try:
@@ -56,6 +56,7 @@ class CampaignOrchestrator:
         self.history = CampaignHistory(self.BASE_DIR)
         self.headline_rotator = HeadlineRotator(self.BASE_DIR, self.history)
         self.visual_variety = VisualVarietyEngine(self.BASE_DIR, self.history)
+        self.scam_library = ScamLibrary(self.BASE_DIR, self.history)
         self.context_engine = CampaignContextEngine(self.BASE_DIR)
         self.max_revisoes = int(os.getenv("MAX_REVISOES", "3"))
         self.telegram_timeout = int(os.getenv("TELEGRAM_TIMEOUT", "3600"))
@@ -296,6 +297,9 @@ class CampaignOrchestrator:
             "falso_parente": ("pix", "número", "troquei", "salva", "filho", "neto"),
             "falsa_central": ("banco", "central", "senha", "conta", "bloque"),
             "phishing": ("clique", "link", "http", "bit.ly", "confirm", "cadastr"),
+            "link_malicioso": ("clique", "link", "http", "bit.ly", "instal", "apk", "encomenda", "taxa"),
+            "falso_emprego": ("vaga", "emprego", "home office", "taxa", "cadastr", "treinamento", "contrat"),
+            "falso_investimento": ("invest", "lucro", "cripto", "grupo", "aporte", "garantid", "robô"),
             "clonagem_whatsapp": ("código", "codigo", "sms", "verific", "6 dígit", "6 digit"),
         }
         sinais = sinais_por_golpe.get(golpe_id, ())
@@ -1100,17 +1104,24 @@ class CampaignOrchestrator:
         print("[4] Grooming / Aliciamento Digital de Menores")
         print("[5] Links de Phishing / Páginas Clonadas")
         print("[6] Clonagem de WhatsApp (Roubo de código SMS)")
+        print("[7] Link Malicioso / Falsa Encomenda / APK falso")
+        print("[8] Falso Emprego / Vaga Home Office")
+        print("[9] Falso Investimento / Cripto / Grupo VIP")
         opcoes_golpe = {
             "1": "Golpe do Falso Parente / Novo Número no WhatsApp pedindo dinheiro urgente.",
             "2": "Golpe do PIX e transferências bancárias sob indução mecânica ou pânico.",
             "3": "Golpe da Falsa Central Bancária simulando atendimento institucional de segurança.",
             "4": "Grooming / Aliciamento digital de menores e exposição de crianças em redes e jogos online.",
             "5": "Links maliciosos de Phishing e páginas clonadas projetadas para roubo de senhas.",
-            "6": "Clonagem de WhatsApp via engenharia social e roubo do código SMS de verificação."
+            "6": "Clonagem de WhatsApp via engenharia social e roubo do código SMS de verificação.",
+            "7": "Links maliciosos: promoções falsas, encomenda retida, APK falso ou atualização fraudulenta.",
+            "8": "Golpe do falso emprego: vagas home office, taxa de admissão e captura de documentos.",
+            "9": "Golpe do falso investimento: lucro garantido, cripto e grupos VIP no WhatsApp."
         }
         mapa_golpe_id = {
             "1": "falso_parente", "2": "pix_fantasma", "3": "falsa_central",
-            "4": "grooming", "5": "phishing", "6": "clonagem_whatsapp"
+            "4": "grooming", "5": "phishing", "6": "clonagem_whatsapp",
+            "7": "link_malicioso", "8": "falso_emprego", "9": "falso_investimento",
         }
         g_escolhido = input("Digite o número da opção desejada: ").strip()
         golpe_final = opcoes_golpe.get(g_escolhido, "Fraudes gerais no WhatsApp.")
@@ -1185,6 +1196,17 @@ class CampaignOrchestrator:
             golpe_obj,
             self.context_data,
         )
+        campaign_ctx = self.scam_library.apply_to_context(
+            campaign_ctx,
+            config.get("golpe_id", ""),
+            config.get("publico_slug", ""),
+        )
+        if campaign_ctx.get("scam_variant_titulo"):
+            frase = (campaign_ctx.get("frase_golpista") or "")[:70]
+            print(
+                f"📚 Variante golpe: {campaign_ctx['scam_variant_titulo']} "
+                f"({campaign_ctx.get('scam_variant_id', '')}) — {frase}..."
+            )
         config["_campaign_context"] = campaign_ctx
         print(self.context_engine.summary_line(campaign_ctx))
         if self._story_approval_enabled():

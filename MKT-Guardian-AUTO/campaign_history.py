@@ -119,6 +119,7 @@ class CampaignHistory:
             "persona_id": pid,
             "ambiente": ambiente,
             "frase_golpista": (creative_data.get("texto_card_notificacao") or "")[:160],
+            "scam_variant_id": config.get("_campaign_context", {}).get("scam_variant_id", ""),
             "asset_path": asset_path if isinstance(asset_path, str) else "",
             "revisao": revisao,
             "canal": config.get("canal", ""),

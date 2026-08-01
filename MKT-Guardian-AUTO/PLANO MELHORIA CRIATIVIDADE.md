@@ -2,7 +2,7 @@
 
 **Objetivo:** elevar qualidade, diversidade e coerência dos posts — memória real de campanhas, headlines variadas, casting visual aspiracional (sem elitismo), golpes reais do dia a dia, e feedback que respeite a intenção do operador.
 
-**Status:** Fases 0–2 concluídas. **Fase 3 (Casting visual) concluída** — v5.2.
+**Status:** Fases 0–4 concluídas. **Fase 4 (Biblioteca de golpes) concluída** — v5.3.
 
 **Referências:** `agent_memory.py`, `visual_variety.py`, `campaign_context_engine.py`, `campaign_orchestrator.py`, `feedback_router.py`, `contexto_negocio/GOLPES WHATSAPP.md`, `campanha_context_matrix.json`, `guardian_base.json`.
 
@@ -259,14 +259,15 @@ APPEARANCE STANDARD (mandatory):
 
 ---
 
-### Fase 4 — Biblioteca de golpes (4–5 dias)
+### Fase 4 — Biblioteca de golpes (4–5 dias) ✅ v5.3
 
-| # | Tarefa | Entregável |
-|---|---|---|
-| 4.1 | Parser MD → `golpes_whatsapp.json` | script ou manual curado |
-| 4.2 | `ScamLibrary.pick_variant(golpe_id, publico)` | `scam_library.py` |
-| 4.3 | Integrar mensagens no card + phone clause | orchestrator |
-| 4.4 | Novos `golpe_id` prioritários: link malicioso, falso emprego, investimento | menu + matriz |
+| # | Tarefa | Entregável | Status |
+|---|---|---|---|
+| 4.1 | Parser MD → `golpes_whatsapp.json` | JSON curado (22 variantes) | ✅ |
+| 4.2 | `ScamLibrary.pick_variant(golpe_id, publico)` | `scam_library.py` | ✅ |
+| 4.3 | Integrar mensagens no card + phone clause | orchestrator | ✅ |
+| 4.4 | Novos `golpe_id`: link malicioso, falso emprego, investimento | menu + matriz | ✅ |
+| 4.5 | Testes unitários | `tests/test_scam_library.py` | ✅ |
 
 ---
 

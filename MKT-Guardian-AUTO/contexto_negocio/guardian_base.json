@@ -196,6 +196,48 @@
       "frase_golpista": "Você ganhou um prêmio! Clique no link para resgatar antes que expire: bit.ly/premio-2026",
       "direcao_arte_emocional": "Documentary photorealistic photo of a Brazilian person hesitating before tapping a suspicious link inside a WhatsApp chat message, phone screen clearly showing WhatsApp interface with green bubbles and fake prize link, sitting at kitchen counter, natural daylight, everyday clothes, photorealistic skin, no red neon glow or matrix effects",
       "ctas": ["BLOQUEIE LINKS PERIGOSOS — BAIXE GRÁTIS", "PROTEJA SEUS DADOS AGORA"]
+    },
+    {
+      "id": "link_malicioso",
+      "nome": "Golpe do Link Malicioso",
+      "descricao": "Links falsos de promoção, encomenda retida, APK ou atualização fraudulenta no WhatsApp",
+      "gancho_modelo": "Esse link inocente pode instalar malware ou roubar seus dados",
+      "ganchos": [
+        "ELE CLICOU NO LINK. PERDEU TODAS AS SENHAS EM 3 SEGUNDOS.",
+        "SUA ENCOMENDA 'RETIDA' ERA UM GOLPE — LINK FALSO NO WHATSAPP.",
+        "O APK DE 'SEGURANÇA' ERA SPYWARE DISFARÇADO."
+      ],
+      "frase_golpista": "Sua encomenda está retida. Pague a taxa pelo link para liberar entrega.",
+      "direcao_arte_emocional": "Documentary photorealistic photo of a Brazilian adult worried while reading a WhatsApp message with suspicious delivery link, authentic green chat bubbles on phone screen, clean middle-income home, natural daylight",
+      "ctas": ["BLOQUEIE LINKS PERIGOSOS — BAIXE GRÁTIS", "NÃO CLIQUE — BAIXE GUARDIAN AI"]
+    },
+    {
+      "id": "falso_emprego",
+      "nome": "Golpe do Falso Emprego",
+      "descricao": "Vagas falsas home office com cobrança de taxa de admissão ou treinamento via PIX",
+      "gancho_modelo": "Vaga falsa no WhatsApp cobrou taxa antes do primeiro salário",
+      "ganchos": [
+        "A VAGA HOME OFFICE ERA FALSA — COBRARAM TAXA E SUMIRAM.",
+        "PROMETERAM R$ 3 MIL POR SEMANA. PEDIU PIX ANTES DE CONTRATAR.",
+        "FALSO RH NO WHATSAPP ROUBOU DOCUMENTOS E DINHEIRO."
+      ],
+      "frase_golpista": "Vaga home office aprovada! Pague taxa de admissão de R$ 97 via PIX para garantir sua vaga.",
+      "direcao_arte_emocional": "Documentary photorealistic photo of a Brazilian job seeker at home desk reading WhatsApp message about fake job offer requesting admission fee via PIX, worried expression, phone showing green chat bubbles, tidy home office, natural daylight",
+      "ctas": ["IDENTIFIQUE GOLPES DE EMPREGO — BAIXE GRÁTIS", "PROTEJA SEU WHATSAPP AGORA"]
+    },
+    {
+      "id": "falso_investimento",
+      "nome": "Golpe do Falso Investimento",
+      "descricao": "Promessas de lucro garantido, cripto e grupos VIP que pedem aporte via PIX no WhatsApp",
+      "gancho_modelo": "Lucro garantido no WhatsApp virou prejuízo total",
+      "ganchos": [
+        "15% AO DIA NO WHATSAPP — ERA GRUPO DE GOLPISTAS.",
+        "O 'ROBÔ DE INVESTIMENTO' ESVAZIOU A CONTA DELA.",
+        "GRUPO VIP NO PRIVADO PEDIU APORTE — NUNCA DEVOLVERAM."
+      ],
+      "frase_golpista": "Lucro de 15% ao dia garantido! Entre no grupo VIP e faça seu primeiro aporte via PIX.",
+      "direcao_arte_emocional": "Documentary photorealistic photo of a Brazilian adult shocked reading WhatsApp message promising guaranteed crypto returns, phone screen with green bubbles and fake investment pitch, clean living room, natural daylight, middle-income aesthetic",
+      "ctas": ["BLOQUEIE GOLPES FINANCEIROS — BAIXE GRÁTIS", "PROTEJA SEU DINHEIRO AGORA"]
     }
   ],
   "COPYWRITING_FRAMEWORK": {

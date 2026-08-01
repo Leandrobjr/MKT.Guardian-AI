@@ -1,0 +1,271 @@
+{
+  "version": 1,
+  "fonte": "GOLPES WHATSAPP.md",
+  "descricao": "Variantes de mensagens golpistas para rotação por golpe_id × público",
+  "variantes": [
+    {
+      "variant_id": "clonagem_codigo_sms",
+      "golpe_id": "clonagem_whatsapp",
+      "ordem_md": 1,
+      "titulo": "Clonagem de WhatsApp",
+      "publicos": ["massa", "idosos", "pais", "empresarios"],
+      "frases_golpista": [
+        "Recebemos sua solicitação. Digite o código de 6 dígitos enviado por SMS para confirmar sua conta do WhatsApp.",
+        "Somos da central de segurança do WhatsApp. Envie o código que chegou por SMS agora ou perderá o acesso.",
+        "Seu número foi registrado em outro aparelho. Informe o código de verificação para cancelar a transferência."
+      ]
+    },
+    {
+      "variant_id": "falso_pix_numero_novo",
+      "golpe_id": "pix_fantasma",
+      "ordem_md": 2,
+      "titulo": "Falso Pedido de PIX",
+      "publicos": ["massa", "idosos", "pais"],
+      "frases_golpista": [
+        "Oi, troquei de número. Preciso de um PIX urgente — te explico depois.",
+        "Mãe, salva esse número. Preciso que você faça um PIX agora, é emergência.",
+        "Amigo, tô sem acesso ao banco. Pode fazer um PIX pro número abaixo? Devolvo amanhã."
+      ]
+    },
+    {
+      "variant_id": "falso_suporte_bancario",
+      "golpe_id": "falsa_central",
+      "ordem_md": 3,
+      "titulo": "Falso Suporte Bancário",
+      "publicos": ["massa", "idosos", "empresarios"],
+      "frases_golpista": [
+        "Aqui é do seu banco. Detectamos uma transação suspeita. Confirme sua senha e o código do cartão agora.",
+        "Antifraude: sua conta será bloqueada em 10 minutos se não confirmar os dados por aqui.",
+        "Gerente digital: instale este app de segurança para evitar bloqueio da conta."
+      ]
+    },
+    {
+      "variant_id": "engenharia_social_urgencia",
+      "golpe_id": "pix_fantasma",
+      "ordem_md": 4,
+      "titulo": "Engenharia Social Emocional",
+      "publicos": ["massa", "idosos"],
+      "frases_golpista": [
+        "Sua conta será bloqueada. Aja agora ou perderá todo o saldo.",
+        "Último aviso: transferência suspeita detectada. Responda AGORA para evitar prejuízo.",
+        "Seu CPF foi usado em fraude. Confirme identidade com PIX de verificação imediato."
+      ]
+    },
+    {
+      "variant_id": "link_promocao_rastreamento",
+      "golpe_id": "link_malicioso",
+      "ordem_md": 5,
+      "titulo": "Golpe do Link Malicioso",
+      "publicos": ["massa", "pais", "idosos"],
+      "frases_golpista": [
+        "Parabéns! Você foi selecionado. Clique aqui para resgatar: bit.ly/brinde-2026",
+        "Atualize seu cadastro para receber o prêmio: http://promo-segura.xyz/confirmar",
+        "Sua encomenda precisa de confirmação. Acesse o link para liberar entrega."
+      ]
+    },
+    {
+      "variant_id": "central_seguranca_invasao",
+      "golpe_id": "falsa_central",
+      "ordem_md": 6,
+      "titulo": "Golpe da Central de Segurança",
+      "publicos": ["idosos", "massa"],
+      "frases_golpista": [
+        "Central de segurança: detectamos invasão na sua conta. Envie o código SMS para bloquear o acesso do criminoso.",
+        "Alerta de fraude! Alguém tentou acessar sua conta. Digite o código de 6 dígitos que chegou agora.",
+        "Somos do suporte antifraude. Sua conta está sendo invadida neste momento — confirme o código."
+      ]
+    },
+    {
+      "variant_id": "vaga_home_office",
+      "golpe_id": "falso_emprego",
+      "ordem_md": 7,
+      "titulo": "Golpe do Falso Emprego",
+      "publicos": ["massa", "pais"],
+      "frases_golpista": [
+        "Vaga home office R$ 3.500/semana! Cadastre-se e pague taxa de admissão de R$ 97 para garantir sua vaga.",
+        "Trabalhe pelo celular, renda extra garantida. Envie documentos e taxa de treinamento via PIX.",
+        "Empresa multinacional contratando. Primeiro pagamento após taxa de credenciamento — confirme agora."
+      ]
+    },
+    {
+      "variant_id": "lucro_garantido_cripto",
+      "golpe_id": "falso_investimento",
+      "ordem_md": 8,
+      "titulo": "Golpe do Falso Investimento",
+      "publicos": ["massa", "empresarios", "idosos"],
+      "frases_golpista": [
+        "Lucro de 15% ao dia garantido! Entre no grupo VIP e faça seu primeiro aporte via PIX.",
+        "Robô de investimento automático — R$ 500 viram R$ 5.000 em 7 dias. Cadastre-se pelo link.",
+        "Oportunidade exclusiva em cripto. Deposite agora e receba bônus de 200% na primeira operação."
+      ]
+    },
+    {
+      "variant_id": "boleto_falso_qr",
+      "golpe_id": "pix_fantasma",
+      "ordem_md": 9,
+      "titulo": "Golpe do Boleto Falso",
+      "publicos": ["empresarios", "escolas"],
+      "frases_golpista": [
+        "Segue boleto atualizado com desconto. Pague hoje via PIX ou QR Code anexo para evitar juros.",
+        "Cobrança em aberto no CNPJ. Confirme pagamento pelo QR Code abaixo — valor com 40% de desconto.",
+        "Nota fiscal pendente. Escaneie o QR Code para quitar e evitar protesto."
+      ]
+    },
+    {
+      "variant_id": "qr_code_pix_adulterado",
+      "golpe_id": "pix_fantasma",
+      "ordem_md": 10,
+      "titulo": "Golpe do QR Code PIX",
+      "publicos": ["massa", "empresarios"],
+      "frases_golpista": [
+        "Use este QR Code para pagamento com desconto — válido só hoje.",
+        "Comprovante em anexo: escaneie o QR para confirmar estorno da compra.",
+        "PIX copia e cola com 30% off — cole no app do banco agora."
+      ]
+    },
+    {
+      "variant_id": "catalogo_falso_produto",
+      "golpe_id": "phishing",
+      "ordem_md": 11,
+      "titulo": "Golpe do Catálogo/Falso Produto",
+      "publicos": ["massa"],
+      "frases_golpista": [
+        "iPhone 15 por R$ 899! Veja catálogo e pague via PIX — entrega em 24h: loja-ofertas.biz",
+        "Promoção relâmpago! Celular, TV e notebook com 70% off. Pedido só via link do catálogo.",
+        "Últimas unidades! Faça pedido pelo WhatsApp e pague antecipado para garantir frete grátis."
+      ]
+    },
+    {
+      "variant_id": "falso_sorteio_premio",
+      "golpe_id": "phishing",
+      "ordem_md": 12,
+      "titulo": "Golpe do Falso Sorteio",
+      "publicos": ["massa", "idosos"],
+      "frases_golpista": [
+        "Você ganhou um prêmio! Clique no link para resgatar antes que expire: bit.ly/premio-2026",
+        "Parabéns, você foi sorteado! Confirme seus dados no link para receber o vale-compras.",
+        "Sorteio exclusivo WhatsApp: você ganhou R$ 2.000! Cadastre-se em 10 min ou perde o prêmio."
+      ]
+    },
+    {
+      "variant_id": "confirmacao_codigo_sms",
+      "golpe_id": "clonagem_whatsapp",
+      "ordem_md": 13,
+      "titulo": "Golpe da Confirmação de Código",
+      "publicos": ["massa", "idosos", "pais"],
+      "frases_golpista": [
+        "Preciso que você me passe o código que acabou de chegar por SMS. É urgente, confio em você.",
+        "Meu celular descarregou. O WhatsApp mandou código pro seu número — me envia aqui por favor?",
+        "Confirmação de cadastro: digite o código de 6 dígitos que recebeu por SMS neste chat."
+      ]
+    },
+    {
+      "variant_id": "falso_advogado_processo",
+      "golpe_id": "falsa_central",
+      "ordem_md": 14,
+      "titulo": "Golpe do Falso Advogado",
+      "publicos": ["massa", "empresarios", "idosos"],
+      "frases_golpista": [
+        "Dr. Silva, advogado. Seu processo foi favorável. Pague taxa cartorária de R$ 890 via PIX para liberar valor.",
+        "Escritório jurídico: acordo disponível. Confirme pagamento de custas para receber indenização ainda hoje.",
+        "Temos valores a receber em seu nome. Taxa de liberação obrigatória — PIX para conta abaixo."
+      ]
+    },
+    {
+      "variant_id": "falso_medico_hospital",
+      "golpe_id": "falso_parente",
+      "ordem_md": 15,
+      "titulo": "Golpe do Falso Médico/Hospital",
+      "publicos": ["pais", "idosos"],
+      "frases_golpista": [
+        "Hospital São Lucas: seu filho deu entrada na emergência. Deposite R$ 2.500 via PIX para iniciar cirurgia.",
+        "Sou da equipe médica. Paciente em estado grave — precisamos de adiantamento urgente para procedimento.",
+        "Mãe, sofri acidente. Estou no hospital, preciso que você faça PIX agora para pagar a cirurgia."
+      ]
+    },
+    {
+      "variant_id": "sextorsao_ameaca",
+      "golpe_id": "grooming",
+      "ordem_md": 16,
+      "titulo": "Golpe de Sextorsão",
+      "publicos": ["pais", "massa"],
+      "frases_golpista": [
+        "Tenho suas fotos. Pague R$ 500 via PIX ou envio pra todo mundo da sua família.",
+        "Apaga depois de ver... se não fizer PIX até meia-noite, vou divulgar o vídeo.",
+        "Sei quem você é. Transferência agora ou posto no grupo da escola."
+      ]
+    },
+    {
+      "variant_id": "malware_apk_falso",
+      "golpe_id": "link_malicioso",
+      "ordem_md": 17,
+      "titulo": "Golpe do Malware APK",
+      "publicos": ["massa", "pais"],
+      "frases_golpista": [
+        "Instale o app de segurança oficial pelo link — proteção contra golpes no WhatsApp.",
+        "Atualização obrigatória do WhatsApp. Baixe o APK anexo para continuar usando.",
+        "App antifraude gratuito. Clique para instalar e proteger suas contas bancárias."
+      ]
+    },
+    {
+      "variant_id": "falsa_encomenda_retida",
+      "golpe_id": "link_malicioso",
+      "ordem_md": 18,
+      "titulo": "Golpe da Falsa Encomenda",
+      "publicos": ["massa", "pais"],
+      "frases_golpista": [
+        "Sua encomenda está retida na alfândega. Pague taxa de R$ 49,90 pelo link para liberar entrega.",
+        "Correios: pacote aguardando pagamento. Clique para evitar devolução ao remetente.",
+        "Entrega suspensa — confirme endereço e pague taxa de despacho pelo link abaixo."
+      ]
+    },
+    {
+      "variant_id": "falsa_cobranca_empresarial",
+      "golpe_id": "pix_fantasma",
+      "ordem_md": 19,
+      "titulo": "Golpe da Falsa Cobrança Empresarial",
+      "publicos": ["empresarios", "escolas"],
+      "frases_golpista": [
+        "Alteração de dados bancários da escola. A partir de hoje, pagamentos via novo PIX abaixo.",
+        "Cobrança urgente CNPJ em aberto. Quite via PIX para evitar negativação do CNPJ.",
+        "Financeiro: identificamos cobrança duplicada. Confirme estorno para este PIX corporativo."
+      ]
+    },
+    {
+      "variant_id": "ia_voz_clonada",
+      "golpe_id": "falso_parente",
+      "ordem_md": 20,
+      "titulo": "Golpe com IA e Voz Clonada",
+      "publicos": ["pais", "idosos", "empresarios"],
+      "frases_golpista": [
+        "Mãe, sou eu. Troquei de número e preciso de PIX urgente — ouviu meu áudio?",
+        "Chefe, sou o João. Estou em reunião, faça PIX pro fornecedor no número que vou mandar.",
+        "Vó, é o neto. Estou preso e preciso de dinheiro agora — não conta pra ninguém."
+      ]
+    },
+    {
+      "variant_id": "grooming_romantico",
+      "golpe_id": "grooming",
+      "ordem_md": 21,
+      "titulo": "Grooming Romântico",
+      "publicos": ["massa", "idosos"],
+      "frases_golpista": [
+        "Vc é muito especial... conversamos todo dia no segredo? Não conta pra ninguém 😉",
+        "Te achei linda no perfil. Podemos ser só nós dois? Manda uma foto sua?",
+        "Sinto que te conheço há anos. Preciso de ajuda financeira urgente — confia em mim?"
+      ]
+    },
+    {
+      "variant_id": "grooming_familiar_falso_filho",
+      "golpe_id": "falso_parente",
+      "ordem_md": 22,
+      "titulo": "Grooming com Falso Filho/Familiar",
+      "publicos": ["pais", "idosos"],
+      "frases_golpista": [
+        "Mãe, troquei de número. Salva aí. Preciso de PIX urgente, depois te explico pessoalmente.",
+        "Oi vó, sou eu o neto. Tô numa emergência e preciso que você faça um PIX agora.",
+        "Pai, perdi o celular. Esse é meu novo número. Me manda PIX que devolvo hoje à noite."
+      ]
+    }
+  ]
+}

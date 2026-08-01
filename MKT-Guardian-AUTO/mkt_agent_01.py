@@ -29,6 +29,12 @@ from kling_client import (
 
 class MediaFactory:
     BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+    APPEARANCE_MANDATE = (
+        "MANDATORY CASTING: neat well-groomed Brazilian person, clean casual clothes "
+        "(simple blouse or polo shirt, clean jeans or chinos), bright organized middle-income home, "
+        "pleasant natural daylight, dignified everyday look — NO poverty aesthetics, NO ragged clothes, "
+        "NO dark grimy rooms, NO luxury mansion."
+    )
     # Identidade visual guardian-ai.app
     BRAND_NAVY = (11, 20, 36)
     BRAND_CARD = (15, 23, 42)
@@ -597,7 +603,7 @@ class MediaFactory:
         # Identidade única da campanha já é garantida pelo sufixo do VisualVarietyEngine
         # embutido em `cena` (evita duplicar instrução de unicidade no prompt).
 
-        essenciais = [cena.strip()]
+        essenciais = [self.APPEARANCE_MANDATE, cena.strip()]
         phone_clause = (creative_data.get("phone_screen_clause") or "").strip()
         if phone_clause:
             essenciais.append(phone_clause)
@@ -837,6 +843,93 @@ class MediaFactory:
             "audio_file": audio_path,
             "commercial_video_file": video_path if remuxed or os.path.isfile(str(video_path)) else prior_assets.get("commercial_video_file"),
             "audio_regenerated": True,
+        }
+
+    def regenerate_visual_only(
+        self, creative_data: dict, prior_assets: dict, feedback: str = ""
+    ) -> dict:
+        """Nova imagem/vídeo estático — mantém copy, áudio e identidade aprovados."""
+        print(f"\n🎨 [Fábrica v{MEDIA_FACTORY_VERSION}] Regerando visual (sem regerar copy/áudio)...")
+
+        self.preset_midia = creative_data.get("preset_midia") or resolve_channel_preset(
+            creative_data.get("canal_veiculacao_selecionado", ""),
+            creative_data.get("tipo_midia_selecionada", ""),
+        )
+        self.canvas_width = int(self.preset_midia.get("width", 1080))
+        self.canvas_height = int(self.preset_midia.get("height", 1080))
+
+        basename = prior_assets.get("basename", "campanha")
+        base_image_path = prior_assets.get("base_image_file") or os.path.join(
+            self.output_dir, f"{basename}_base.jpg"
+        )
+        final_design_path = prior_assets.get("static_image_file") or os.path.join(
+            self.output_dir, f"{basename}.jpg"
+        )
+        video_output_path = prior_assets.get("commercial_video_file") or os.path.join(
+            self.output_dir, f"{basename}.mp4"
+        )
+        audio_final_path = prior_assets.get("audio_file", "")
+        overlay_png = os.path.join(self.work_dir, f"{basename}_overlay.png")
+
+        if feedback:
+            creative_data["direcao_arte_emocional"] = (
+                f"{creative_data.get('direcao_arte_emocional', '').rstrip()}. "
+                f"CORREÇÃO VISUAL OBRIGATÓRIA: {feedback}"
+            )
+
+        headline = creative_data.get("gancho_atencao_inicial", "")
+        alerta_texto = creative_data.get("texto_card_notificacao", "")
+        solucao_texto = card_solucao_text()
+        cta_texto = resolve_overlay_cta(creative_data)
+        url_conversao = creative_data.get("link_conversao", self.url_conversao)
+        frases_destaque: list[str] = []
+        if creative_data.get("frase_destaque_golpista"):
+            frases_destaque.append(creative_data["frase_destaque_golpista"])
+
+        for path in (base_image_path, final_design_path):
+            if path and os.path.isfile(path):
+                try:
+                    os.remove(path)
+                except OSError:
+                    pass
+
+        publicidade_prompt = self._build_visual_prompt(creative_data)
+        self._generate_gemini_image(
+            publicidade_prompt, base_image_path,
+            creative_data=creative_data, basename=basename,
+        )
+        if not os.path.isfile(base_image_path):
+            print("❌ Falha ao regerar imagem Gemini.")
+            return prior_assets
+
+        self._compose_overlay_png(
+            overlay_png, headline, alerta_texto, solucao_texto, cta_texto, url_conversao, frases_destaque,
+        )
+        self._apply_pillow_layout(
+            base_image_path, final_design_path,
+            headline, alerta_texto, solucao_texto, cta_texto, url_conversao, frases_destaque,
+        )
+
+        video_ok = False
+        if self._audio_ok(audio_final_path) and os.path.isfile(base_image_path):
+            duration = self._get_audio_duration(audio_final_path)
+            zoom = still_video_zoom_filter(
+                self.canvas_width, self.canvas_height, int(duration * 25), 25
+            )
+            video_ok = compose_still_with_overlay(
+                base_image_path, overlay_png, audio_final_path,
+                video_output_path, duration,
+                self.canvas_width, self.canvas_height, zoom,
+            )
+            if video_ok:
+                print("✅ MP4 estático regerado (nova imagem + áudio original).")
+
+        return {
+            **prior_assets,
+            "static_image_file": final_design_path,
+            "base_image_file": base_image_path,
+            "commercial_video_file": video_output_path if video_ok else prior_assets.get("commercial_video_file"),
+            "visual_regenerated": True,
         }
 
     def generate_campaign_assets(self, creative_data: dict) -> dict:
@@ -1231,16 +1324,28 @@ class MediaFactory:
         return resultado
 
     def _trim_narration_for_preset(self, text: str, preset: dict | None) -> str:
-        """Corta roteiro longo antes do TTS — evita vídeos de 27s+ no TikTok."""
+        """Corta roteiro longo antes do TTS — sempre em fronteira de frase."""
         preset = preset or {}
         max_chars = preset.get("copy_max_chars")
         if not max_chars or len(text) <= int(max_chars):
             return text
         limite = int(max_chars)
-        cortado = text[:limite].rsplit(" ", 1)[0].rstrip(".,; ")
-        if not cortado.endswith("."):
+        if len(text) <= limite:
+            return text
+
+        candidato = text[:limite]
+        sentencas = re.split(r"(?<=[.!?])\s+", candidato)
+        if len(sentencas) > 1:
+            cortado = " ".join(sentencas[:-1]).strip()
+        else:
+            cortado = candidato.rsplit(" ", 1)[0].strip()
+
+        cortado = cortado.rstrip(".,; ")
+        if cortado and not cortado.endswith("."):
             cortado += "."
-        print(f"✂️ Roteiro encurtado: {len(text)} → {len(cortado)} chars (limite {limite} TikTok/Shorts)")
+        if len(cortado) < 40:
+            cortado = text[:limite].rsplit(" ", 1)[0].rstrip(".,; ") + "."
+        print(f"✂️ Roteiro encurtado: {len(text)} → {len(cortado)} chars (limite {limite})")
         return cortado
 
     def _fit_narration_to_preset(self, audio_path: str, base_path: str) -> str:
@@ -1379,11 +1484,13 @@ class MediaFactory:
         if os.path.isfile(output_path):
             os.remove(output_path)
 
-        full_prompt = prompt
+        full_prompt = f"{self.APPEARANCE_MANDATE} {prompt}"
         retry_suffixes = [
             "",
-            " Alternative composition: different person (age, gender, hair, clothes), different camera angle.",
-            " Second attempt: new unique face, new background layout, new color palette — avoid kitchen cliché.",
+            " Alternative composition: same gender as described, different face and hair, "
+            "different bright organized room layout, clean casual outfit.",
+            " Second attempt: new unique face, bright airy middle-income Brazilian home, "
+            "well-groomed subject — avoid kitchen cliché and poverty aesthetics.",
         ]
 
         print(f"🎨 Gerando imagem ({self.model_imagem})...")
@@ -1397,13 +1504,17 @@ class MediaFactory:
                     contents=attempt_prompt,
                     config=types.GenerateContentConfig(response_modalities=["IMAGE"]),
                 )
-                for part in response.candidates[0].content.parts:
+                candidates = getattr(response, "candidates", None) or []
+                if not candidates or not getattr(candidates[0], "content", None):
+                    raise ValueError("Gemini não retornou imagem (resposta vazia ou bloqueada)")
+                for part in candidates[0].content.parts:
                     if part.inline_data and part.inline_data.data:
                         with open(output_path, "wb") as f:
                             f.write(part.inline_data.data)
                         print(f"✅ Imagem: {output_path}")
                         self.visual_variety.register_generated(attempt_prompt, basename)
                         return
+                raise ValueError("Gemini retornou candidato sem dados de imagem")
             except Exception as e:
                 print(f"❌ Imagem falhou (tentativa {attempt + 1}): {e}")
 

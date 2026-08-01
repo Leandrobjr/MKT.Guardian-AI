@@ -28,6 +28,8 @@ def classify_improvement(feedback: str) -> dict:
             "imagem", "foto", "cena", "cozinha", "loja", "vídeo", "video",
             "kling", "pessoa", "empresário", "empresario", "ambiente",
             "cenário", "cenario", "modelo", "atriz", "ator",
+            "pobre", "humilde", "vestid", "aparência", "aparencia", "bem vest",
+            "organizad", "claro", "limpo", "fallback",
         )
     )
     pronunciation = any(
@@ -52,7 +54,10 @@ def classify_improvement(feedback: str) -> dict:
 
     recompose_only = layout and not copy and not visual and not audio
     reapply_audio_only = audio and not copy and not visual and not layout
-    regenerate_copy = copy or (not layout and not visual and not audio and not copy)
+    visual_only = visual and not copy and not audio and not layout
+    regenerate_copy = copy or (
+        not layout and not visual and not audio and not copy
+    )
 
     return {
         "layout": layout,
@@ -61,7 +66,8 @@ def classify_improvement(feedback: str) -> dict:
         "audio": audio,
         "recompose_only": recompose_only,
         "reapply_audio_only": reapply_audio_only,
-        "regenerate_copy": regenerate_copy and not recompose_only and not reapply_audio_only,
+        "visual_only": visual_only,
+        "regenerate_copy": regenerate_copy and not recompose_only and not reapply_audio_only and not visual_only,
         "regenerate_visual": visual,
         "regenerate_audio": audio,
     }
@@ -70,6 +76,8 @@ def classify_improvement(feedback: str) -> dict:
 def describe_plan(plan: dict) -> str:
     if plan["recompose_only"]:
         return "layout/overlay (quebra de texto nos cards — sem regerar copy)"
+    if plan.get("visual_only"):
+        return "imagem/vídeo (nova cena — mantém copy e áudio aprovados)"
     if plan.get("reapply_audio_only"):
         return "narração/áudio (fechamento no card — sem regerar copy/Kling)"
     parts = []

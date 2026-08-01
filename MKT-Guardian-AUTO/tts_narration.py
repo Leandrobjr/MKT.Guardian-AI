@@ -77,6 +77,18 @@ def build_narration_script(
         "",
         core,
     ).rstrip(" .,;")
+    # Evita vazamento do texto do card Guardian para a narração
+    core = re.sub(
+        r"(?i)\s*guardian\s+ai\s+detectou[^.!?]*[.!?]?\s*",
+        " ",
+        core,
+    )
+    core = re.sub(
+        r"(?i)\s*enviou\s+um\s+alerta\s+imediato\s+ao\s+usu[aá]rio[^.!?]*[.!?]?\s*",
+        " ",
+        core,
+    )
+    core = re.sub(r"\s{2,}", " ", core).strip(" .,;")
 
     script = f"{core}. {closing}."
     return _fix_app_name_pronunciation(script)

@@ -1,7 +1,7 @@
 """Versão do build — exibida no startup para confirmar git pull."""
 
-MEDIA_FACTORY_VERSION = "18.5"
-ORCHESTRATOR_VERSION = "4.7"
+MEDIA_FACTORY_VERSION = "18.6"
+ORCHESTRATOR_VERSION = "4.8"
 MIN_GIT_COMMIT_PREFIX = "fbc6e11"  # FFmpeg nativo + overlay PNG
 
 
@@ -26,6 +26,6 @@ def print_build_banner(base_dir: str) -> None:
         f"Fábrica v{MEDIA_FACTORY_VERSION} | git {git_hash}"
     )
     print(
-        "   Esperado: Orquestrador v4.7+ | Fase 0 criatividade (gancho rotativo, memória por combo). "
+        "   Esperado: Orquestrador v4.8+ | correções Fase 0 (visual lock, áudio, Gemini). "
         "Se não aparecer, rode: git pull origin main"
     )

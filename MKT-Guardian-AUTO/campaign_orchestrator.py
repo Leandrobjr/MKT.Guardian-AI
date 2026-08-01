@@ -629,8 +629,26 @@ class CampaignOrchestrator:
             lines.append(f"- Estilo foto: {dv['estilo_fotografico']}")
         return "\n".join(lines)
 
+    def _lock_creative_identity(self, config: dict, creative_data: dict) -> None:
+        """Preserva gênero/personagem após estória aprovada — evita troca na correção visual."""
+        config["_genero_locked"] = creative_data.get("genero_campanha", "")
+        config["_personagem_locked"] = creative_data.get("genero_personagem_visual", "")
+
+    def _apply_locked_identity(self, creative_data: dict, config: dict) -> dict:
+        genero = config.get("_genero_locked")
+        if genero in ("feminino", "masculino"):
+            creative_data["genero_campanha"] = genero
+        personagem = config.get("_personagem_locked")
+        if personagem:
+            creative_data["genero_personagem_visual"] = personagem
+        return creative_data
+
     def _resolve_genero_campanha(self, creative_data: dict, config: dict) -> str:
         """Narrativa (Mãe/Pai) prevalece; caso neutro, alterna M/F entre campanhas."""
+        locked = config.get("_genero_locked")
+        if locked in ("feminino", "masculino"):
+            return locked
+
         genero_narrativa = self._detect_visual_gender(creative_data)
         publico_slug = config.get("publico_slug", "geral")
         if genero_narrativa:
@@ -703,6 +721,7 @@ class CampaignOrchestrator:
     def _finalize_creative_data(self, creative_data: dict, config: dict, golpe_obj: dict) -> dict:
         produto = self.context_data.get("PRODUTO_E_POSICIONAMENTO", {})
         campaign_ctx = config.get("_campaign_context", {})
+        creative_data = self._apply_locked_identity(creative_data, config)
         creative_data = self._harmonize_gender_copy(creative_data, campaign_ctx)
         creative_data["genero_campanha"] = self._resolve_genero_campanha(creative_data, config)
         creative_data["tipo_midia_selecionada"] = config["midia"]
@@ -859,7 +878,7 @@ class CampaignOrchestrator:
 
         config_creative = types.GenerateContentConfig(
             system_instruction=system_instruction,
-            temperature=0.7,
+            temperature=0.45,
             response_mime_type="application/json",
             response_schema={
                 "type": "OBJECT",
@@ -1042,6 +1061,7 @@ class CampaignOrchestrator:
             self._print_creative_summary(creative_data)
 
             if not self._story_approval_enabled():
+                self._lock_creative_identity(config, creative_data)
                 return True, creative_data
 
             acao = self._solicitar_aprovacao_estoria(config, creative_data, revisao, story_attempt)
@@ -1051,6 +1071,7 @@ class CampaignOrchestrator:
                 continue
 
             if acao["action"] == "approve":
+                self._lock_creative_identity(config, creative_data)
                 if self.telegram:
                     self.telegram.notificar_sync("✅ *Estória aprovada* — iniciando produção de vídeo/áudio...")
                 else:
@@ -1243,6 +1264,8 @@ class CampaignOrchestrator:
         aprovado = False
         recompose_next = False
         reapply_audio_next = False
+        visual_only_next = False
+        visual_feedback = ""
 
         for revisao in range(self.max_revisoes + 1):
             if recompose_next:
@@ -1254,6 +1277,14 @@ class CampaignOrchestrator:
                 print(f"\n🔊 Regerando narração (pronúncia do site — revisão {revisao})...")
                 assets_resultado = self.media_factory.reapply_audio_only(creative_data, assets_resultado)
                 reapply_audio_next = False
+            elif visual_only_next:
+                print(f"\n🎨 Regerando só imagem/vídeo (copy e áudio aprovados — revisão {revisao})...")
+                creative_data = self._apply_locked_identity(creative_data, config)
+                assets_resultado = self.media_factory.regenerate_visual_only(
+                    creative_data, assets_resultado, visual_feedback
+                )
+                visual_only_next = False
+                visual_feedback = ""
             else:
                 if revisao > 0:
                     print(f"\n🔄 Revisão {revisao}/{self.max_revisoes} — regerando campanha...")
@@ -1372,6 +1403,20 @@ class CampaignOrchestrator:
                             f"('{NARRATION_CLOSING}' — sem regerar copy/Kling). Aguarde..."
                         )
                     reapply_audio_next = True
+                    instrucoes_melhoria = ""
+                    continue
+
+                if plan.get("visual_only") or (
+                    plan["regenerate_visual"]
+                    and not plan["regenerate_copy"]
+                    and not plan["regenerate_audio"]
+                ):
+                    if self.telegram:
+                        self.telegram.notificar_sync(
+                            "🎨 *Visual* — nova imagem/vídeo mantendo copy e áudio aprovados..."
+                        )
+                    visual_only_next = True
+                    visual_feedback = feedback
                     instrucoes_melhoria = ""
                     continue
 

@@ -97,8 +97,24 @@ def _audit_env_files() -> tuple[Path | None, dict[str, str]]:
     return winner, effective
 
 
+def _shell_vs_file_warning(from_files: dict[str, str]) -> None:
+    """Detecta export stale no shell (causa #1 de 'atualizei .env mas não mudou')."""
+    file_tok = from_files.get("META_ACCESS_TOKEN", "")
+    if not file_tok:
+        return
+    shell_tok = os.environ.get("META_ACCESS_TOKEN", "").strip()
+    if shell_tok and shell_tok != file_tok:
+        print("\n🚨 CAUSA ENCONTRADA: shell com token DIFERENTE do .env")
+        print(f"   Shell (export/source antigo): {_token_fingerprint(shell_tok)}")
+        print(f"   Arquivo .env (correto):       {_token_fingerprint(file_tok)}")
+        print("\n   Token Meta NÃO propaga — quem manda é o valor carregado.")
+        print("   Rode: unset META_ACCESS_TOKEN")
+        print("   Ou abra um terminal NOVO (sem source .env).")
+
+
 def main() -> int:
     winner_path, from_files = _audit_env_files()
+    _shell_vs_file_warning(from_files)
 
     load_project_env()
     token = os.getenv("META_ACCESS_TOKEN", "").strip()
@@ -120,10 +136,10 @@ def main() -> int:
             "Feche o terminal ou rode: unset META_ACCESS_TOKEN"
         )
 
-    if token.startswith("EAAoJmoNlc"):
+    if file_tok and token == file_tok and token.endswith("4QZDZD"):
         print(
-            "\n⚠️  Este prefixo (EAAoJmoNlc…) é o token que expirou em 30/07. "
-            "Gere um token NOVO no Graph API Explorer — não reutilize este."
+            "\n⚠️  Token no .env termina em …4QZDZD (expirou 30/07). "
+            "Cole o token novo (…6vtN06d) e salve o arquivo."
         )
 
     if not token:

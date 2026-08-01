@@ -27,6 +27,47 @@ class MetaPublisher:
                 "META_ACCESS_TOKEN e META_IG_USER_ID precisam estar no .env"
             )
 
+    def verificar_token(self) -> dict | None:
+        """Retorna None se OK; senão dict com ok=False e mensagem legível."""
+        app_id = os.getenv("META_APP_ID", "")
+        app_secret = os.getenv("META_APP_SECRET", "")
+        app_token = f"{app_id}|{app_secret}" if app_id and app_secret else self.token
+        try:
+            r = requests.get(
+                f"{GRAPH_BASE}/debug_token",
+                params={"input_token": self.token, "access_token": app_token},
+                timeout=15,
+            )
+            data = r.json().get("data") or {}
+            if not data.get("is_valid"):
+                return {
+                    "ok": False,
+                    "erro": (
+                        "META_ACCESS_TOKEN expirado ou inválido. "
+                        "No Linux: python3 meta_token_check.py"
+                    ),
+                }
+            exp = data.get("expires_at") or 0
+            if exp and exp < time.time():
+                return {
+                    "ok": False,
+                    "erro": (
+                        "META_ACCESS_TOKEN expirado. "
+                        "Renove (long-lived 60 dias) e atualize o .env no Linux."
+                    ),
+                }
+            scopes = set(data.get("scopes") or [])
+            needed = {"instagram_basic", "instagram_content_publish"}
+            if not needed.issubset(scopes):
+                falta = ", ".join(sorted(needed - scopes))
+                return {
+                    "ok": False,
+                    "erro": f"Token sem permissões Instagram: {falta}",
+                }
+        except Exception:
+            pass
+        return None
+
     @staticmethod
     def _meta_error(response: requests.Response) -> str:
         try:
@@ -148,6 +189,11 @@ class MetaPublisher:
         return {"ok": False, "erro": "Timeout aguardando processamento do vídeo."}
 
     def postar_reel(self, caminho_video: str, caption: str) -> dict:
+        token_err = self.verificar_token()
+        if token_err:
+            print(f"❌ [Meta] {token_err['erro']}")
+            return token_err
+
         container_id = self._upload_video_resumable(caminho_video, caption)
         if not container_id:
             return {"ok": False, "erro": "Falha no upload do vídeo."}

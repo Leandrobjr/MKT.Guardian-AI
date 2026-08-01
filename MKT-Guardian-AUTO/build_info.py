@@ -1,7 +1,7 @@
 """Versão do build — exibida no startup para confirmar git pull."""
 
 MEDIA_FACTORY_VERSION = "18.9"
-ORCHESTRATOR_VERSION = "5.7"
+ORCHESTRATOR_VERSION = "5.8"
 MIN_GIT_COMMIT_PREFIX = "fbc6e11"  # FFmpeg nativo + overlay PNG
 
 
@@ -26,6 +26,6 @@ def print_build_banner(base_dir: str) -> None:
         f"Fábrica v{MEDIA_FACTORY_VERSION} | git {git_hash}"
     )
     print(
-        "   Esperado: Orquestrador v5.7+ | Gênero do roteiro prevalece (sem falso 'seu WhatsApp'). "
+        "   Esperado: Orquestrador v5.8+ | Gênero/cena derivados do ROTEIRO (não alternância). "
         "Se não aparecer, rode: git pull origin main"
     )

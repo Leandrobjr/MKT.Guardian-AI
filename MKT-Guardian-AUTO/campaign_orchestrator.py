@@ -19,11 +19,15 @@ from channel_presets import resolve_channel_preset, format_preset_summary
 from tts_narration import strip_written_site_urls, card_solucao_text, NARRATION_CLOSING
 from build_info import ORCHESTRATOR_VERSION, print_build_banner
 from campaign_coherence import (
+    describe_protagonist,
     format_nexo_prompt_block,
     infer_protagonist_gender,
     is_coherent,
+    is_gender_coherent,
     nexo_score,
     pick_coherent_gancho,
+    _gender_from_personagem_field,
+    _gender_from_roteiro,
 )
 from campaign_context_engine import CampaignContextEngine
 from scam_library import ScamLibrary
@@ -508,17 +512,57 @@ class CampaignOrchestrator:
 
         return None
 
-    def _enforce_gender_coherence(self, creative_data: dict) -> dict:
-        """Garante que genero_campanha, cena e casting batem com roteiro/personagem."""
+    def _sync_personagem_visual_to_roteiro(self, creative_data: dict) -> dict:
+        """Alinha campo Personagem ao protagonista do roteiro (ex.: Dona Helena → Idosa)."""
+        roteiro = creative_data.get("desenvolvimento_copy", "") or ""
+        roteiro_gender = _gender_from_roteiro(roteiro)
+        if not roteiro_gender:
+            return creative_data
+        field_gender = _gender_from_personagem_field(
+            (creative_data.get("genero_personagem_visual") or "").lower()
+        )
+        if field_gender == roteiro_gender:
+            return creative_data
+        if roteiro_gender == "feminino":
+            m = re.search(r"\bdona\s+(\w+)", roteiro, re.I)
+            nome = m.group(1).capitalize() if m else "protagonista"
+            creative_data["genero_personagem_visual"] = f"Idosa ({nome}, protagonista do roteiro)"
+        else:
+            m = re.search(r"\b(?:o\s+)?seu\s+(\w+)", roteiro, re.I)
+            nome = m.group(1).capitalize() if m and m.group(1).lower() not in (
+                "whatsapp", "celular", "pix", "link", "privado"
+            ) else "protagonista"
+            creative_data["genero_personagem_visual"] = f"Idoso ({nome}, protagonista do roteiro)"
+        return creative_data
+
+    def _apply_protagonist_gender_from_roteiro(self, creative_data: dict, config: dict) -> dict:
+        """Fonte única de gênero — roteiro vence; alternância só se roteiro neutro."""
+        locked = config.get("_genero_locked")
+        if locked in ("feminino", "masculino"):
+            creative_data["genero_campanha"] = locked
+            return creative_data
+
         inferred = infer_protagonist_gender(creative_data)
-        current = creative_data.get("genero_campanha", "")
-        if inferred and current and inferred != current:
-            print(
-                f"⚠️ Gênero visual corrigido: {current} → {inferred} "
-                f"(coerente com roteiro/personagem)"
-            )
+        publico_slug = config.get("publico_slug", "geral")
         if inferred:
+            prev = creative_data.get("genero_campanha", "")
+            if prev and prev != inferred:
+                print(
+                    f"⚠️ Gênero alinhado ao roteiro: {prev} → {inferred} "
+                    f"({describe_protagonist(creative_data)})"
+                )
             creative_data["genero_campanha"] = inferred
+            creative_data = self._sync_personagem_visual_to_roteiro(creative_data)
+            self.visual_variety.record_gender(inferred, publico_slug)
+            return creative_data
+
+        genero = self.visual_variety.next_alternating_gender(publico_slug)
+        creative_data["genero_campanha"] = genero
+        self.visual_variety.record_gender(genero, publico_slug)
+        return creative_data
+
+    def _enforce_gender_coherence(self, creative_data: dict) -> dict:
+        """Compat — delega para apply; mantido para chamadas legadas."""
         return creative_data
 
     def _detect_visual_gender(self, creative_data: dict) -> str:
@@ -681,28 +725,18 @@ class CampaignOrchestrator:
         return creative_data
 
     def _resolve_genero_campanha(self, creative_data: dict, config: dict) -> str:
-        """Narrativa (Mãe/Pai) prevalece; caso neutro, alterna M/F entre campanhas."""
-        locked = config.get("_genero_locked")
-        if locked in ("feminino", "masculino"):
-            return locked
-
-        genero_narrativa = self._detect_visual_gender(creative_data)
-        publico_slug = config.get("publico_slug", "geral")
-        if genero_narrativa:
-            genero = genero_narrativa
-        else:
-            genero = self.visual_variety.next_alternating_gender(publico_slug)
-        self.visual_variety.record_gender(genero, publico_slug)
-        return genero
+        """Deprecated internamente — use _apply_protagonist_gender_from_roteiro."""
+        creative_data = self._apply_protagonist_gender_from_roteiro(creative_data, config)
+        return creative_data.get("genero_campanha", "neutro")
 
     def _build_art_direction(
         self, golpe_obj: dict, creative_data: dict, config: dict, campaign_ctx: dict | None = None
     ) -> str:
         golpe_id = config.get("golpe_id", "")
         publico_slug = config.get("publico_slug", "")
-        genero_visual = self._detect_visual_gender(creative_data)
-        if not genero_visual:
-            genero_visual = creative_data.get("genero_campanha", "")
+        genero_visual = creative_data.get("genero_campanha", "")
+        if genero_visual not in ("feminino", "masculino"):
+            genero_visual = infer_protagonist_gender(creative_data)
 
         cena_publico = self._build_publico_scene(publico_slug, golpe_id, genero_visual)
         if campaign_ctx and campaign_ctx.get("direcao_arte_emocional"):
@@ -762,8 +796,7 @@ class CampaignOrchestrator:
         campaign_ctx = config.get("_campaign_context", {})
         creative_data = self._apply_locked_identity(creative_data, config)
         creative_data = self._harmonize_gender_copy(creative_data, campaign_ctx)
-        creative_data["genero_campanha"] = self._resolve_genero_campanha(creative_data, config)
-        creative_data = self._enforce_gender_coherence(creative_data)
+        creative_data = self._apply_protagonist_gender_from_roteiro(creative_data, config)
         creative_data["tipo_midia_selecionada"] = config["midia"]
         creative_data["canal_veiculacao_selecionado"] = config["canal"]
         creative_data["direcao_arte_emocional"] = self._build_art_direction(
@@ -945,7 +978,9 @@ class CampaignOrchestrator:
             "4. texto_card_notificacao: COPIE LITERALMENTE a frase_golpista do contexto "
             "(ajuste mínimo de informalidade se necessário — sem trocar o pretexto do golpe).\n"
             "5. frase_destaque_golpista: Frase-chave do golpista para destacar no card.\n"
-            "6. genero_personagem_visual: DEVE respeitar GUARDRAILS e o protagonista do CONTEXTO NARRATIVO "
+            "6. genero_personagem_visual: DEVE ser coerente com o protagonista NOMEADO no desenvolvimento_copy "
+            "(Dona Helena → 'Idosa (Helena...)'; Seu Carlos → 'Idoso (Carlos...)'). "
+            "Respeite GUARDRAILS e o CONTEXTO NARRATIVO "
             "(escola=diretor/professor; empresa=comerciante; pais=pai/mãe; idoso=65+).\n"
             "7. texto_card_solucao: IGNORE este campo — será substituído automaticamente por: "
             f"'{card_solucao_text()}'\n"
@@ -982,11 +1017,17 @@ class CampaignOrchestrator:
         for tentativa in range(3):
             try:
                 payload = contexto_injetado
-                if tentativa > 0 and frase_golpista:
+                if tentativa > 0:
+                    if frase_golpista:
+                        payload += (
+                            f"\n\n⚠️ RETENTATIVA {tentativa + 1}: o roteiro anterior NÃO descreveu "
+                            f"o mesmo golpe da frase «{frase_golpista}». "
+                            "Reescreva contando EXATAMENTE este pretexto — card e roteiro devem combinar.\n"
+                        )
                     payload += (
-                        f"\n\n⚠️ RETENTATIVA {tentativa + 1}: o roteiro anterior NÃO descreveu "
-                        f"o mesmo golpe da frase «{frase_golpista}». "
-                        "Reescreva contando EXATAMENTE este pretexto — card e roteiro devem combinar.\n"
+                        "\n⚠️ RETENTATIVA: se o roteiro nomeia DONA/Maria/mãe/dela → genero_personagem_visual "
+                        "DEVE ser idosa/mulher; se nomeia SEU Carlos/pai/dele → idoso/homem. "
+                        "NUNCA misture protagonista feminino no texto com personagem masculino no campo 6.\n"
                     )
                 response = self.client.models.generate_content(
                     model=self.model_name,
@@ -997,9 +1038,18 @@ class CampaignOrchestrator:
                 result = self._finalize_creative_data(dados, config, golpe_obj)
                 copy = (result.get("desenvolvimento_copy") or "").strip()
                 head = (result.get("gancho_atencao_inicial") or "").strip()
-                if not frase_golpista or is_coherent(copy, frase_golpista, head):
+                nexo_ok = not frase_golpista or is_coherent(copy, frase_golpista, head)
+                genero_ok = is_gender_coherent(result)
+                if nexo_ok and genero_ok:
                     return result
-                if tentativa < 2:
+                if not genero_ok and tentativa < 2:
+                    print(
+                        "[!] Roteiro e gênero visual conflitantes "
+                        f"({describe_protagonist(result)} vs gênero {result.get('genero_campanha')}) "
+                        "— regerando copy..."
+                    )
+                    continue
+                if not nexo_ok and tentativa < 2:
                     print(
                         f"[!] Nexo roteiro/card insuficiente ({nexo_score(copy, frase_golpista, head):.0%}) "
                         f"— regerando copy..."
@@ -1051,6 +1101,9 @@ class CampaignOrchestrator:
         print(f"🔥 HEADLINE: {creative_data['gancho_atencao_inicial']}")
         print(f"📖 ROTEIRO: {creative_data['desenvolvimento_copy'][:200]}...")
         print(f"👤 Gênero: {creative_data.get('genero_campanha', 'neutro')}")
+        print(f"🎭 Protagonista (roteiro): {describe_protagonist(creative_data)}")
+        if not is_gender_coherent(creative_data):
+            print("❌ INCOERÊNCIA: roteiro e gênero visual não combinam — não deveria chegar aqui.")
         if creative_data.get("campaign_combo"):
             print(f"🎯 Combo contexto: {creative_data['campaign_combo']}")
         print(f"🔘 CTA: {creative_data['texto_botao_conversao']}")

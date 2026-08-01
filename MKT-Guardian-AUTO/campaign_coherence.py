@@ -131,16 +131,16 @@ def _gender_from_roteiro(roteiro: str) -> str:
 
 
 def infer_protagonist_gender(creative_data: dict) -> str:
-    """Infere gênero visual — personagem > roteiro > headline (sem falso 'seu WhatsApp')."""
+    """Infere gênero do protagonista — ROTEIRO prevalece sobre personagem/campo auxiliar."""
+    from_roteiro = _gender_from_roteiro(creative_data.get("desenvolvimento_copy", ""))
+    if from_roteiro:
+        return from_roteiro
+
     from_field = _gender_from_personagem_field(
         (creative_data.get("genero_personagem_visual") or "").lower()
     )
     if from_field:
         return from_field
-
-    from_roteiro = _gender_from_roteiro(creative_data.get("desenvolvimento_copy", ""))
-    if from_roteiro:
-        return from_roteiro
 
     aux = (
         creative_data.get("gancho_atencao_inicial", "") + " "
@@ -153,6 +153,32 @@ def infer_protagonist_gender(creative_data: dict) -> str:
 
     gc = creative_data.get("genero_campanha", "")
     return gc if gc in ("feminino", "masculino") else ""
+
+
+def is_gender_coherent(creative_data: dict) -> bool:
+    """True se genero_campanha/cena batem com o protagonista nomeado no roteiro."""
+    roteiro_gender = _gender_from_roteiro(creative_data.get("desenvolvimento_copy", ""))
+    if not roteiro_gender:
+        return True
+    campanha = creative_data.get("genero_campanha", "")
+    return campanha == roteiro_gender
+
+
+def describe_protagonist(creative_data: dict) -> str:
+    """Resumo legível do protagonista inferido do roteiro."""
+    roteiro = creative_data.get("desenvolvimento_copy", "") or ""
+    m_dona = re.search(r"\bdona\s+(\w+)", roteiro, re.I)
+    if m_dona:
+        return f"feminino — Dona {m_dona.group(1).capitalize()}"
+    m_seu = re.search(r"\b(?:o\s+)?seu\s+(\w+)", roteiro, re.I)
+    if m_seu and m_seu.group(1).lower() not in SEU_POSSESSIVE:
+        return f"masculino — Seu {m_seu.group(1).capitalize()}"
+    g = _gender_from_roteiro(roteiro)
+    if g == "feminino":
+        return "feminino — protagonista feminina no roteiro"
+    if g == "masculino":
+        return "masculino — protagonista masculino no roteiro"
+    return "neutro — roteiro sem protagonista nomeado"
 
 
 def format_nexo_prompt_block(frase: str, variant_titulo: str = "") -> str:

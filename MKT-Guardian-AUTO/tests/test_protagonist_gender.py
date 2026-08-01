@@ -6,7 +6,7 @@ import unittest
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from campaign_coherence import infer_protagonist_gender
+from campaign_coherence import infer_protagonist_gender, is_gender_coherent, describe_protagonist
 
 
 class TestProtagonistGender(unittest.TestCase):
@@ -26,9 +26,27 @@ class TestProtagonistGender(unittest.TestCase):
         }
         self.assertEqual(infer_protagonist_gender(data), "feminino")
 
-    def test_idosa_sem_mulher_explicita(self):
-        data = {"genero_personagem_visual": "Idosa (68 anos)"}
+    def test_roteiro_vence_campo_personagem_masculino(self):
+        """Roteiro Dona Helena prevalece sobre personagem 'Idoso homem' errado do Gemini."""
+        data = {
+            "genero_personagem_visual": "Idoso (Homem, 68 anos)",
+            "desenvolvimento_copy": "Aos 68 anos, Dona Helena quase perdeu tudo no WhatsApp dela.",
+        }
         self.assertEqual(infer_protagonist_gender(data), "feminino")
+
+    def test_is_gender_coherent_apos_finalize_simulado(self):
+        data = {
+            "genero_campanha": "feminino",
+            "desenvolvimento_copy": "Dona Helena quase caiu no golpe.",
+        }
+        self.assertTrue(is_gender_coherent(data))
+        data["genero_campanha"] = "masculino"
+        self.assertFalse(is_gender_coherent(data))
+
+    def test_describe_protagonist_dona(self):
+        data = {"desenvolvimento_copy": "Aos 68 anos, Dona Helena quase perdeu a economia."}
+        self.assertIn("Helena", describe_protagonist(data))
+        self.assertIn("feminino", describe_protagonist(data))
 
     def test_seu_carlos_no_roteiro(self):
         data = {

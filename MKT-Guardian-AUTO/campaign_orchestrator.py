@@ -20,6 +20,7 @@ from tts_narration import strip_written_site_urls, card_solucao_text, NARRATION_
 from build_info import ORCHESTRATOR_VERSION, print_build_banner
 from campaign_coherence import (
     format_nexo_prompt_block,
+    infer_protagonist_gender,
     is_coherent,
     nexo_score,
     pick_coherent_gancho,
@@ -508,21 +509,8 @@ class CampaignOrchestrator:
         return None
 
     def _detect_visual_gender(self, creative_data: dict) -> str:
-        """Gênero da PESSOA retratada, inferido do tratamento do golpe (Mãe/Pai/Vó/Vô).
-        Evita incoerência entre narrativa ('MÃE') e imagem (homem)."""
-        alvo = (
-            creative_data.get("texto_card_notificacao", "") + " "
-            + creative_data.get("gancho_atencao_inicial", "") + " "
-            + creative_data.get("desenvolvimento_copy", "")
-        ).lower()
-        fem = bool(re.search(r"\bm[ãa]e\b|\bvov[óo]\b|\bav[óo]\b|\btitia\b|\bsogra\b", alvo))
-        masc = bool(re.search(r"\bpai\b|\bvov[ôo]\b|\bav[ôo]\b|\btitio\b|\bsogro\b", alvo))
-        if fem and not masc:
-            return "feminino"
-        if masc and not fem:
-            return "masculino"
-        gc = creative_data.get("genero_campanha", "")
-        return gc if gc in ("feminino", "masculino") else ""
+        """Gênero da PESSOA retratada — roteiro, personagem e tratamento (Mãe/Pai/Seu/Dona)."""
+        return infer_protagonist_gender(creative_data)
 
     def _format_guardrails_for_prompt(self, publico_slug: str = "") -> str:
         g = self.context_data.get("GUARDRAILS_PERSONAGENS", {})
@@ -699,6 +687,8 @@ class CampaignOrchestrator:
         golpe_id = config.get("golpe_id", "")
         publico_slug = config.get("publico_slug", "")
         genero_visual = self._detect_visual_gender(creative_data)
+        if not genero_visual:
+            genero_visual = creative_data.get("genero_campanha", "")
 
         cena_publico = self._build_publico_scene(publico_slug, golpe_id, genero_visual)
         if campaign_ctx and campaign_ctx.get("direcao_arte_emocional"):
@@ -1023,6 +1013,15 @@ class CampaignOrchestrator:
             if os.path.isfile(imagem):
                 return imagem
         return ""
+
+    def _resolve_publish_asset(self, assets: dict, config: dict) -> str:
+        """Feed estático: publica JPEG (IMAGE) em vez de MP4 (REELS) — evita falhas na Meta."""
+        if config.get("midia") == "imagem":
+            imagem = assets.get("static_image_file", "")
+            if imagem and imagem not in ("N/A", "Não solicitada", "Não solicitado"):
+                if os.path.isfile(imagem):
+                    return imagem
+        return self._resolve_primary_asset(assets)
 
     def _montar_caption_instagram(self, creative_data: dict) -> str:
         headline = creative_data.get("gancho_atencao_inicial", "")
@@ -1638,7 +1637,7 @@ class CampaignOrchestrator:
         self.traffic_manager.structure_advertising_campaign(creative_data, assets_resultado)
 
         if config.get("postar_instagram"):
-            asset_path = self._resolve_primary_asset(assets_resultado)
+            asset_path = self._resolve_publish_asset(assets_resultado, config)
             canal_tiktok = "tiktok" in config.get("canal", "").lower()
             if not asset_path:
                 print("⚠️ Nenhum asset disponível para publicar.")
@@ -1669,6 +1668,8 @@ class CampaignOrchestrator:
                             self.telegram.notificar_sync(aviso)
             elif self.publisher:
                 caption = self._montar_caption_instagram(creative_data)
+                if config.get("midia") == "imagem" and asset_path.lower().endswith((".jpg", ".jpeg", ".png")):
+                    print(f"📤 [Meta] Publicando imagem estática (Feed): {os.path.basename(asset_path)}")
                 resultado = self.publisher.postar_asset(asset_path, caption)
                 if resultado.get("ok"):
                     msg = f"✅ Publicado no Instagram!\nID: `{resultado.get('post_id')}`"

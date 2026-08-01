@@ -90,6 +90,31 @@ def pick_coherent_gancho(ganchos: list[str], frase: str, start_idx: int = 0) -> 
     return gancho, idx
 
 
+def infer_protagonist_gender(creative_data: dict) -> str:
+    """Infere gênero visual do protagonista — personagem, roteiro e tratamento (Seu/Dona/Mãe/Pai)."""
+    gp = (creative_data.get("genero_personagem_visual") or "").lower()
+    masc_gp = ("homem", "masculino", "senhor", "aposentado homem", "vô", "vovo", "avô")
+    fem_gp = ("mulher", "feminino", "senhora", "aposentada", "vó", "avó", "dona")
+    if any(k in gp for k in masc_gp):
+        return "masculino"
+    if any(k in gp for k in fem_gp):
+        return "feminino"
+
+    alvo = (
+        creative_data.get("texto_card_notificacao", "") + " "
+        + creative_data.get("gancho_atencao_inicial", "") + " "
+        + creative_data.get("desenvolvimento_copy", "")
+    ).lower()
+    fem = bool(re.search(r"\bm[ãa]e\b|\bvov[óo]\b|\bav[óo]\b|\btitia\b|\bsogra\b|\bdona\s+\w+", alvo))
+    masc = bool(re.search(r"\bpai\b|\bvov[ôo]\b|\bav[ôo]\b|\btitio\b|\bsogro\b|\bseu\s+\w+", alvo))
+    if fem and not masc:
+        return "feminino"
+    if masc and not fem:
+        return "masculino"
+    gc = creative_data.get("genero_campanha", "")
+    return gc if gc in ("feminino", "masculino") else ""
+
+
 def format_nexo_prompt_block(frase: str, variant_titulo: str = "") -> str:
     titulo = variant_titulo or "golpe selecionado"
     return (

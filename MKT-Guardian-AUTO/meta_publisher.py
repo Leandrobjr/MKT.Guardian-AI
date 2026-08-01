@@ -172,14 +172,14 @@ class MetaPublisher:
         return container_id
 
     def _aguardar_container(self, container_id: str) -> dict | None:
-        for tentativa in range(18):
+        for tentativa in range(24):
             if tentativa:
                 time.sleep(10)
             try:
                 status_r = requests.get(
                     f"{GRAPH_BASE}/{container_id}",
                     params={
-                        "fields": "status_code,status",
+                        "fields": "status_code",
                         "access_token": self.token,
                     },
                     timeout=15,
@@ -193,10 +193,34 @@ class MetaPublisher:
                 if status_code in ("ERROR", "EXPIRED"):
                     return {"ok": False, "erro": payload}
                 if tentativa == 0:
-                    print("⏳ [Meta] Processando vídeo...")
+                    print("⏳ [Meta] Processando mídia...")
             except Exception:
                 pass
-        return {"ok": False, "erro": "Timeout aguardando processamento do vídeo."}
+        return {"ok": False, "erro": "Timeout aguardando processamento da mídia."}
+
+    def _publicar_container(self, container_id: str, retries: int = 3) -> dict:
+        """Publica container com retry em erros transitórios (500/code=1)."""
+        last_err = "Falha desconhecida."
+        for tentativa in range(retries):
+            if tentativa:
+                espera = 8 * tentativa
+                print(f"🔁 [Meta] Retry publicação ({tentativa + 1}/{retries}) em {espera}s...")
+                time.sleep(espera)
+            try:
+                r = requests.post(
+                    f"{GRAPH_BASE}/{self.ig_user}/media_publish",
+                    data={"creation_id": container_id, "access_token": self.token},
+                    timeout=30,
+                )
+                if r.ok:
+                    post_id = r.json().get("id")
+                    return {"ok": True, "post_id": post_id}
+                last_err = self._meta_error(r)
+                if r.status_code not in (500, 502, 503, 504) and not last_err.startswith("500"):
+                    break
+            except Exception as e:
+                last_err = str(e)
+        return {"ok": False, "erro": last_err}
 
     def postar_reel(self, caminho_video: str, caption: str) -> dict:
         token_err = self.verificar_token()
@@ -212,19 +236,10 @@ class MetaPublisher:
         if erro:
             return erro
 
-        try:
-            r = requests.post(
-                f"{GRAPH_BASE}/{self.ig_user}/media_publish",
-                data={"creation_id": container_id, "access_token": self.token},
-                timeout=30,
-            )
-            if not r.ok:
-                return {"ok": False, "erro": self._meta_error(r)}
-            post_id = r.json().get("id")
-            print(f"✅ [Meta] Reel publicado! ID: {post_id}")
-            return {"ok": True, "post_id": post_id}
-        except Exception as e:
-            return {"ok": False, "erro": str(e)}
+        resultado = self._publicar_container(container_id)
+        if resultado.get("ok"):
+            print(f"✅ [Meta] Reel publicado! ID: {resultado.get('post_id')}")
+        return resultado
 
     def postar_imagem(self, caminho_imagem: str, caption: str) -> dict:
         image_url = self._upload_para_imgbb(caminho_imagem)
@@ -244,16 +259,10 @@ class MetaPublisher:
             if not r.ok:
                 return {"ok": False, "erro": self._meta_error(r)}
             container_id = r.json().get("id")
-            r2 = requests.post(
-                f"{GRAPH_BASE}/{self.ig_user}/media_publish",
-                data={"creation_id": container_id, "access_token": self.token},
-                timeout=30,
-            )
-            if not r2.ok:
-                return {"ok": False, "erro": self._meta_error(r2)}
-            post_id = r2.json().get("id")
-            print(f"✅ [Meta] Imagem publicada! ID: {post_id}")
-            return {"ok": True, "post_id": post_id}
+            resultado = self._publicar_container(container_id)
+            if resultado.get("ok"):
+                print(f"✅ [Meta] Imagem publicada! ID: {resultado.get('post_id')}")
+            return resultado
         except Exception as e:
             return {"ok": False, "erro": str(e)}
 

@@ -11,6 +11,7 @@ from dotenv import load_dotenv
 from mkt_agent_01 import MediaFactory
 from traffic_manager import TrafficManager
 from agent_memory import AgentMemory
+from campaign_history import CampaignHistory
 from feedback_router import classify_improvement, describe_plan
 from visual_variety import VisualVarietyEngine
 from channel_presets import resolve_channel_preset, format_preset_summary
@@ -51,6 +52,7 @@ class CampaignOrchestrator:
         self.media_factory = MediaFactory()
         self.traffic_manager = TrafficManager()
         self.memory = AgentMemory(self.BASE_DIR)
+        self.history = CampaignHistory(self.BASE_DIR)
         self.visual_variety = VisualVarietyEngine(self.BASE_DIR)
         self.context_engine = CampaignContextEngine(self.BASE_DIR)
         self.max_revisoes = int(os.getenv("MAX_REVISOES", "3"))
@@ -815,6 +817,10 @@ class CampaignOrchestrator:
             publico=publico_slug,
             golpe=golpe_id,
         )
+        anti_repeat_txt = self.history.format_anti_repeticao(
+            publico=publico_slug,
+            golpe=golpe_id,
+        )
         preset = resolve_channel_preset(config.get("canal", ""), config.get("midia", ""))
 
         bloco_admin = ""
@@ -858,6 +864,8 @@ class CampaignOrchestrator:
             f"CONTEXTO ESTRATÉGICO DE NEGÓCIO:\n"
             f"{self.md_context[:12000] if self.md_context else ''}\n"
         )
+        if anti_repeat_txt:
+            contexto_injetado += f"\n{anti_repeat_txt}\n"
         if memoria_txt:
             contexto_injetado += f"\nMEMÓRIA — REGRAS APRENDIDAS:\n{memoria_txt}\n"
         if instrucoes_extras.strip():
@@ -1282,13 +1290,21 @@ class CampaignOrchestrator:
             else:
                 self._init_publisher()
 
+        pub_slug = config.get("publico_slug", "")
+        golpe_id = config.get("golpe_id", "")
         memoria_resumo = self.memory.format_for_prompt(
-            publico=config.get("publico_slug", ""),
-            golpe=config.get("golpe_id", ""),
+            publico=pub_slug,
+            golpe=golpe_id,
             limit_correcoes=3,
         )
         if memoria_resumo:
             print(f"🧠 Memória carregada ({len(memoria_resumo.splitlines())} regras aprendidas)")
+        hist_recent = self.history.get_recent(pub_slug, golpe_id, limit=5)
+        if hist_recent:
+            print(
+                f"📚 Histórico combo {pub_slug}/{golpe_id}: "
+                f"{len(hist_recent)} campanha(s) — anti-repetição ativo"
+            )
 
         instrucoes_melhoria = ""
         assets_resultado = {}
@@ -1335,6 +1351,24 @@ class CampaignOrchestrator:
                 or (config.get("aprovacao_telegram") and not self.telegram)
             )
             if not (usar_telegram_aprovacao or usar_terminal_aprovacao):
+                asset_path = self._resolve_primary_asset(assets_resultado)
+                if asset_path:
+                    self.history.registrar_campanha(
+                        creative_data,
+                        config,
+                        assets_resultado,
+                        status="gerado",
+                        revisao=revisao,
+                        asset_path=asset_path,
+                    )
+                    self.history.registrar_campanha(
+                        creative_data,
+                        config,
+                        assets_resultado,
+                        status="aprovado",
+                        revisao=revisao,
+                        asset_path=asset_path,
+                    )
                 aprovado = True
                 break
 
@@ -1342,6 +1376,15 @@ class CampaignOrchestrator:
             if not asset_path:
                 print("❌ Nenhum asset visual gerado para aprovação.")
                 return
+
+            self.history.registrar_campanha(
+                creative_data,
+                config,
+                assets_resultado,
+                status="gerado",
+                revisao=revisao,
+                asset_path=asset_path,
+            )
 
             video_path = assets_resultado.get("commercial_video_file", "")
             if config.get("midia") == "imagem" and (
@@ -1386,6 +1429,14 @@ class CampaignOrchestrator:
                     assets_resultado.get("basename", job_id),
                     creative_data["gancho_atencao_inicial"],
                     asset_path,
+                )
+                self.history.registrar_campanha(
+                    creative_data,
+                    config,
+                    assets_resultado,
+                    status="aprovado",
+                    revisao=revisao,
+                    asset_path=asset_path,
                 )
                 aprovado = True
                 break

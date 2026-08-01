@@ -219,15 +219,17 @@ APPEARANCE STANDARD (mandatory):
 
 ---
 
-### Fase 1 — Histórico de campanhas (3–4 dias)
+### Fase 1 — Histórico de campanhas (3–4 dias) ✅ Concluída (2026-08-01)
 
-| # | Tarefa | Entregável |
-|---|---|---|
-| 1.1 | Criar `campaign_history.py` | JSONL `campanhas_historico.jsonl` |
-| 1.2 | Registrar ao aprovar + ao gerar asset | hooks em orchestrator |
-| 1.3 | API `get_recent(combo, limit)` + `is_headline_used()` | consultas |
-| 1.4 | Bloco prompt `ANTI-REPETIÇÃO` | injeção automática |
-| 1.5 | Testes unitários dedup headline/hash | `tests/test_campaign_history.py` |
+| # | Tarefa | Entregável | Status |
+|---|---|---|---|
+| 1.1 | Criar `campaign_history.py` | JSONL `campanhas_historico.jsonl` | ✅ |
+| 1.2 | Registrar ao aprovar + ao gerar asset | hooks em orchestrator | ✅ |
+| 1.3 | API `get_recent(combo, limit)` + `is_headline_used()` | consultas | ✅ |
+| 1.4 | Bloco prompt `ANTI-REPETIÇÃO` | injeção automática | ✅ |
+| 1.5 | Testes unitários dedup headline/hash | `tests/test_campaign_history.py` | ✅ |
+
+**Versão:** Orquestrador v5.0 | Fábrica v18.8
 
 ---
 

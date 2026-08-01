@@ -130,6 +130,10 @@ Token com `instagram_content_publish` e `instagram_basic`.
 
 **Fase 0:** ✅ concluída (Orquestrador v4.7) — ver plano para detalhes.
 
+**Fase 1:** ✅ concluída (Orquestrador v5.0) — `campaign_history.py`, anti-repetição no prompt.
+
+**Próxima:** Fase 2 — Headlines e ganchos (`HeadlineRotator`, expandir matriz).
+
 ---
 
 *Última atualização: 2026-07-30*

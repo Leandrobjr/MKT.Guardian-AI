@@ -18,6 +18,7 @@ from visual_variety import VisualVarietyEngine
 from channel_presets import resolve_channel_preset, format_preset_summary
 from tts_narration import strip_written_site_urls, card_solucao_text, NARRATION_CLOSING
 from build_info import ORCHESTRATOR_VERSION, print_build_banner
+from campaign_context_engine import CampaignContextEngine
 from scam_library import ScamLibrary
 from story_approval import format_story_telegram, story_keyboard
 

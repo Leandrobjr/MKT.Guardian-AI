@@ -7,39 +7,140 @@ import re
 CATEGORIAS = ("narrativa", "headline", "visual", "golpe", "layout", "audio", "copy")
 
 
-def _has_narrative_intent(t: str) -> bool:
-    """Pedidos de mudar estória, protagonista, ICP ou tipo de personagem."""
-    narrative_terms = (
-        "estória", "estoria", "narrativa", "historia", "história", "enredo",
-        "protagonista", "diretor", "diretora", "professor", "professora",
-        "escola", "escolar", "mãe", "mae", "pai", "avó", "avo", "neto", "neta",
-        "idoso", "idosos", "aposentad", "empresário", "empresario", "comerciante",
-        "outra estória", "outra estoria", "outra historia", "outra história",
-        "homem", "mulher", "masculino", "feminino", "ele ", "ela ",
+def _is_surgical_copy_edit(t: str) -> bool:
+    """Edição pontual de frase, card ou regra de produto — não troca ICP/golpe do menu."""
+    markers = (
+        "altere a seguinte frase",
+        "no roteiro",
+        "mude para:",
+        "mude para ",
+        "substitua por",
+        "substituir por",
+        "no card golp",
+        "card golpista altere",
+        "card golpísta altere",
+        "lembre-se sempre",
+        "lembre se sempre",
+        "não citar",
+        "nao citar",
+        "nunca citar",
+        "nunca afirmar",
+        "não afirmar",
+        "nao afirmar",
+        "monitora conversas",
+        "monitora essas conversas",
+        "texto exato",
     )
-    if any(x in t for x in narrative_terms):
+    if any(m in t for m in markers):
         return True
-    change_verbs = ("trocar", "mudar", "alterar", "substituir", "quero ", "preciso ", "focar")
-    subject_terms = ("personagem", "protagonista", "narrador", "cena narrativa", "estória", "estoria", "icp", "público", "publico")
-    if any(v in t for v in change_verbs) and any(s in t for s in subject_terms):
+    if "altere" in t and any(x in t for x in ("roteiro", "frase", "card")):
         return True
     return False
 
 
-def _has_golpe_intent(t: str) -> bool:
-    golpe_terms = (
-        "outro golpe", "trocar golpe", "mudar golpe", "variante",
-        "tipo de golpe", "golpe diferente", "abordar outro",
+def _has_explicit_icp_change_intent(t: str) -> bool:
+    """Troca real de ICP/protagonista — não palavras soltas dentro de texto de card."""
+    if _is_surgical_copy_edit(t):
+        return False
+    explicit = (
+        "estória de escola",
+        "estoria de escola",
+        "historia de escola",
+        "história de escola",
+        "quero escola",
+        "focar em escola",
+        "focar na escola",
+        "ambiente escolar",
+        "trocar protagonista",
+        "protagonista diretor",
+        "protagonista professora",
+        "diretor escolar",
+        "estória de idoso",
+        "estoria de idoso",
+        "quero idoso",
+        "focar em idoso",
+        "estória de empres",
+        "estoria de empres",
+        "quero empres",
+        "focar no comerciante",
+        "focar no empres",
+        "outra estória",
+        "outra estoria",
+        "mudar icp",
+        "trocar icp",
+        "trocar público",
+        "trocar publico",
+        "não mãe",
+        "nao mae",
+        "não pai",
+        "nao pai",
+        "com pai de família",
+        "com mãe de família",
+        "com mae de familia",
     )
-    if any(x in t for x in golpe_terms):
+    if any(p in t for p in explicit):
         return True
-    especificos = (
-        "pix", "phishing", "link malicioso", "clonagem", "grooming",
-        "falso parente", "falsa central", "falso emprego", "investimento",
-        "boleto", "encomenda", "sextorsão", "sextorsao",
+    return bool(
+        re.search(
+            r"(quero|preciso|focar|trocar|mudar).{0,40}"
+            r"(escola|idoso|empres|comerciante|diretor|coordenador pedag)",
+            t,
+        )
     )
-    change = ("golpe", "frase golp", "mensagem golp", "card golp", "ameaça")
-    return any(g in t for g in especificos) and any(c in t for c in change + ("quero", "preciso", "trocar", "mudar"))
+
+
+def _has_explicit_golpe_change_intent(t: str) -> bool:
+    """Troca real de tipo de golpe — não 'PIX' dentro de texto de card."""
+    if _is_surgical_copy_edit(t):
+        return False
+    explicit = (
+        "outro golpe",
+        "trocar golpe",
+        "mudar golpe",
+        "golpe diferente",
+        "tipo de golpe",
+        "abordar outro golpe",
+        "estória de pix",
+        "estoria de pix",
+        "focar no pix",
+        "focar no grooming",
+        "abordar grooming",
+        "abordar o pix",
+        "variante do golpe",
+        "golpe do falso parente",
+        "falso parente",
+    )
+    if any(p in t for p in explicit):
+        return True
+    if re.search(r"(quero|preciso|trocar|mudar).{0,30}golpe", t):
+        return True
+    return False
+
+
+def _has_narrative_intent(t: str) -> bool:
+    """Pedidos de mudar estória, protagonista ou ICP — não edição cirúrgica de copy."""
+    if _is_surgical_copy_edit(t):
+        return False
+    if _has_explicit_icp_change_intent(t):
+        return True
+    return any(
+        x in t
+        for x in (
+            "protagonista",
+            "trocar personagem",
+            "mudar protagonista",
+            "homem no lugar",
+            "mulher no lugar",
+            "masculino no lugar",
+            "feminino no lugar",
+        )
+    )
+
+
+def _has_golpe_intent(t: str) -> bool:
+    if _is_surgical_copy_edit(t):
+        return False
+    return _has_explicit_golpe_change_intent(t)
 
 
 def _has_headline_intent(t: str) -> bool:
@@ -52,41 +153,49 @@ def _has_headline_intent(t: str) -> bool:
 
 def detect_narrative_override(feedback: str) -> dict:
     """
-    Detecta override temporário de ICP e/ou golpe a partir do feedback livre.
-    Retorna dict com publico_slug, golpe_id, note (pode estar vazio).
+    Detecta override temporário de ICP e/ou golpe — só com intenção explícita.
+    Edições cirúrgicas de frase/card NÃO disparam override.
     """
     t = feedback.lower().strip()
-    if not t or not _has_narrative_intent(t):
+    if not t or _is_surgical_copy_edit(t):
         return {}
 
     override: dict = {"note": feedback.strip()[:300]}
+    icp_change = _has_explicit_icp_change_intent(t)
+    golpe_change = _has_explicit_golpe_change_intent(t)
 
-    publico_patterns: list[tuple[tuple[str, ...], str, str]] = [
-        (("escola", "escolar", "diretor", "diretora", "professor", "professora", "coordenador"), "escolas", "escola"),
-        (("idoso", "idosos", "aposentad", "avó", "avo", "vó", "vo ", "neto", "neta"), "idosos", "idosos"),
-        (("empresário", "empresario", "comerciante", "lojista", "negócio", "negocio", "caixa", "cnpj"), "empresarios", "empresários"),
-        (("pai", "mãe", "mae", "filho", "filha", "família", "familia", "menor", "adolescente"), "pais", "pais"),
-    ]
-    for keywords, slug, label in publico_patterns:
-        if any(k in t for k in keywords):
-            override["publico_slug"] = slug
-            override["publico_label"] = label
-            break
+    if not icp_change and not golpe_change:
+        return {}
 
-    golpe_patterns: list[tuple[tuple[str, ...], str]] = [
-        (("falso parente", "falso filho", "troquei de número", "troquei de numero", "neto", "neta"), "falso_parente"),
-        (("pix", "transferência", "transferencia", "qr code", "boleto"), "pix_fantasma"),
-        (("central", "banco", "atendente", "suporte banc"), "falsa_central"),
-        (("grooming", "aliciamento", "predador", "menor", "filho"), "grooming"),
-        (("phishing", "link", "clique", "bit.ly", "malicioso", "encomenda", "apk"), "link_malicioso"),
-        (("clonagem", "código sms", "codigo sms", "verificação", "verificacao"), "clonagem_whatsapp"),
-        (("emprego", "vaga", "home office", "rh falso"), "falso_emprego"),
-        (("investimento", "cripto", "grupo vip", "lucro garantido"), "falso_investimento"),
-    ]
-    for keywords, golpe_id in golpe_patterns:
-        if any(k in t for k in keywords):
-            override["golpe_id"] = golpe_id
-            break
+    if icp_change:
+        publico_patterns: list[tuple[tuple[str, ...], str, str]] = [
+            (("escola", "escolar", "diretor", "diretora", "professor", "professora", "coordenador"), "escolas", "escola"),
+            (("idoso", "idosos", "aposentad", "avó", "avo", "vó"), "idosos", "idosos"),
+            (("empresário", "empresario", "comerciante", "lojista", "negócio", "negocio", "caixa", "cnpj"), "empresarios", "empresários"),
+            (("pai de família", "pai de familia", "quero pai", "focar no pai", "não mãe", "nao mae"), "pais", "pais"),
+            (("mãe de família", "mae de familia", "quero mãe", "quero mae", "focar na mãe", "não pai", "nao pai"), "pais", "pais"),
+        ]
+        for keywords, slug, label in publico_patterns:
+            if any(k in t for k in keywords):
+                override["publico_slug"] = slug
+                override["publico_label"] = label
+                break
+
+    if golpe_change:
+        golpe_patterns: list[tuple[tuple[str, ...], str]] = [
+            (("falso parente", "falso filho", "troquei de número", "troquei de numero"), "falso_parente"),
+            (("pix fantasma", "golpe do pix", "focar no pix", "estória de pix", "estoria de pix", "qr code", "boleto falso"), "pix_fantasma"),
+            (("falsa central", "central banc", "suporte banc"), "falsa_central"),
+            (("grooming", "aliciamento", "predador digital"), "grooming"),
+            (("phishing", "link malicioso", "bit.ly", "apk falso"), "link_malicioso"),
+            (("clonagem", "código sms", "codigo sms"), "clonagem_whatsapp"),
+            (("falso emprego", "vaga falsa", "home office falso"), "falso_emprego"),
+            (("falso investimento", "cripto falsa", "grupo vip"), "falso_investimento"),
+        ]
+        for keywords, golpe_id in golpe_patterns:
+            if any(k in t for k in keywords):
+                override["golpe_id"] = golpe_id
+                break
 
     if len(override) <= 1:
         return {}
@@ -101,6 +210,7 @@ def correction_tag(plan: dict) -> str:
 
 def classify_improvement(feedback: str) -> dict:
     t = feedback.lower().strip()
+    surgical = _is_surgical_copy_edit(t)
     narrative = _has_narrative_intent(t)
     golpe = _has_golpe_intent(t)
     headline = _has_headline_intent(t)
@@ -115,13 +225,14 @@ def classify_improvement(feedback: str) -> dict:
             "fonte grande", "fonte menor", "quebrar",
         )
     )
-    copy = narrative or golpe or any(
+    copy = surgical or narrative or golpe or any(
         x in t
         for x in (
             "headline", "titulo", "título", "roteiro", "narra", "gancho",
             "cta", "copy", "re/escrev", "reescrev", "mudar o texto da",
             "texto do golp", "frase do golp", "chamar", "urgencia",
             "estória", "estoria", "historia", "história", "sentido",
+            "altere", "mude para", "substitua",
         )
     )
     visual = any(
@@ -134,7 +245,7 @@ def classify_improvement(feedback: str) -> dict:
             "organizad", "claro", "limpo", "fallback", "gemini",
         )
     )
-    if not narrative and any(x in t for x in ("pessoa", "personagem", "modelo")):
+    if not narrative and not surgical and any(x in t for x in ("pessoa", "personagem", "modelo")):
         visual = True
 
     pronunciation = any(
@@ -155,9 +266,9 @@ def classify_improvement(feedback: str) -> dict:
     if pronunciation and not any(
         x in t for x in ("headline", "titulo", "título", "reescrev", "re/escrev", "mudar o texto")
     ):
-        copy = False if not narrative else copy
+        copy = False if not narrative and not surgical else copy
 
-    headline_only = headline and not narrative and not golpe and not visual and not layout and not audio
+    headline_only = headline and not narrative and not golpe and not visual and not layout and not audio and not surgical
 
     recompose_only = layout and not copy and not visual and not audio
     reapply_audio_only = audio and not copy and not visual and not layout
@@ -166,11 +277,13 @@ def classify_improvement(feedback: str) -> dict:
         not layout and not visual and not audio and not copy and not narrative and not golpe
     )
 
-    if narrative:
+    if surgical:
+        primary = "copy"
+    elif narrative:
         primary = "narrativa"
     elif headline_only:
         primary = "headline"
-    elif golpe and not narrative:
+    elif golpe:
         primary = "golpe"
     elif visual_only or (visual and not copy):
         primary = "visual"
@@ -181,7 +294,7 @@ def classify_improvement(feedback: str) -> dict:
     else:
         primary = "copy"
 
-    override = detect_narrative_override(feedback) if narrative else {}
+    override = detect_narrative_override(feedback)
 
     return {
         "layout": layout,
@@ -191,6 +304,7 @@ def classify_improvement(feedback: str) -> dict:
         "narrative": narrative,
         "golpe": golpe,
         "headline": headline,
+        "surgical_copy": surgical,
         "headline_only": headline_only,
         "narrative_override": override,
         "primary_category": primary,
@@ -204,6 +318,8 @@ def classify_improvement(feedback: str) -> dict:
 
 
 def describe_plan(plan: dict) -> str:
+    if plan.get("surgical_copy"):
+        return "copy cirúrgica (frase/card/regra — mantém combo do menu)"
     if plan.get("headline_only"):
         return "headline/manchete (nova manchete + overlay — mantém roteiro)"
     if plan["recompose_only"]:

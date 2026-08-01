@@ -580,26 +580,30 @@ class CampaignOrchestrator:
         return ctx
 
     def _apply_narrative_override(self, config: dict, feedback: str, golpe_obj: dict, plan: dict) -> dict | None:
-        """Aplica override temporário de ICP/golpe a partir do feedback MELHORAR."""
-        override = plan.get("narrative_override") or {}
-        if not override and not plan.get("narrative"):
+        """Aplica override temporário de ICP/golpe — só com intenção explícita."""
+        if plan.get("surgical_copy"):
+            config.pop("narrative_override", None)
+            print("✏️ Edição cirúrgica de copy — combo do menu mantido (pais+grooming etc.).")
             return None
-        if override:
-            config["narrative_override"] = override
-            print(
-                format_menu_conflict(
-                    config.get("publico_slug", ""),
-                    config.get("golpe_id", ""),
-                    override,
-                )
+
+        override = plan.get("narrative_override") or {}
+        if not override.get("publico_slug") and not override.get("golpe_id"):
+            config.pop("narrative_override", None)
+            if plan.get("narrative"):
+                print("📖 Instrução narrativa livre — combo do menu mantido.")
+            return None
+
+        config["narrative_override"] = override
+        print(
+            format_menu_conflict(
+                config.get("publico_slug", ""),
+                config.get("golpe_id", ""),
+                override,
             )
-            ctx = self._refresh_campaign_context(config, golpe_obj)
-            print(self.context_engine.summary_line(ctx))
-            return override
-        if plan.get("narrative"):
-            config["narrative_override"] = {"note": feedback.strip()[:300]}
-            print("📖 Override narrativo genérico — instrução livre prevalece sobre matriz fixa.")
-        return config.get("narrative_override")
+        )
+        ctx = self._refresh_campaign_context(config, golpe_obj)
+        print(self.context_engine.summary_line(ctx))
+        return override
 
     def _apply_golpe_variant(self, config: dict, golpe_obj: dict) -> dict:
         """Rotaciona variante de golpe (frase_golpista) mantendo golpe_id do menu."""

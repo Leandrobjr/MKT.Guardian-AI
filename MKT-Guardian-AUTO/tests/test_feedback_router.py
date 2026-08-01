@@ -58,9 +58,26 @@ class TestFeedbackRouter(unittest.TestCase):
         self.assertIn("CONFLITO", msg)
         self.assertIn("escolas", msg)
 
-    def test_describe_plan_golpe(self):
-        plan = classify_improvement("Trocar variante do golpe de link malicioso")
-        self.assertIn("golpe", describe_plan(plan).lower())
+    def test_user_surgical_edit_no_override(self):
+        """Regressão: editar frase/card não deve trocar combo para escolas+pix."""
+        fb = (
+            "No roteiro, altere a seguinte frase: O Guardian AI monitora essas conversas privadas "
+            "e detecta padrões de aliciamento, enviando um alerta imediato para o seu celular. "
+            "mude para: O Guardian-AI detecta padrões de aliciamento no WhatsApp, enviando alerta "
+            "imediato no celular do responsável. Feita essa alteração lembre-se sempre em não citar "
+            "nas campanhas que o Guardian-AI monitora conversas privadas. "
+            "No card golpísta altere para Sei quem vc é! Manda o PIX agora ou posto no grupo da escola!"
+        )
+        plan = classify_improvement(fb)
+        self.assertTrue(plan.get("surgical_copy"))
+        self.assertFalse(plan.get("narrative"))
+        self.assertEqual(plan.get("primary_category"), "copy")
+        self.assertEqual(plan.get("narrative_override"), {})
+
+    def test_explicit_escola_still_overrides(self):
+        plan = classify_improvement("Quero estória de escola com diretor alertando pais")
+        self.assertTrue(plan.get("narrative"))
+        self.assertEqual(plan.get("narrative_override", {}).get("publico_slug"), "escolas")
 
 
 if __name__ == "__main__":

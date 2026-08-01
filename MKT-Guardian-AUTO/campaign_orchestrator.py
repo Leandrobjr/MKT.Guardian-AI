@@ -18,6 +18,12 @@ from visual_variety import VisualVarietyEngine
 from channel_presets import resolve_channel_preset, format_preset_summary
 from tts_narration import strip_written_site_urls, card_solucao_text, NARRATION_CLOSING
 from build_info import ORCHESTRATOR_VERSION, print_build_banner
+from campaign_coherence import (
+    format_nexo_prompt_block,
+    is_coherent,
+    nexo_score,
+    pick_coherent_gancho,
+)
 from campaign_context_engine import CampaignContextEngine
 from scam_library import ScamLibrary
 from story_approval import format_story_telegram, story_keyboard
@@ -285,28 +291,41 @@ class CampaignOrchestrator:
     def _align_card_message(
         self, creative_data: dict, config: dict, campaign_ctx: dict, golpe_obj: dict
     ) -> dict:
-        """Garante que o card golpista reflita o tipo de ameaça da campanha."""
-        golpe_id = config.get("golpe_id", "")
+        """Card golpista = frase da variante selecionada (nexo com roteiro e cena)."""
         frase_ref = (campaign_ctx.get("frase_golpista") or golpe_obj.get("frase_golpista", "")).strip()
-        card = (creative_data.get("texto_card_notificacao") or "").strip()
         if not frase_ref:
             return creative_data
-
-        sinais_por_golpe = {
-            "grooming": ("foto", "segredo", "bonit", "perf", "conta", "manda", "lind"),
-            "pix_fantasma": ("pix", "transfer", "urgent", "pag", "dinheiro", "valor"),
-            "falso_parente": ("pix", "número", "troquei", "salva", "filho", "neto"),
-            "falsa_central": ("banco", "central", "senha", "conta", "bloque"),
-            "phishing": ("clique", "link", "http", "bit.ly", "confirm", "cadastr"),
-            "link_malicioso": ("clique", "link", "http", "bit.ly", "instal", "apk", "encomenda", "taxa"),
-            "falso_emprego": ("vaga", "emprego", "home office", "taxa", "cadastr", "treinamento", "contrat"),
-            "falso_investimento": ("invest", "lucro", "cripto", "grupo", "aporte", "garantid", "robô"),
-            "clonagem_whatsapp": ("código", "codigo", "sms", "verific", "6 dígit", "6 digit"),
-        }
-        sinais = sinais_por_golpe.get(golpe_id, ())
-        if sinais and not any(s in card.lower() for s in sinais):
+        card = (creative_data.get("texto_card_notificacao") or "").strip()
+        if card.lower() != frase_ref.lower():
             creative_data["texto_card_notificacao"] = frase_ref
-            print(f"⚠️ Card golpista alinhado ao contexto ({golpe_id})")
+            if card:
+                print("📌 Card golpista sincronizado com variante do golpe (nexo da campanha).")
+        return creative_data
+
+    def _enforce_campaign_nexo(
+        self, creative_data: dict, campaign_ctx: dict, config: dict
+    ) -> dict:
+        """Valida nexo roteiro ↔ card; substitui manchete incoerente."""
+        frase = (campaign_ctx.get("frase_golpista") or "").strip()
+        roteiro = (creative_data.get("desenvolvimento_copy") or "").strip()
+        headline = (creative_data.get("gancho_atencao_inicial") or "").strip()
+        if not frase or not roteiro:
+            return creative_data
+
+        score = nexo_score(roteiro, frase, headline)
+        if is_coherent(roteiro, frase, headline):
+            return creative_data
+
+        ganchos = [g for g in (campaign_ctx.get("ganchos") or []) if g]
+        if ganchos:
+            alt, _ = pick_coherent_gancho(ganchos, frase)
+            if alt:
+                creative_data["gancho_atencao_inicial"] = alt.upper()
+                creative_data["headline_escolhida"] = alt
+                print(
+                    f"[!] Nexo fraco ({score:.0%}) — manchete alinhada ao card: {alt[:70]}..."
+                )
+        config["_nexo_retry"] = True
         return creative_data
 
     def _inject_phone_message_in_scene(
@@ -746,6 +765,7 @@ class CampaignOrchestrator:
             golpe_obj, creative_data, config, campaign_ctx
         )
         creative_data = self._align_card_message(creative_data, config, campaign_ctx, golpe_obj)
+        creative_data = self._enforce_campaign_nexo(creative_data, campaign_ctx, config)
         creative_data = self._inject_phone_message_in_scene(creative_data, campaign_ctx, golpe_obj)
         creative_data = self.visual_variety.enrich(creative_data, config, self.context_data)
 
@@ -806,13 +826,26 @@ class CampaignOrchestrator:
         gancho_prioritario = None
         if not instrucoes_extras.strip() and not config.get("narrative_override"):
             ganchos_list = [g for g in (campaign_ctx.get("ganchos") or []) if g]
-            gancho_prioritario, gancho_idx = self.headline_rotator.pick_gancho(
-                campaign_ctx, config, advance=True
-            )
+            if ganchos_list and frase_golpista:
+                state = self.headline_rotator._load_state()
+                combo = self.headline_rotator._combo_key(config)
+                last_idx = int(state.get(combo, -1))
+                gancho_prioritario, gancho_idx = pick_coherent_gancho(
+                    ganchos_list, frase_golpista, start_idx=last_idx + 1
+                )
+                if gancho_prioritario and gancho_idx >= 0:
+                    state[combo] = gancho_idx
+                    self.headline_rotator._save_state(state)
+                    config["_gancho_rotativo"] = gancho_prioritario
+                    config["_gancho_rotativo_idx"] = gancho_idx
+            else:
+                gancho_prioritario, gancho_idx = self.headline_rotator.pick_gancho(
+                    campaign_ctx, config, advance=True
+                )
             if gancho_prioritario and ganchos_list:
                 total = len(ganchos_list)
                 pos = gancho_idx + 1 if gancho_idx >= 0 else 1
-                print(f"🎯 Gancho rotativo ({pos}/{total}): {gancho_prioritario[:70]}...")
+                print(f"🎯 Gancho com nexo ao card ({pos}/{total}): {gancho_prioritario[:70]}...")
 
         memoria_txt = self.memory.format_for_prompt(
             publico=publico_slug,
@@ -839,6 +872,7 @@ class CampaignOrchestrator:
             f"- Slug ICP: {publico_slug}\n"
             f"- Ameaça/Golpe Abordado: {config['golpe']}\n"
             f"- Frase real que o golpista enviaria no WhatsApp (base para o card): {frase_golpista}\n"
+            f"{format_nexo_prompt_block(frase_golpista, campaign_ctx.get('scam_variant_titulo', ''))}"
             f"- Ganchos de referência (inspire-se, não copie literalmente): {' | '.join(ganchos_ref)}\n"
             + (
                 f"- GANCHO PRIORITÁRIO DESTA CAMPANHA (ângulo obrigatório, palavras novas): "
@@ -903,8 +937,8 @@ class CampaignOrchestrator:
             f"Mencione Guardian AI como solução de detecção e alerta. "
             f"NÃO inclua URL na narração — o fechamento será adicionado automaticamente.\n"
             "3. chamada_para_acao_cta: Comando curto em MAIÚSCULAS.\n"
-            "4. texto_card_notificacao: APENAS a mensagem REAL do golpista no WhatsApp — "
-            "use a frase_golpista do contexto como base, adaptando só o tom informal.\n"
+            "4. texto_card_notificacao: COPIE LITERALMENTE a frase_golpista do contexto "
+            "(ajuste mínimo de informalidade se necessário — sem trocar o pretexto do golpe).\n"
             "5. frase_destaque_golpista: Frase-chave do golpista para destacar no card.\n"
             "6. genero_personagem_visual: DEVE respeitar GUARDRAILS e o protagonista do CONTEXTO NARRATIVO "
             "(escola=diretor/professor; empresa=comerciante; pais=pai/mãe; idoso=65+).\n"
@@ -942,13 +976,35 @@ class CampaignOrchestrator:
 
         for tentativa in range(3):
             try:
+                payload = contexto_injetado
+                if tentativa > 0 and frase_golpista:
+                    payload += (
+                        f"\n\n⚠️ RETENTATIVA {tentativa + 1}: o roteiro anterior NÃO descreveu "
+                        f"o mesmo golpe da frase «{frase_golpista}». "
+                        "Reescreva contando EXATAMENTE este pretexto — card e roteiro devem combinar.\n"
+                    )
                 response = self.client.models.generate_content(
                     model=self.model_name,
-                    contents=contexto_injetado,
+                    contents=payload,
                     config=config_creative,
                 )
                 dados = json.loads(response.text)
-                return self._finalize_creative_data(dados, config, golpe_obj)
+                result = self._finalize_creative_data(dados, config, golpe_obj)
+                copy = (result.get("desenvolvimento_copy") or "").strip()
+                head = (result.get("gancho_atencao_inicial") or "").strip()
+                if not frase_golpista or is_coherent(copy, frase_golpista, head):
+                    return result
+                if tentativa < 2:
+                    print(
+                        f"[!] Nexo roteiro/card insuficiente ({nexo_score(copy, frase_golpista, head):.0%}) "
+                        f"— regerando copy..."
+                    )
+                    continue
+                print(
+                    f"⚠️ Nexo ainda parcial ({nexo_score(copy, frase_golpista, head):.0%}) — "
+                    "revise na aprovação da estória se necessário."
+                )
+                return result
             except Exception as e:
                 if "429" in str(e):
                     time.sleep(15)

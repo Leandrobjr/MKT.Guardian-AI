@@ -74,11 +74,19 @@ class ScamLibrary:
         pool = [v for v in variantes if v.get("golpe_id") == golpe_id]
         if not pool:
             return []
-        preferidos = [
-            v for v in pool
-            if not v.get("publicos") or publico_slug in v.get("publicos", [])
-        ]
-        return preferidos if preferidos else pool
+        if publico_slug:
+            preferidos = [
+                v for v in pool
+                if publico_slug in (v.get("publicos") or [])
+            ]
+            if preferidos:
+                return preferidos
+            # ICP específico: não usar variantes de outro público (ex.: brinde/massa em empresários)
+            neutros = [v for v in pool if not v.get("publicos")]
+            if neutros:
+                return neutros
+            return pool
+        return pool
 
     def _pick_frase(self, variant: dict, used: set[str]) -> str:
         frases = variant.get("frases_golpista") or []
@@ -148,6 +156,7 @@ class ScamLibrary:
         ctx["frase_golpista"] = picked["frase_golpista"]
         ctx["scam_variant_id"] = picked["variant_id"]
         ctx["scam_variant_titulo"] = picked.get("titulo", "")
+        ctx["angulo_golpe"] = picked.get("titulo", "")
         return ctx
 
     def count_variants(self, golpe_id: str = "") -> int:

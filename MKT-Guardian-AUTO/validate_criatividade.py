@@ -60,7 +60,15 @@ def main() -> int:
     ok_all &= check("Novos golpe_id Fase 4", novos.issubset(ids), str(novos & ids))
 
     lib = ScamLibrary(BASE)
-    ok_all &= check("Variantes golpes >= 20", lib.count_variants() >= 20, str(lib.count_variants()))
+        ok_all &= check("Variantes golpes >= 20", lib.count_variants() >= 20, str(lib.count_variants()))
+        emp = lib.pick_variant("link_malicioso", "empresarios")
+        emp_vid = (emp or {}).get("variant_id", "")
+        emp_frase = ((emp or {}).get("frase_golpista") or "").lower()
+        ok_all &= check(
+            "Variante B2B empresarios",
+            bool(emp and ("b2b" in emp_vid or "fornecedor" in emp_vid or "fornecedor" in emp_frase)),
+            emp_vid,
+        )
 
     hist = CampaignHistory(BASE)
     ve = VisualVarietyEngine(BASE, hist)

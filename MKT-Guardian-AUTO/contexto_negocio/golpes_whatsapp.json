@@ -266,6 +266,54 @@
         "Oi vó, sou eu o neto. Tô numa emergência e preciso que você faça um PIX agora.",
         "Pai, perdi o celular. Esse é meu novo número. Me manda PIX que devolvo hoje à noite."
       ]
+    },
+    {
+      "variant_id": "link_fornecedor_cadastro_b2b",
+      "golpe_id": "link_malicioso",
+      "ordem_md": 23,
+      "titulo": "Link falso de cadastro de fornecedor",
+      "publicos": ["empresarios"],
+      "frases_golpista": [
+        "Olá, sou do cadastro de fornecedores. Atualize seus dados pelo link urgente: bit.ly/cadastro-fornecedor",
+        "Setor financeiro: confirme seu cadastro de fornecedor no link para continuar recebendo pagamentos.",
+        "Atualização obrigatória de CNPJ de fornecedor — acesse agora: bit.ly/atualizar-cadastro-b2b"
+      ]
+    },
+    {
+      "variant_id": "link_phishing_cliente_b2b",
+      "golpe_id": "link_malicioso",
+      "ordem_md": 24,
+      "titulo": "Phishing disfarçado de cliente no WhatsApp Business",
+      "publicos": ["empresarios"],
+      "frases_golpista": [
+        "Oi, sou cliente da loja. Segue comprovante e link para confirmar pedido: bit.ly/pedido-cliente",
+        "Cliente VIP: clique no link para liberar desconto exclusivo no seu WhatsApp Business.",
+        "Preciso que confirme meu pedido pelo link antes das 18h — urgente."
+      ]
+    },
+    {
+      "variant_id": "link_apk_seguranca_b2b",
+      "golpe_id": "link_malicioso",
+      "ordem_md": 25,
+      "titulo": "APK falso de segurança no celular comercial",
+      "publicos": ["empresarios"],
+      "frases_golpista": [
+        "Instale o app de segurança oficial para proteger seu WhatsApp Business: bit.ly/app-seguro-b2b",
+        "Atualização obrigatória do antivírus comercial — baixe pelo link anexo.",
+        "App antifraude gratuito para lojistas — clique para instalar agora."
+      ]
+    },
+    {
+      "variant_id": "link_encomenda_b2b",
+      "golpe_id": "link_malicioso",
+      "ordem_md": 26,
+      "titulo": "Falsa encomenda/cobrança no WhatsApp Business",
+      "publicos": ["empresarios"],
+      "frases_golpista": [
+        "Sua encomenda comercial está retida. Pague a taxa de despacho pelo link para liberar entrega.",
+        "Correios empresarial: pacote aguardando — confirme taxa no link abaixo.",
+        "Entrega suspensa para sua loja — acesse o link para evitar devolução."
+      ]
     }
   ]
 }

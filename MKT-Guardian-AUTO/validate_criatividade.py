@@ -35,7 +35,7 @@ def main() -> int:
     print("VALIDACAO MKT GUARDIAN — CRIATIVIDADE (Fases 1-5)")
     print("=" * 60)
     print_build_banner(BASE)
-    print(f"  Versao esperada: v5.10+ | Atual: v{ORCHESTRATOR_VERSION}")
+    print(f"  Versao esperada: v5.11+ | Atual: v{ORCHESTRATOR_VERSION}")
     ok_all = True
 
     for rel in (

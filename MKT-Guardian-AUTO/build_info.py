@@ -1,7 +1,7 @@
 """Versão do build — exibida no startup para confirmar git pull."""
 
 MEDIA_FACTORY_VERSION = "18.9"
-ORCHESTRATOR_VERSION = "5.10"
+ORCHESTRATOR_VERSION = "5.11"
 MIN_GIT_COMMIT_PREFIX = "fbc6e11"  # FFmpeg nativo + overlay PNG
 
 
@@ -26,6 +26,6 @@ def print_build_banner(base_dir: str) -> None:
         f"Fábrica v{MEDIA_FACTORY_VERSION} | git {git_hash}"
     )
     print(
-        "   Esperado: Orquestrador v5.10+ | Lexicon Guard + memória linguística administrável. "
+        "   Esperado: Orquestrador v5.11+ | Upload TikTok manual pelo Ubuntu + Lexicon Guard. "
         "Se não aparecer, rode: git pull origin main"
     )

@@ -49,14 +49,14 @@ def main(argv: list[str] | None = None) -> int:
             print("Nenhuma regra linguística ativa.")
             return 0
         for rule in rules:
-            prefix = "❌" if rule.get("tipo") == "proibida" else "✅"
+            prefix = "[PROIBIDA]" if rule.get("tipo") == "proibida" else "[SUGERIDA]"
             replacement = f" → {rule.get('usar')}" if rule.get("usar") else ""
             print(f"{prefix} {rule.get('id')}: {rule.get('expressao')}{replacement}")
         return 0
 
     expression = args.expressao.strip()
     if not expression:
-        print("❌ A expressão não pode ser vazia.")
+        print("ERRO: A expressão não pode ser vazia.")
         return 2
     rule_id = args.id.strip() or _rule_id(expression)
     if args.command == "add-proibida":
@@ -78,9 +78,9 @@ def main(argv: list[str] | None = None) -> int:
             origem="lexicon_admin",
         )
     if not added:
-        print(f"⚠️ Regra já existente: {rule_id}")
+        print(f"AVISO: Regra já existente: {rule_id}")
         return 0
-    print(f"✅ Regra adicionada: {rule_id}")
+    print(f"OK: Regra adicionada: {rule_id}")
     return 0
 
 

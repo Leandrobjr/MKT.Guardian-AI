@@ -33,6 +33,7 @@ from campaign_context_engine import CampaignContextEngine
 from scam_library import ScamLibrary
 from story_approval import format_story_telegram, story_keyboard
 from copy_lexicon import CopyLexicon
+from manual_export import export_tiktok_package
 
 try:
     from telegram_approval import TelegramApproval
@@ -1414,8 +1415,12 @@ class CampaignOrchestrator:
         print("\n📲 ETAPA 6: Fluxo após gerar o criativo:")
         print("[1] Apenas salvar arquivos localmente (sem aprovação, sem Telegram)")
         print("[2] Salvar + Aprovação via Telegram (recomendado)")
-        print("[3] Salvar + Telegram + Postar automaticamente após APROVAR")
-        print("[4] Aprovar aqui mesmo (terminal) + Postar automaticamente após APROVAR")
+        if "tiktok" in canal_final.lower():
+            print("[3] Salvar + Telegram + Exportar pacote TikTok após APROVAR")
+            print("[4] Aprovar aqui mesmo (terminal) + Exportar pacote TikTok após APROVAR")
+        else:
+            print("[3] Salvar + Telegram + Postar automaticamente após APROVAR")
+            print("[4] Aprovar aqui mesmo (terminal) + Postar automaticamente após APROVAR")
         f_escolhido = input("Digite o número da opção desejada: ").strip()
         fluxo_map = {
             "1": {"aprovacao_telegram": False, "aprovacao_terminal": False, "postar_instagram": False},
@@ -1485,7 +1490,7 @@ class CampaignOrchestrator:
                 self._init_telegram()
         if config.get("postar_instagram"):
             if "tiktok" in config.get("canal", "").lower():
-                self._init_tiktok_publisher()
+                print("📦 TikTok configurado para upload manual pelo Ubuntu.")
             else:
                 self._init_publisher()
 
@@ -1763,30 +1768,25 @@ class CampaignOrchestrator:
             if not asset_path:
                 print("⚠️ Nenhum asset disponível para publicar.")
             elif canal_tiktok:
-                if not self.tiktok_publisher:
-                    aviso = "⚠️ Publicação TikTok não configurada (verifique TIKTOK_ACCESS_TOKEN no .env)."
+                resultado = export_tiktok_package(
+                    self.BASE_DIR,
+                    assets_resultado,
+                    creative_data,
+                    open_browser=True,
+                )
+                if resultado.get("ok"):
+                    aviso = (
+                        "📦 Pacote TikTok exportado para upload manual.\n"
+                        f"📁 Pasta: {resultado['package_dir']}\n"
+                        f"🎬 Vídeo: {resultado['video']}\n"
+                        f"📝 Legenda: {resultado['caption']}\n"
+                        "🌐 Página de upload aberta no navegador Ubuntu."
+                    )
                     print(aviso)
                     if self.telegram:
                         self.telegram.notificar_sync(aviso)
                 else:
-                    caption = self._montar_caption_instagram(creative_data)
-                    try:
-                        resultado = self.tiktok_publisher.publish_video(asset_path, caption)
-                        if resultado.get("ok"):
-                            msg = f"✅ Publicado no TikTok!\nID: `{resultado.get('publish_id', '')}`"
-                            print(msg)
-                            if self.telegram:
-                                self.telegram.notificar_sync(msg)
-                        else:
-                            print(f"❌ Falha ao publicar no TikTok: {resultado.get('erro')}")
-                    except NotImplementedError as e:
-                        aviso = (
-                            f"⚠️ Publicação automática no TikTok ainda não está pronta ({e}).\n"
-                            f"O arquivo está salvo em: {asset_path}"
-                        )
-                        print(aviso)
-                        if self.telegram:
-                            self.telegram.notificar_sync(aviso)
+                    print(f"❌ Falha ao exportar pacote TikTok: {resultado.get('erro')}")
             elif self.publisher:
                 caption = self._montar_caption_instagram(creative_data)
                 if config.get("midia") == "imagem" and asset_path.lower().endswith((".jpg", ".jpeg", ".png")):

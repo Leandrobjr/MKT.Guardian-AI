@@ -35,13 +35,14 @@ def main() -> int:
     print("VALIDACAO MKT GUARDIAN — CRIATIVIDADE (Fases 1-5)")
     print("=" * 60)
     print_build_banner(BASE)
-    print(f"  Versao esperada: v5.8+ | Atual: v{ORCHESTRATOR_VERSION}")
+    print(f"  Versao esperada: v5.9+ | Atual: v{ORCHESTRATOR_VERSION}")
     ok_all = True
 
     for rel in (
         "contexto_negocio/guardian_base.json",
         "contexto_negocio/golpes_whatsapp.json",
         "contexto_negocio/campanha_context_matrix.json",
+        "contexto_negocio/copy_lexicon.json",
     ):
         try:
             with open(os.path.join(BASE, rel), encoding="utf-8") as f:
@@ -52,6 +53,20 @@ def main() -> int:
 
     with open(os.path.join(BASE, "contexto_negocio/guardian_base.json"), encoding="utf-8") as f:
         ctx = json.load(f)
+    with open(os.path.join(BASE, "contexto_negocio/copy_lexicon.json"), encoding="utf-8") as f:
+        lexicon = json.load(f)
+    proibidas = {
+        p.lower()
+        for item in lexicon.get("expressoes_proibidas", [])
+        for p in item.get("padroes", [])
+    }
+    sugeridas = {
+        item.get("usar", "").lower()
+        for item in lexicon.get("expressoes_sugeridas", [])
+        if item.get("usar")
+    }
+    ok_all &= check("Léxico: expressões proibidas", "chat privado" in proibidas)
+    ok_all &= check("Léxico: expressões sugeridas", "mensagem no chat do whatsapp" in sugeridas)
     personas = ctx.get("PERSONAS_EXEMPLO", [])
     golpes = ctx.get("TIPOS_DE_GOLPE", [])
     ok_all &= check("Personas >= 24", len(personas) >= 24, f"{len(personas)} personas")

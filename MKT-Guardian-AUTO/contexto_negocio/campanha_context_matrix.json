@@ -176,7 +176,7 @@
   "empresarios": {
     "_default": {
       "protagonista": "Empresário(a) ou comerciante brasileiro(a) (35-55 anos)",
-      "angulo_narrativa": "O negócio, o caixa e a reputação em risco por golpe no WhatsApp Business em conversa privada.",
+      "angulo_narrativa": "O negócio, o caixa e a reputação em risco por golpe no WhatsApp Business em conversa no WhatsApp.",
       "narrativa_parental": false,
       "persona_visual": "empresário ou comerciante brasileiro(a), 35-55 anos, ambiente comercial",
       "proibicoes_narrativa": [
@@ -217,7 +217,7 @@
       ]
     },
     "grooming": {
-      "angulo_narrativa": "Comerciante alerta sobre golpista se passando por menor em conversa privada — ângulo profissional.",
+      "angulo_narrativa": "Comerciante alerta sobre golpista se passando por menor em conversa no WhatsApp — ângulo profissional.",
       "ganchos": [
         "UM 'CLIENTE MENOR' NO PRIVADO DO WHATSAPP BUSINESS ERA UM ADULTO.",
         "GOLPISTA SE PASSOU POR FILHO DE CLIENTE EM MENSAGEM DIRETA.",

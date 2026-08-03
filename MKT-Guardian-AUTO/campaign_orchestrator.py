@@ -60,6 +60,7 @@ class CampaignOrchestrator:
 
         self.context_path = os.path.join(self.BASE_DIR, "contexto_negocio", "guardian_base.json")
         self.context_data = self._load_business_context()
+        self.copy_lexicon = self._load_copy_lexicon()
         self.md_context = self._load_markdown_context()
 
         self.media_factory = MediaFactory()
@@ -131,6 +132,17 @@ class CampaignOrchestrator:
                 return json.load(f)
         except Exception as e:
             print(f"❌ Erro ao ler JSON de contexto: {e}")
+            return {}
+
+    def _load_copy_lexicon(self) -> dict:
+        path = os.path.join(self.BASE_DIR, "contexto_negocio", "copy_lexicon.json")
+        if not os.path.isfile(path):
+            return {}
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except (json.JSONDecodeError, OSError) as e:
+            print(f"⚠️ Erro ao ler léxico de copy: {e}")
             return {}
 
     def _build_cta_button(
@@ -234,7 +246,8 @@ class CampaignOrchestrator:
 
     def _format_product_capabilities_for_prompt(self) -> str:
         cap = self.context_data.get("PRODUTO_E_POSICIONAMENTO", {}).get("capacidades_reais", {})
-        if not cap:
+        lexicon = self.copy_lexicon
+        if not cap and not lexicon:
             return ""
         lines = ["CAPACIDADES REAIS DO GUARDIAN AI (NUNCA VIOLAR):"]
         for item in cap.get("faz", []):
@@ -243,25 +256,41 @@ class CampaignOrchestrator:
             lines.append(f"  ❌ {item}")
         if cap.get("regra_criativo"):
             lines.append(f"  📌 {cap['regra_criativo']}")
+        proibidas = lexicon.get("expressoes_proibidas", [])
+        if proibidas:
+            lines.append("")
+            lines.append("GUIA LEXICAL OBRIGATÓRIO — NÃO USAR:")
+            for item in proibidas:
+                padroes = ", ".join(f'"{p}"' for p in item.get("padroes", []))
+                lines.append(f"  ❌ {padroes} — {item.get('motivo', '')}")
+        sugeridas = lexicon.get("expressoes_sugeridas", [])
+        if sugeridas:
+            lines.append("")
+            lines.append("GUIA LEXICAL OBRIGATÓRIO — PREFERIR:")
+            for item in sugeridas:
+                lines.append(f"  ✅ \"{item.get('usar', '')}\"")
         return "\n".join(lines)
 
     def _enforce_product_truth(self, creative_data: dict) -> dict:
-        """Guardian AI detecta e alerta em conversas privadas — nunca bloqueia nem monitora grupos.
+        """Guardian AI detecta e alerta no chat do WhatsApp — nunca bloqueia nem monitora grupos.
 
         Corrige apenas frases que ATRIBUEM ao produto uma capacidade que ele não tem
         (monitorar/detectar dentro do grupo). NÃO altera frases que já contrastam
-        corretamente grupo x privado (ex.: "não é no grupo, é no privado"), pois essas
+        corretamente grupo x chat do WhatsApp (ex.: "não é no grupo, é no chat do WhatsApp"), pois essas
         são justamente os ganchos corretos definidos em campanha_context_matrix.json —
         um regex genérico de "no/do/em grupo" quebrava essas frases e gerava
-        contradições do tipo "não acontece na conversa privada, é no privado".
+            contradições do tipo "não acontece em grupos; acontece no chat do WhatsApp".
         """
         capacidade_patterns = [
-            (r"\binfiltrad\w+ no grupo\b", "contatando o aluno no privado"),
-            (r"\bpredador\w* no grupo\b", "predador no privado do WhatsApp"),
-            (r"\bdetecta\w*\s+(o |a )?invasor\w*\s+no grupo\b", "alerta sobre mensagem suspeita no privado"),
-            (r"\bdetecta\w* (o |a )?invasor\b", "alerta sobre mensagem suspeita no privado"),
-            (r"\bmonitora\w* grupos?\b", "alerta em conversas privadas"),
-            (r"\b(detecta|alerta|notifica)\w*\s+(o |a )?grupo\b", r"\1 o usuário no privado"),
+            (r"\binfiltrad\w+ no grupo\b", "contatando o aluno no chat do WhatsApp"),
+            (r"\bpredador\w* no grupo\b", "predador no chat do WhatsApp"),
+            (r"\bdetecta\w*\s+(o |a )?invasor\w*\s+no grupo\b", "alerta sobre mensagem suspeita no chat do WhatsApp"),
+            (r"\bdetecta\w* (o |a )?invasor\b", "alerta sobre mensagem suspeita no chat do WhatsApp"),
+            (r"\bmonitora\w* grupos?\b", "detecta ameaças e envia alerta no chat do WhatsApp"),
+            (r"\b(detecta|alerta|notifica)\w*\s+(o |a )?grupo\b", r"\1 o usuário no chat do WhatsApp"),
+            (r"\bmonitora\w*\s+(suas\s+|essas\s+|as\s+)?conversas\s+privadas\b", "detecta ameaças e envia um alerta imediato"),
+            (r"\bchat\s+privado\b", "chat do WhatsApp"),
+            (r"\bconversa\s+privada\b", "conversa no WhatsApp"),
         ]
         for field in ("desenvolvimento_copy", "gancho_atencao_inicial", "chamada_para_acao_cta", "texto_card_notificacao"):
             if not creative_data.get(field):
@@ -272,9 +301,9 @@ class CampaignOrchestrator:
             for pattern, repl in capacidade_patterns:
                 text = re.sub(pattern, repl, text, flags=re.IGNORECASE)
             # Rede de segurança: se a substituição criar "privad..." repetido perto
-            # (ex.: "...conversa privada, é no privado"), remove a redundância.
+            # (ex.: "...conversa no WhatsApp, é no chat do WhatsApp"), remove a redundância.
             text = re.sub(
-                r"\b(conversa privada|chat privado)\b([^.!?]{0,20})\bno privado\b",
+                r"\b(conversa no WhatsApp|chat do WhatsApp)\b([^.!?]{0,20})\bno privado\b",
                 r"\1\2",
                 text,
                 flags=re.IGNORECASE,
@@ -962,14 +991,14 @@ class CampaignOrchestrator:
             + (f"ESTRUTURA DO ROTEIRO DE NARRAÇÃO:\n{roteiro_txt}\n\n" if roteiro_txt else "")
             + "CAPACIDADE DO PRODUTO (NUNCA VIOLAR):\n"
             "- Guardian AI NÃO bloqueia mensagens, apps nem configurações do celular.\n"
-            "- Ele DETECTA ameaças em conversas PRIVADAS (1:1) do WhatsApp e ENVIA ALERTA imediato.\n"
-            "- NÃO monitora grupos do WhatsApp — golpes em campanha devem ser em chat privado.\n"
+            "- Ele DETECTA ameaças em mensagens diretas (1:1) no chat do WhatsApp e ENVIA ALERTA imediato.\n"
+            "- NÃO monitora grupos do WhatsApp — golpes em campanha devem ocorrer no chat do WhatsApp, não em grupos.\n"
             "- Nome da marca: sempre 'Guardian AI' (pronúncia em inglês).\n"
             "- NUNCA inclua URL, domínio ou guardian-ai.app na narração.\n\n"
             + "REGRAS OBRIGATÓRIAS DE OUTPUT (JSON estrito):\n"
             "1. gancho_atencao_inicial: MANCHETE visceral em MAIÚSCULAS, máx 10 palavras. "
             "Contraste GRUPO x PRIVADO de forma clara (ex.: 'NÃO É NO GRUPO — É NO PRIVADO DO ALUNO'). "
-            "PROIBIDO frases contraditórias como 'não acontece na conversa privada, é no privado'.\n"
+            "PROIBIDO frases contraditórias como 'não acontece em grupos; acontece no chat do WhatsApp'.\n"
             f"2. desenvolvimento_copy: Roteiro PAS com {preset['copy_duration']}. "
             f"Tom: {preset['copy_tone']}.{regra_chars} "
             f"Mencione Guardian AI como solução de detecção e alerta. "

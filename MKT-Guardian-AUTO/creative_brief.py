@@ -170,8 +170,8 @@ class HeadlineRotator:
         headline = (creative_data.get("gancho_atencao_inicial") or "").strip()
         broken = [
             r"privad[oa][^.!?]{0,30}privad[oa]",
-            r"conversa privada[^.!?]{0,25}no privado",
-            r"chat privado[^.!?]{0,25}no privado",
+            r"conversa no WhatsApp[^.!?]{0,25}no privado",
+            r"chat do WhatsApp[^.!?]{0,25}no privado",
             r"não acontece[^.!?]{0,40}no privado",
         ]
         publico = config.get("publico_slug", "")

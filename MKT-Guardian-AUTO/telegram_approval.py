@@ -287,7 +287,7 @@ class TelegramApproval:
                                 session, "sendMessage", chat_id=self.chat_id,
                                 text=(
                                     "Descreva a *melhoria* na estória (responda em texto):\n\n"
-                                    "• Produto: ex. não falar em grupos — só chat privado\n"
+                                    "• Produto: ex. não falar em grupos — só no chat do WhatsApp\n"
                                     "• Headline / roteiro / personagem / CTA\n"
                                     "• Mensagem do golpista ou ângulo da história"
                                 ),

@@ -1,0 +1,82 @@
+{
+  "versao": "1.0",
+  "descricao": "Guia canônico de linguagem do agente criador e das validações de copy.",
+  "expressoes_proibidas": [
+    {
+      "id": "monitora_conversas",
+      "padroes": [
+        "monitora conversas privadas",
+        "monitora suas conversas",
+        "monitora essas conversas",
+        "monitora o que você conversa"
+      ],
+      "motivo": "Implica vigilância contínua. O produto detecta ameaças e envia alertas.",
+      "severidade": "bloqueante"
+    },
+    {
+      "id": "monitora_grupos",
+      "padroes": [
+        "monitora grupos",
+        "monitora os grupos",
+        "detecta ameaças dentro de grupos"
+      ],
+      "motivo": "O produto não monitora grupos do WhatsApp.",
+      "severidade": "bloqueante"
+    },
+    {
+      "id": "chat_privado",
+      "padroes": [
+        "chat privado",
+        "em chat privado",
+        "no chat privado"
+      ],
+      "motivo": "Padronização editorial: usar 'no chat do WhatsApp'.",
+      "severidade": "bloqueante"
+    }
+  ],
+  "expressoes_sugeridas": [
+    {
+      "id": "deteccao_alerta",
+      "usar": "O Guardian AI detecta ameaças e envia um alerta imediato.",
+      "contextos": [
+        "solucao",
+        "fechamento_roteiro"
+      ]
+    },
+    {
+      "id": "mensagem_whatsapp",
+      "usar": "mensagem no chat do WhatsApp",
+      "contextos": [
+        "golpe",
+        "cena",
+        "roteiro"
+      ]
+    },
+    {
+      "id": "conversa_whatsapp",
+      "usar": "conversa no WhatsApp",
+      "contextos": [
+        "roteiro",
+        "cena"
+      ]
+    }
+  ],
+  "substituicoes_automaticas": [
+    {
+      "padrao": "monitora suas conversas privadas",
+      "substituto": "detecta ameaças e envia um alerta imediato"
+    },
+    {
+      "padrao": "monitora essas conversas privadas",
+      "substituto": "detecta ameaças e envia um alerta imediato"
+    },
+    {
+      "padrao": "chat privado",
+      "substituto": "chat do WhatsApp"
+    },
+    {
+      "padrao": "conversa privada",
+      "substituto": "conversa no WhatsApp"
+    }
+  ]
+}

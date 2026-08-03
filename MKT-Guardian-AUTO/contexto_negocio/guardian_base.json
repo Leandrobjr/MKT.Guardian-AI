@@ -5,11 +5,11 @@
     "plataformas": ["Android (Play Store)", "iOS (App Store)"],
     "url_oficial": "https://guardian-ai.app",
     "posicionamento_comercial": "Proteção inteligente para sua vida, no WhatsApp.",
-    "proposta_unica_de_valor": "O app que monitora, detecta golpes no WhatsApp e envia alertas imediatos para você verificar — sem complicação técnica.",
-    "foco_exclusivo": "Guardian AI protege EXCLUSIVAMENTE o WhatsApp — versão pessoal e WhatsApp Business. Todo criativo deve mostrar golpes e proteção em conversas PRIVADAS (1:1), não em grupos.",
+    "proposta_unica_de_valor": "O app que detecta golpes no WhatsApp e envia alertas imediatos para você verificar — sem complicação técnica.",
+    "foco_exclusivo": "Guardian AI protege EXCLUSIVAMENTE o WhatsApp — versão pessoal e WhatsApp Business. Todo criativo deve mostrar golpes e proteção no chat do WhatsApp, em mensagens diretas 1:1, não em grupos.",
     "capacidades_reais": {
       "faz": [
-        "Detecta padrões suspeitos em conversas PRIVADAS do WhatsApp (mensagens diretas 1:1)",
+        "Detecta padrões suspeitos em mensagens diretas no chat do WhatsApp (1:1)",
         "Envia alerta imediato para o usuário verificar a mensagem suspeita",
         "Protege WhatsApp pessoal e WhatsApp Business"
       ],
@@ -18,7 +18,7 @@
         "NÃO bloqueia mensagens, apps nem configurações do celular",
         "NÃO impede o usuário de enviar ou receber mensagens"
       ],
-      "regra_criativo": "O golpe e o alerta do Guardian AI devem aparecer em chat PRIVADO (1:1). Nunca afirmar que o app detecta ameaças dentro de grupos."
+      "regra_criativo": "O golpe e o alerta do Guardian AI devem aparecer no chat do WhatsApp, em mensagem direta 1:1. Nunca afirmar que o app detecta ameaças dentro de grupos."
     },
     "tom_de_voz_obrigatorio": {
       "estilo": "Autoritário, urgente, acolhedor e simples",
@@ -29,8 +29,8 @@
         "Sempre mencionar dor específica antes da solução",
         "Máximo 15 palavras por frase de impacto"
       ],
-      "palavras_proibidas": ["cybersecurity", "firewall", "endpoint", "SSL", "TLS", "protocolo"],
-      "palavras_chave": ["golpe", "proteção", "WhatsApp", "PIX", "família", "segurança", "invasão", "clone"]
+      "palavras_proibidas": ["cybersecurity", "firewall", "endpoint", "SSL", "TLS", "protocolo", "chat privado", "monitora conversas", "monitora grupos"],
+      "palavras_chave": ["golpe", "proteção", "WhatsApp", "PIX", "família", "segurança", "invasão", "clone", "detecta ameaças", "alerta imediato", "chat do WhatsApp"]
     }
   },
   "ICP_PUBLICOS": [

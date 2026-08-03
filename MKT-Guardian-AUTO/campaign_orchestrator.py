@@ -32,6 +32,7 @@ from campaign_coherence import (
 from campaign_context_engine import CampaignContextEngine
 from scam_library import ScamLibrary
 from story_approval import format_story_telegram, story_keyboard
+from copy_lexicon import CopyLexicon
 
 try:
     from telegram_approval import TelegramApproval
@@ -61,6 +62,7 @@ class CampaignOrchestrator:
         self.context_path = os.path.join(self.BASE_DIR, "contexto_negocio", "guardian_base.json")
         self.context_data = self._load_business_context()
         self.copy_lexicon = self._load_copy_lexicon()
+        self.lexicon_guard = CopyLexicon(self.BASE_DIR)
         self.md_context = self._load_markdown_context()
 
         self.media_factory = MediaFactory()
@@ -269,6 +271,8 @@ class CampaignOrchestrator:
             lines.append("GUIA LEXICAL OBRIGATÓRIO — PREFERIR:")
             for item in sugeridas:
                 lines.append(f"  ✅ \"{item.get('usar', '')}\"")
+        lines.append("")
+        lines.append(self.lexicon_guard.format_for_prompt())
         return "\n".join(lines)
 
     def _enforce_product_truth(self, creative_data: dict) -> dict:
@@ -313,6 +317,12 @@ class CampaignOrchestrator:
             creative_data[field] = self._fix_pt_artifacts(text)
 
         creative_data["texto_card_solucao"] = card_solucao_text()
+        creative_data, violations = self.lexicon_guard.sanitize_creative(creative_data)
+        if violations:
+            resumo = ", ".join(
+                f"{item['campo']}={item['expressao']!r}" for item in violations[:3]
+            )
+            print(f"⚠️ Violações lexicais remanescentes: {resumo}")
         return creative_data
 
     def _sanitize_headline(
@@ -1069,8 +1079,16 @@ class CampaignOrchestrator:
                 head = (result.get("gancho_atencao_inicial") or "").strip()
                 nexo_ok = not frase_golpista or is_coherent(copy, frase_golpista, head)
                 genero_ok = is_gender_coherent(result)
-                if nexo_ok and genero_ok:
+                _, lexical_violations = self.lexicon_guard.sanitize_creative(dict(result))
+                lexical_ok = not lexical_violations
+                if nexo_ok and genero_ok and lexical_ok:
                     return result
+                if not lexical_ok and tentativa < 2:
+                    print(
+                        "[!] Copy fora do léxico canônico "
+                        f"({lexical_violations[0]['expressao']!r}) — regerando copy..."
+                    )
+                    continue
                 if not genero_ok and tentativa < 2:
                     print(
                         "[!] Roteiro e gênero visual conflitantes "

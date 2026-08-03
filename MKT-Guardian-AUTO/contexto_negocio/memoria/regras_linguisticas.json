@@ -1,0 +1,32 @@
+[
+  {
+    "id": "nao_monitora_conversas",
+    "tipo": "proibida",
+    "expressao": "monitora conversas privadas",
+    "usar": "detecta ameaças e envia um alerta imediato",
+    "motivo": "O Guardian AI detecta ameaças; não promete vigilância contínua.",
+    "escopo": "global",
+    "origem": "regra_base",
+    "ativo": true
+  },
+  {
+    "id": "nao_chat_privado",
+    "tipo": "proibida",
+    "expressao": "chat privado",
+    "usar": "chat do WhatsApp",
+    "motivo": "Padronização editorial definida pelo administrador.",
+    "escopo": "global",
+    "origem": "regra_base",
+    "ativo": true
+  },
+  {
+    "id": "solucao_detecta_alerta",
+    "tipo": "sugerida",
+    "expressao": "detecta ameaças e envia um alerta imediato",
+    "usar": "detecta ameaças e envia um alerta imediato",
+    "motivo": "Descreve a capacidade real do produto.",
+    "escopo": "global",
+    "origem": "regra_base",
+    "ativo": true
+  }
+]

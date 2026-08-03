@@ -1319,6 +1319,12 @@ class CampaignOrchestrator:
                     story_attempt,
                     categoria=plan.get("primary_category", "narrativa"),
                 )
+                regras_aprendidas = self.memory.aprender_regra_de_feedback(feedback)
+                if regras_aprendidas:
+                    print(
+                        "🧠 Regra linguística global aprendida: "
+                        + ", ".join(regras_aprendidas)
+                    )
                 print(f"📝 Melhoria registrada — regerando estória (tentativa {story_attempt}/{self.max_revisoes})...")
                 if self.telegram:
                     self.telegram.notificar_sync(

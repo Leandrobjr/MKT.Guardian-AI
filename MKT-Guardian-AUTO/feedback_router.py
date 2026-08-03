@@ -214,6 +214,20 @@ def classify_improvement(feedback: str) -> dict:
     narrative = _has_narrative_intent(t)
     golpe = _has_golpe_intent(t)
     headline = _has_headline_intent(t)
+    product_language = any(
+        x in t
+        for x in (
+            "monitora conversas",
+            "monitora essas conversas",
+            "monitora grupos",
+            "chat privado",
+            "conversa privada",
+            "não usar",
+            "nao usar",
+            "não citar",
+            "nao citar",
+        )
+    )
 
     layout = any(
         x in t
@@ -225,7 +239,7 @@ def classify_improvement(feedback: str) -> dict:
             "fonte grande", "fonte menor", "quebrar",
         )
     )
-    copy = surgical or narrative or golpe or any(
+    copy = product_language or surgical or narrative or golpe or any(
         x in t
         for x in (
             "headline", "titulo", "título", "roteiro", "narra", "gancho",
@@ -277,7 +291,9 @@ def classify_improvement(feedback: str) -> dict:
         not layout and not visual and not audio and not copy and not narrative and not golpe
     )
 
-    if surgical:
+    if product_language and not narrative and not golpe and not surgical:
+        primary = "produto"
+    elif surgical:
         primary = "copy"
     elif narrative:
         primary = "narrativa"
@@ -305,6 +321,7 @@ def classify_improvement(feedback: str) -> dict:
         "golpe": golpe,
         "headline": headline,
         "surgical_copy": surgical,
+        "product_language": product_language,
         "headline_only": headline_only,
         "narrative_override": override,
         "primary_category": primary,

@@ -20,6 +20,7 @@ class AgentMemory:
         self._correcoes = os.path.join(self.mem_dir, "correcoes_admin.jsonl")
         self._aprovados = os.path.join(self.mem_dir, "aprovados.jsonl")
         self._rejeitados = os.path.join(self.mem_dir, "rejeitados.jsonl")
+        self._regras_linguisticas = os.path.join(self.mem_dir, "regras_linguisticas.json")
 
     def _append(self, path: str, record: dict) -> None:
         record.setdefault("data", datetime.now().strftime("%Y-%m-%d %H:%M"))
@@ -38,6 +39,88 @@ class AgentMemory:
             except json.JSONDecodeError:
                 continue
         return registros
+
+    def regras_linguisticas(self, ativas_only: bool = True) -> list[dict]:
+        if not os.path.isfile(self._regras_linguisticas):
+            return []
+        try:
+            with open(self._regras_linguisticas, encoding="utf-8") as f:
+                rules = json.load(f)
+            if not isinstance(rules, list):
+                return []
+            if ativas_only:
+                rules = [r for r in rules if r.get("ativo", True)]
+            return rules
+        except (OSError, json.JSONDecodeError):
+            return []
+
+    def registrar_regra_linguistica(
+        self,
+        rule_id: str,
+        tipo: str,
+        expressao: str,
+        usar: str = "",
+        motivo: str = "",
+        origem: str = "admin",
+    ) -> bool:
+        """Adiciona regra global deduplicada; retorna False se já existir."""
+        rules = self.regras_linguisticas(ativas_only=False)
+        if any(r.get("id") == rule_id for r in rules):
+            return False
+        rules.append(
+            {
+                "id": rule_id,
+                "tipo": tipo,
+                "expressao": expressao,
+                "usar": usar,
+                "motivo": motivo,
+                "escopo": "global",
+                "origem": origem,
+                "ativo": True,
+            }
+        )
+        with open(self._regras_linguisticas, "w", encoding="utf-8") as f:
+            json.dump(rules, f, ensure_ascii=False, indent=2)
+            f.write("\n")
+        return True
+
+    def aprender_regra_de_feedback(self, feedback: str) -> list[str]:
+        """Promove regras explícitas de linguagem do feedback para memória global."""
+        text = (feedback or "").lower()
+        learned: list[str] = []
+        candidates = (
+            (
+                "nao_monitora_conversas",
+                "proibida",
+                "monitora conversas privadas",
+                "detecta ameaças e envia um alerta imediato",
+                "Regra explícita do administrador.",
+            ),
+            (
+                "nao_chat_privado",
+                "proibida",
+                "chat privado",
+                "chat do WhatsApp",
+                "Regra explícita do administrador.",
+            ),
+            (
+                "nao_monitora_grupos",
+                "proibida",
+                "monitora grupos",
+                "detecta ameaças no chat do WhatsApp",
+                "O produto não monitora grupos.",
+            ),
+        )
+        for rule_id, tipo, expressao, usar, motivo in candidates:
+            if expressao in text and any(
+                marker in text
+                for marker in ("não usar", "nao usar", "nunca usar", "não citar", "nao citar", "proib")
+            ):
+                if self.registrar_regra_linguistica(
+                    rule_id, tipo, expressao, usar, motivo, origem="feedback_admin"
+                ):
+                    learned.append(rule_id)
+        return learned
 
     def registrar_correcao(
         self,
@@ -148,6 +231,18 @@ class AgentMemory:
     ) -> str:
         """Texto injetado no prompt Gemini — regras aprendidas (filtradas por combo)."""
         partes: list[str] = []
+        regras = self.regras_linguisticas()
+        if regras:
+            partes.append("REGRAS LINGUÍSTICAS GLOBAIS — aplicar em qualquer combo:")
+            for rule in regras:
+                if rule.get("tipo") == "proibida":
+                    partes.append(
+                        f"- NÃO USAR: {rule.get('expressao', '')}. "
+                        f"Preferir: {rule.get('usar', '')}."
+                    )
+                else:
+                    partes.append(f"- PREFERIR: {rule.get('usar', rule.get('expressao', ''))}.")
+
         correcoes = self._filter_by_combo(
             self._load_recent(self._correcoes, limit_correcoes * 3),
             publico,

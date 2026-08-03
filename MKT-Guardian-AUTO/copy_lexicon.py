@@ -36,10 +36,45 @@ class CopyLexicon:
             return {}
 
     def _prohibited(self) -> list[dict[str, Any]]:
-        return self.data.get("expressoes_proibidas", [])
+        items = list(self.data.get("expressoes_proibidas", []))
+        known = {str(p).lower() for item in items for p in item.get("padroes", [])}
+        for rule in self._memory_rules():
+            if rule.get("tipo") != "proibida":
+                continue
+            expression = str(rule.get("expressao", "")).strip()
+            if expression and expression.lower() not in known:
+                items.append(
+                    {
+                        "id": rule.get("id", ""),
+                        "padroes": [expression],
+                        "motivo": rule.get("motivo", ""),
+                        "severidade": "bloqueante",
+                    }
+                )
+        return items
 
     def _substitutions(self) -> list[dict[str, str]]:
-        return self.data.get("substituicoes_automaticas", [])
+        items = list(self.data.get("substituicoes_automaticas", []))
+        known = {str(i.get("padrao", "")).lower() for i in items}
+        for rule in self._memory_rules():
+            if rule.get("tipo") != "proibida":
+                continue
+            expression = str(rule.get("expressao", "")).strip()
+            replacement = str(rule.get("usar", "")).strip()
+            if expression and replacement and expression.lower() not in known:
+                items.append({"padrao": expression, "substituto": replacement})
+        return items
+
+    def _memory_rules(self) -> list[dict[str, Any]]:
+        path = os.path.join(
+            os.path.dirname(self.path), "memoria", "regras_linguisticas.json"
+        )
+        try:
+            with open(path, encoding="utf-8") as f:
+                rules = json.load(f)
+            return [r for r in rules if r.get("ativo", True)] if isinstance(rules, list) else []
+        except (OSError, json.JSONDecodeError):
+            return []
 
     def scan_violations(self, text: str) -> list[dict[str, str]]:
         """Retorna as expressões proibidas encontradas no texto."""

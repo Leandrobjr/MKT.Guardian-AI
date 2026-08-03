@@ -35,7 +35,7 @@ def main() -> int:
     print("VALIDACAO MKT GUARDIAN — CRIATIVIDADE (Fases 1-5)")
     print("=" * 60)
     print_build_banner(BASE)
-    print(f"  Versao esperada: v5.9+ | Atual: v{ORCHESTRATOR_VERSION}")
+    print(f"  Versao esperada: v5.10+ | Atual: v{ORCHESTRATOR_VERSION}")
     ok_all = True
 
     for rel in (
@@ -43,6 +43,7 @@ def main() -> int:
         "contexto_negocio/golpes_whatsapp.json",
         "contexto_negocio/campanha_context_matrix.json",
         "contexto_negocio/copy_lexicon.json",
+        "contexto_negocio/memoria/regras_linguisticas.json",
     ):
         try:
             with open(os.path.join(BASE, rel), encoding="utf-8") as f:

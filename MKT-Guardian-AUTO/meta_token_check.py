@@ -165,7 +165,7 @@ def main() -> int:
         err = body["error"]
         print(f"\n❌ debug_token: {err.get('message')} (code={err.get('code')})")
         print("\n💡 A Meta rejeitou ESTE token literal. Próximos passos:")
-        print("   1) rm ~/Documentos/Guardian-AI/MKT_Guardian-AI/MKT-Guardian-AUTO/.env")
+        print("   1) Confirme qual dos arquivos .env deve ser a fonte oficial")
         print("   2) Graph API Explorer → token NOVO (não o EAAoJmoNlc…)")
         print("   3) Troque por long-lived (curl fb_exchange_token)")
         print("   4) Cole só em MKT_Guardian-AI/.env")
@@ -204,7 +204,7 @@ def main() -> int:
         print("\n🚨 DICOTOMIA: dois tokens diferentes nos .env")
         print(f"   Raiz (../.env):  {_token_fingerprint(root_tok)}")
         print(f"   AUTO (./.env):   {_token_fingerprint(auto_tok)}  ← ESTE está em uso")
-        print("   O long-lived do curl deve ir na raiz E rm MKT-Guardian-AUTO/.env")
+        print("   Alinhe os dois arquivos .env; não mantenha tokens diferentes.")
 
     needed = {"instagram_basic", "instagram_content_publish"}
     missing = needed - set(scopes)
@@ -246,11 +246,11 @@ def main() -> int:
 
     if root_tok and auto_tok and root_tok != auto_tok:
         print("RESULTADO: ERRADO — AUTO/.env sobrescreve o long-lived da raiz.")
-        print("   rm MKT-Guardian-AUTO/.env  &&  python3 meta_token_check.py")
+        print("   Alinhe a fonte oficial dos arquivos .env e rode novamente o diagnóstico.")
         return 1
 
     if dias_restantes is not None and dias_restantes < 30:
-        print("RESULTADO: ERRADO — token CURTO (~horas), não long-lived (60 dias).")
+        print("RESULTADO: ERRADO — token abaixo do mínimo de 30 dias; renove para long-lived (60 dias).")
         print("   Cole o access_token do curl (expires_in: 5183999) em ../.env")
         print("   Confira se termina com …GpMkx (ou sufixo do SEU curl), não …PaL4SU")
         return 1

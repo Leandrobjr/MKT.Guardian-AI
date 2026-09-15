@@ -95,13 +95,16 @@ class CampaignHistory:
             asset_path = assets_resultado.get("commercial_video_file") or assets_resultado.get(
                 "static_image_file", ""
             )
-        ambiente = ""
+        ambiente = creative_data.get("ambiente_cena") or ""
         regras = creative_data.get("regras_visuais") or {}
         if isinstance(regras, dict):
-            ambiente = regras.get("ambiente") or regras.get("cenario") or ""
+            ambiente = ambiente or regras.get("ambiente") or regras.get("cenario") or ""
+        preset_metadata = config.get("preset_metadata") or config.get("_channel_metadata") or {}
+        preset = config.get("preset_midia") or creative_data.get("preset_midia") or {}
 
         return {
             "tipo": "campanha_historico",
+            "campaign_id": config.get("_campaign_id", ""),
             "status": status,
             "basename": basename,
             "publico": publico,
@@ -117,6 +120,8 @@ class CampaignHistory:
             "copy_hook": copy[:200],
             "visual_hash": visual_hash(cena, pid),
             "persona_id": pid,
+            "visual_reference_id": creative_data.get("visual_reference_id", ""),
+            "visual_reference": creative_data.get("visual_reference") or {},
             "ambiente": ambiente,
             "frase_golpista": (creative_data.get("texto_card_notificacao") or "")[:160],
             "scam_variant_id": config.get("_campaign_context", {}).get("scam_variant_id", ""),
@@ -124,6 +129,20 @@ class CampaignHistory:
             "revisao": revisao,
             "canal": config.get("canal", ""),
             "midia": config.get("midia", ""),
+            "preset_id": preset_metadata.get("preset_id") or preset.get("preset_id", ""),
+            "resolucao": preset_metadata.get("resolucao")
+            or f"{preset.get('width', '')}x{preset.get('height', '')}",
+            "proporcao": preset_metadata.get("proporcao") or preset.get("aspect_ratio", ""),
+            "duracao_copy": preset_metadata.get("duracao_copy") or preset.get("copy_duration", ""),
+            "duracao_alvo_segundos": preset_metadata.get("duracao_alvo_segundos")
+            or preset.get("target_narration_seconds"),
+            "ritmo": preset_metadata.get("ritmo", ""),
+            "tipo_trilha": preset_metadata.get("tipo_trilha") or preset.get("trilha_tipo", ""),
+            "velocidade_narracao": preset_metadata.get("velocidade_narracao")
+            or preset.get("eleven_speed"),
+            "storyboard": creative_data.get("storyboard")
+            or config.get("_storyboard")
+            or [],
         }
 
     def registrar_campanha(

@@ -2,20 +2,109 @@
 
 from __future__ import annotations
 
+from dataclasses import asdict, dataclass
+
+from composition_templates import get_composition_template
+
 
 def _is_video_midia(midia: str) -> bool:
     m = (midia or "").lower()
     return "vídeo" in m or "video" in m or "animado" in m
 
 
+def is_video_media(midia: str) -> bool:
+    """Indica se a mídia selecionada exige um asset de vídeo."""
+    return _is_video_midia(midia)
+
+
 def _is_meta_canal(canal: str) -> bool:
-    return "meta" in (canal or "").lower()
+    value = (canal or "").lower()
+    return any(token in value for token in ("meta", "instagram", "facebook", "feed", "reels"))
+
+
+def _is_short_canal(canal: str) -> bool:
+    value = (canal or "").lower()
+    return any(token in value for token in ("tiktok", "youtube", "shorts"))
+
+
+@dataclass(frozen=True)
+class ChannelMediaValidation:
+    valid: bool
+    errors: tuple[str, ...]
+    preset: dict
+    metadata: dict
+
+    def to_dict(self) -> dict:
+        return asdict(self)
+
+
+def _preset_metadata(preset: dict) -> dict:
+    width = preset.get("width", 1080)
+    height = preset.get("height", 1080)
+    template = preset.get("composition_template") or {}
+    return {
+        "preset_id": preset.get("preset_id", ""),
+        "template_id": template.get("template_id", ""),
+        "area_segura": template.get("safe_area", []),
+        "posicao_logo": template.get("logo_anchor", ""),
+        "animacao_composicao": template.get("animation", ""),
+        "resolucao": f"{width}x{height}",
+        "proporcao": preset.get("aspect_ratio", ""),
+        "duracao_copy": preset.get("copy_duration", ""),
+        "duracao_alvo_segundos": preset.get("target_narration_seconds"),
+        "ritmo": (
+            "rápido e urgente"
+            if preset.get("preset_id") == "shorts_urgente"
+            else "pausado e focado em leitura"
+        ),
+        "tipo_trilha": preset.get("trilha_tipo", ""),
+        "velocidade_narracao": preset.get("eleven_speed"),
+    }
+
+
+def _attach_composition_template(preset: dict) -> dict:
+    preset["composition_template"] = get_composition_template(
+        preset.get("preset_id", "")
+    ).to_dict()
+    return preset
+
+
+def validate_channel_media(canal: str, midia: str) -> ChannelMediaValidation:
+    """Valida combinação antes de consumir Gemini, Kling ou ElevenLabs."""
+    media_video = _is_video_midia(midia)
+    media_label = "vídeo vertical" if media_video else "imagem quadrada"
+    errors: list[str] = []
+    is_meta = _is_meta_canal(canal)
+    is_short = _is_short_canal(canal)
+
+    if not str(canal or "").strip():
+        errors.append("O canal de distribuição é obrigatório.")
+    elif not is_meta and not is_short:
+        errors.append(
+            f"Canal não suportado para {media_label}. Use Meta Ads ou TikTok/YouTube Shorts."
+        )
+    elif not media_video and not is_meta:
+        errors.append(
+            "Imagem estática quadrada só pode ser usada no Feed do Instagram/Facebook (Meta Ads)."
+        )
+    elif media_video and not (is_meta or is_short):
+        errors.append(
+            "Vídeo vertical só pode ser usado em Reels/Stories da Meta ou TikTok/YouTube Shorts."
+        )
+
+    preset = resolve_channel_preset(canal, midia)
+    return ChannelMediaValidation(
+        valid=not errors,
+        errors=tuple(errors),
+        preset=preset,
+        metadata=_preset_metadata(preset),
+    )
 
 
 def resolve_channel_preset(canal: str, midia: str) -> dict:
-    """Retorna preset técnico conforme canal (Etapa 4) e tipo de mídia (Etapa 3)."""
+    """Retorna preset técnico conforme canal e tipo de mídia."""
     if not _is_video_midia(midia):
-        return {
+        return _attach_composition_template({
             "preset_id": "feed_quadrado",
             "label": "Feed Instagram/Facebook 1:1",
             "width": 1080,
@@ -33,10 +122,10 @@ def resolve_channel_preset(canal: str, midia: str) -> dict:
             "track_weight": "0.30",
             "kling_duration": 5,
             "kling_resolution": "720p",
-        }
+        })
 
     if _is_meta_canal(canal):
-        return {
+        return _attach_composition_template({
             "preset_id": "meta_reels",
             "label": "Meta Ads — Reels/Stories (pausado, leitura)",
             "width": 1080,
@@ -60,9 +149,9 @@ def resolve_channel_preset(canal: str, midia: str) -> dict:
             "copy_max_chars": 520,
             "target_narration_seconds": 32,
             "video_slowdown": 1.35,
-        }
+        })
 
-    return {
+    return _attach_composition_template({
         "preset_id": "shorts_urgente",
         "label": "TikTok / YouTube Shorts (rápido, urgente)",
         "width": 1080,
@@ -88,7 +177,7 @@ def resolve_channel_preset(canal: str, midia: str) -> dict:
         "auto_fit_narration": True,
         "max_audio_speedup": 1.25,
         "video_slowdown": 1.45,
-    }
+    })
 
 
 def format_preset_summary(preset: dict) -> str:

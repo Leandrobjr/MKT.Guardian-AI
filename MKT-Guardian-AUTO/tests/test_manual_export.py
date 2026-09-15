@@ -1,6 +1,7 @@
 """Testes da exportação local para upload manual no TikTok."""
 
 import os
+import json
 import shutil
 import tempfile
 import unittest
@@ -31,9 +32,10 @@ class TestManualExport(unittest.TestCase):
         result = export_tiktok_package(
             self.tmp,
             {
-                "basename": "campanha",
+                "basename": "../campanha/../campanha",
                 "commercial_video_file": self.video,
                 "static_image_file": self.image,
+                "campaign_id": "camp_123",
             },
             {
                 "gancho_atencao_inicial": "GOLPE NO WHATSAPP",
@@ -48,6 +50,11 @@ class TestManualExport(unittest.TestCase):
         self.assertTrue(os.path.isfile(result["thumbnail"]))
         self.assertTrue(os.path.isfile(result["caption"]))
         self.assertTrue(os.path.isfile(result["checklist"]))
+        self.assertNotIn("..", result["package_dir"])
+        with open(os.path.join(result["package_dir"], "dados_campanha.json"), encoding="utf-8") as f:
+            metadata = json.load(f)
+        self.assertEqual(metadata["campaign_id"], "camp_123")
+        self.assertFalse(metadata["publicacao_automatica"])
         with open(result["caption"], encoding="utf-8") as f:
             self.assertIn("GOLPE NO WHATSAPP", f.read())
 

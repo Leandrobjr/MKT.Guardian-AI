@@ -9,6 +9,7 @@ from __future__ import annotations
 import json
 import os
 import re
+from dataclasses import asdict, dataclass
 from typing import TYPE_CHECKING
 
 from campaign_history import CampaignHistory, headline_hash
@@ -17,6 +18,173 @@ if TYPE_CHECKING:
     pass
 
 _WORD_RE = re.compile(r"[\wÀ-ÿ]+", re.UNICODE)
+
+
+@dataclass(frozen=True)
+class CreativeBrief:
+    """Fonte única de verdade compartilhada pelos agentes da campanha."""
+
+    objetivo: str
+    publico: str
+    publico_slug: str
+    golpe: str
+    golpe_id: str
+    variante_golpe: str
+    mensagem_golpista: str
+    dor_principal: str
+    promessa: str
+    personagem: str
+    cenario: str
+    emocao: str
+    estilo_visual: str
+    canal: str
+    duracao: str
+    formato: dict
+    textos_pos_producao: tuple[str, ...]
+    restricoes: tuple[str, ...]
+    chamada_para_acao: str
+
+    def to_dict(self) -> dict:
+        data = asdict(self)
+        data["textos_pos_producao"] = list(self.textos_pos_producao)
+        data["restricoes"] = list(self.restricoes)
+        return data
+
+    def to_prompt_block(self) -> str:
+        """Formata o brief sem incluir instruções específicas de um único agente."""
+        formato = self.formato
+        linhas = [
+            "BRIEF CRIATIVO ÚNICO — FONTE DE VERDADE DA CAMPANHA:",
+            f"- Objetivo: {self.objetivo}",
+            f"- Público: {self.publico} ({self.publico_slug})",
+            f"- Golpe: {self.golpe} ({self.golpe_id})",
+            f"- Variante: {self.variante_golpe or 'não definida'}",
+            f"- Mensagem do golpista: {self.mensagem_golpista or 'não definida'}",
+            f"- Dor principal: {self.dor_principal}",
+            f"- Promessa: {self.promessa}",
+            f"- Personagem: {self.personagem}",
+            f"- Cenário: {self.cenario}",
+            f"- Emoção: {self.emocao}",
+            f"- Estilo visual: {self.estilo_visual}",
+            f"- Canal: {self.canal}",
+            f"- Duração da narração: {self.duracao}",
+            f"- Formato: {formato.get('width')}x{formato.get('height')} ({formato.get('aspect_ratio')}) "
+            f"| template {formato.get('template_id', 'não definido')}",
+            f"- CTA obrigatório: {self.chamada_para_acao}",
+            "- Textos inseridos somente na pós-produção: "
+            + "; ".join(self.textos_pos_producao),
+        ]
+        if self.restricoes:
+            linhas.append("- Restrições obrigatórias:")
+            linhas.extend(f"  • {item}" for item in self.restricoes)
+        linhas.append(
+            "Todos os agentes devem respeitar este brief. Não invente outro público, golpe, "
+            "cenário, promessa ou CTA."
+        )
+        return "\n".join(linhas)
+
+
+def _first_text(values: object, fallback: str) -> str:
+    if isinstance(values, list):
+        for value in values:
+            if str(value).strip():
+                return str(value).strip()
+    if isinstance(values, str) and values.strip():
+        return values.strip()
+    return fallback
+
+
+def _default_cta(publico_slug: str, ctx: dict) -> str:
+    if ctx.get("cta_template"):
+        return str(ctx["cta_template"]).strip()
+    if publico_slug == "escolas":
+        return "PROTEJA SEUS ALUNOS COM GUARDIAN AI"
+    if publico_slug == "empresarios":
+        return "TESTE GRÁTIS — PROTEJA SEU WHATSAPP BUSINESS AGORA!"
+    if publico_slug == "pais":
+        return "TESTE GRÁTIS — PROTEJA O WHATSAPP DOS SEUS FILHOS!"
+    return "TESTE GRÁTIS — PROTEJA SEU WHATSAPP AGORA!"
+
+
+def build_creative_brief(
+    config: dict,
+    campaign_ctx: dict,
+    golpe_obj: dict,
+    preset: dict,
+    context_data: dict | None = None,
+) -> CreativeBrief:
+    """Constrói o brief antes da geração de copy e assets."""
+    context_data = context_data or {}
+    produto = context_data.get("PRODUTO_E_POSICIONAMENTO", {})
+    visual = context_data.get("DIRETRIZES_VISUAIS", {})
+    capacidades = produto.get("capacidades_reais", {})
+    restricoes = list(campaign_ctx.get("proibicoes_narrativa") or [])
+    restricoes.extend(campaign_ctx.get("obrigacoes_narrativa") or [])
+    restricoes.extend(
+        [
+            "Não inserir texto essencial dentro da imagem/vídeo gerado por IA.",
+            "Não incluir URL na narração; URL e CTA entram na pós-produção.",
+            "Mostrar o golpe e o alerta em conversa direta 1:1 no WhatsApp.",
+        ]
+    )
+    restricoes.extend(capacidades.get("nao_faz") or [])
+
+    dores = campaign_ctx.get("dores") or []
+    gatilhos = campaign_ctx.get("gatilhos") or []
+    estilo = visual.get(
+        "estilo_fotografico",
+        "Fotografia documental realista, cotidiano brasileiro bem cuidado.",
+    )
+    cenario = campaign_ctx.get("direcao_arte_emocional") or campaign_ctx.get(
+        "persona_visual", "Ambiente cotidiano brasileiro organizado."
+    )
+    promessa = (
+        produto.get("proposta_unica_de_valor")
+        or "Detectar ameaças no WhatsApp e enviar um alerta imediato."
+    )
+    golpe = golpe_obj.get("nome") or config.get("golpe", "Golpe no WhatsApp")
+    variante = campaign_ctx.get("scam_variant_titulo") or campaign_ctx.get(
+        "scam_variant_id", ""
+    )
+    formato = {
+        "width": preset.get("width", 1080),
+        "height": preset.get("height", 1080),
+        "aspect_ratio": preset.get("aspect_ratio", "1:1"),
+        "preset_id": preset.get("preset_id", ""),
+        "template_id": (preset.get("composition_template") or {}).get("template_id", ""),
+        "target_narration_seconds": preset.get("target_narration_seconds"),
+    }
+    return CreativeBrief(
+        objetivo=str(config.get("objetivo") or "Gerar instalação ou lead qualificado."),
+        publico=str(config.get("publico") or campaign_ctx.get("icp_nome") or "Público selecionado"),
+        publico_slug=str(config.get("publico_slug") or "geral"),
+        golpe=str(golpe),
+        golpe_id=str(config.get("golpe_id") or campaign_ctx.get("golpe_id") or ""),
+        variante_golpe=str(variante),
+        mensagem_golpista=str(campaign_ctx.get("frase_golpista") or golpe_obj.get("frase_golpista") or ""),
+        dor_principal=_first_text(dores, "Medo de cair em um golpe recebido no WhatsApp."),
+        promessa=str(promessa),
+        personagem=str(
+            campaign_ctx.get("protagonista")
+            or campaign_ctx.get("persona_visual")
+            or "Pessoa brasileira do público selecionado."
+        ),
+        cenario=str(cenario),
+        emocao=", ".join(str(item) for item in gatilhos[:4]) or "urgência e proteção",
+        estilo_visual=str(estilo),
+        canal=str(config.get("canal") or "Canal não definido"),
+        duracao=str(preset.get("copy_duration") or "Duração não definida"),
+        formato=formato,
+        textos_pos_producao=(
+            "headline",
+            "mensagem do card do golpe",
+            "card de solução",
+            "CTA",
+            "URL",
+        ),
+        restricoes=tuple(dict.fromkeys(str(item).strip() for item in restricoes if str(item).strip())),
+        chamada_para_acao=_default_cta(str(config.get("publico_slug") or ""), campaign_ctx),
+    )
 
 
 def tokenize_headline(text: str) -> set[str]:

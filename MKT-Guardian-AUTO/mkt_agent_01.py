@@ -1,5 +1,6 @@
 import os
 import re
+import json
 import time
 import random
 import shutil
@@ -16,7 +17,9 @@ from channel_presets import resolve_channel_preset, format_preset_summary
 from build_info import MEDIA_FACTORY_VERSION, print_build_banner
 from video_motion import build_natural_frame_sequence, motion_prompt_suffix, still_video_zoom_filter
 from video_compositor import compile_kling_pipeline, compose_still_with_overlay
+from composition_templates import get_composition_template
 from tts_narration import build_narration_script, card_solucao_text, resolve_overlay_cta, NARRATION_CLOSING
+from storyboard import format_storyboard_prompt
 from kling_client import (
     KLING_BASE_URL,
     explain_balance_error,
@@ -283,24 +286,45 @@ class MediaFactory:
             int(x1 * sx), int(y1 * sy),
         )
 
+    def _composition_template(self) -> dict:
+        preset = self.preset_midia or {}
+        template = preset.get("composition_template")
+        if template:
+            return template
+        return get_composition_template(
+            preset.get("preset_id", "meta_reels")
+        ).to_dict()
+
+    def _template_color(
+        self, role: str, fallback: tuple[int, int, int]
+    ) -> tuple[int, int, int]:
+        value = self._composition_template().get("colors", {}).get(role, fallback)
+        return tuple(value)
+
+    def _normalized_box(
+        self, box: tuple[float, float, float, float]
+    ) -> tuple[int, int, int, int]:
+        x0, y0, x1, y1 = box
+        return (
+            int(x0 * self.canvas_width),
+            int(y0 * self.canvas_height),
+            int(x1 * self.canvas_width),
+            int(y1 * self.canvas_height),
+        )
+
     def _scaled_font_size(self, base_size: int, min_size: int = 14) -> int:
-        """Escala tamanho de fonte proporcionalmente ao canvas (referência 1920px de altura)."""
-        return max(min_size, int(base_size * self.canvas_height / 1920))
+        """Escala fontes conforme o preset, preservando legibilidade no feed quadrado."""
+        reference_height = 1080 if self.canvas_height <= 1080 else 1920
+        return max(min_size, int(base_size * self.canvas_height / reference_height))
 
     def _card_layout(self) -> tuple:
-        """Retorna (alerta_box, solucao_box, cta_box) ajustadas ao canvas atual.
-        Cards compactos e deslocados para a faixa inferior — a maior parte do
-        quadro (rosto, mãos, celular) permanece sempre visível e sem obstrução."""
-        is_square = self.canvas_height <= self.canvas_width * 1.15
-        if is_square:
-            # 1:1 — cards ocupam só os últimos ~19% da imagem, iniciando em 73%
-            boxes = (
-                self._scale_box((36, 1402, 1044, 1527)),
-                self._scale_box((36, 1535, 1044, 1645)),
-                self._scale_box((36, 1653, 1044, 1763)),
-            )
-        else:
-            # 9:16 — cards ocupam só os últimos ~20% da imagem, iniciando em 68%
+        """Retorna as três regiões do template ativo: alerta, solução e CTA."""
+        template = self._composition_template()
+        boxes = tuple(
+            self._normalized_box(tuple(region))
+            for region in template.get("card_regions", [])
+        )
+        if len(boxes) != 3:
             boxes = (
                 self._scale_box((36, 1306, 1044, 1476)),
                 self._scale_box((36, 1486, 1044, 1581)),
@@ -308,7 +332,7 @@ class MediaFactory:
             )
         print(
             f"[Layout] canvas={self.canvas_width}x{self.canvas_height} "
-            f"is_square={is_square} "
+            f"template={template.get('template_id', 'fallback')} "
             f"alerta_y={boxes[0][1]}-{boxes[0][3]} "
             f"solucao_y={boxes[1][1]}-{boxes[1][3]} "
             f"cta_y={boxes[2][1]}-{boxes[2][3]}"
@@ -329,8 +353,10 @@ class MediaFactory:
             fade_h = extra_top_fade
             fade = Image.new("RGBA", (w, fade_h), (0, 0, 0, 0))
             fdraw = ImageDraw.Draw(fade)
+            scrim = self._template_color("scrim", (6, 12, 24))
             fdraw.rounded_rectangle(
-                (0, 0, w, fade_h + radius), radius=radius, fill=(6, 12, 24, 70)
+                (0, 0, w, fade_h + radius), radius=radius,
+                fill=(*scrim, 70),
             )
             img.paste(fade, (x0, top_y - fade_h), fade)
 
@@ -339,28 +365,110 @@ class MediaFactory:
             return
         panel = Image.new("RGBA", (w, h), (0, 0, 0, 0))
         pdraw = ImageDraw.Draw(panel)
-        pdraw.rounded_rectangle((0, 0, w, h), radius=radius, fill=(6, 12, 24, 195))
+        scrim = self._template_color("scrim", (6, 12, 24))
+        pdraw.rounded_rectangle((0, 0, w, h), radius=radius, fill=(*scrim, 195))
         img.paste(panel, (x0, top_y), panel)
 
     def _draw_headline_branded(
         self, draw: ImageDraw.ImageDraw, headline: str, highlight_phrases: list[str]
     ):
-        font_size = self._scaled_font_size(42, min_size=28)
+        template = self._composition_template()
+        font_size = self._scaled_font_size(
+            int(template.get("headline_font_size", 42)), min_size=28
+        )
         font = self._load_font(font_size, bold=True)
-        max_w = self.canvas_width - 100
-        lines = self._wrap_text(draw, headline.upper(), font, max_w, max_lines=3)
-        y = int(56 * self.canvas_height / 1920)
+        safe_left, safe_top, safe_right, _safe_bottom = tuple(
+            self._composition_template().get("safe_area", (0.06, 0.06, 0.06, 0.06))
+        )
+        safe_x0 = int(safe_left * self.canvas_width)
+        safe_x1 = int((1 - safe_right) * self.canvas_width)
+        max_w = safe_x1 - safe_x0
+        lines = self._wrap_text(
+            draw,
+            headline.upper(),
+            font,
+            max_w,
+            max_lines=int(template.get("headline_max_lines", 3)),
+        )
+        y = int(
+            max(float(template.get("headline_top", 0.055)), safe_top)
+            * self.canvas_height
+        )
+        _logo_x, logo_y, logo_size, _logo_font, _logo_label = self._logo_layout(draw)
+        y = max(y, logo_y + logo_size + int(16 * self.canvas_height / 1920))
         line_h = max(font_size + 8, int(50 * self.canvas_height / 1920))
-        center_x = self.canvas_width // 2
+        center_x = (safe_x0 + safe_x1) // 2
         for line in lines:
             segments = self._split_line_by_highlights(line, highlight_phrases)
             total_w = sum(self._text_width(draw, seg, font) for seg, _ in segments)
             x = center_x - total_w // 2
             for seg, is_hi in segments:
-                color = self.BRAND_GREEN if is_hi else self.BRAND_TEXT
+                color = self._template_color(
+                    "highlight" if is_hi else "headline",
+                    self.BRAND_GREEN if is_hi else self.BRAND_TEXT,
+                )
                 self._draw_text_with_shadow(draw, (x, y), seg, font, color)
                 x += self._text_width(draw, seg, font)
             y += line_h
+
+    def _logo_layout(
+        self, draw: ImageDraw.ImageDraw
+    ) -> tuple[int, int, int, ImageFont.ImageFont, str]:
+        template = self._composition_template()
+        safe_left, safe_top, _safe_right, _safe_bottom = tuple(
+            template.get("safe_area", (0.06, 0.06, 0.06, 0.06))
+        )
+        margin = max(
+            int(float(template.get("logo_margin", 0.045)) * self.canvas_width),
+            int(safe_left * self.canvas_width),
+        )
+        font_size = self._scaled_font_size(
+            int(template.get("logo_font_size", 24)), min_size=14
+        )
+        font = self._load_font(font_size, bold=True)
+        label = "GUARDIAN AI"
+        anchor = template.get("logo_anchor", "top_left")
+        text_width = self._text_width(draw, label, font)
+        logo_size = max(font_size + 10, 38)
+        group_width = logo_size + int(10 * self.canvas_width / 1080) + text_width
+        x = margin if anchor != "top_right" else self.canvas_width - margin - group_width
+        y = (
+            max(margin, int(safe_top * self.canvas_height))
+            if not anchor.startswith("bottom")
+            else self.canvas_height - margin - logo_size
+        )
+        return x, y, logo_size, font, label
+
+    def _draw_logo(self, draw: ImageDraw.ImageDraw) -> None:
+        """Desenha símbolo e wordmark em pós-produção, sem depender da imagem gerada."""
+        x, y, logo_size, font, label = self._logo_layout(draw)
+        radius = max(8, logo_size // 5)
+        draw.rounded_rectangle(
+            (x, y, x + logo_size, y + logo_size),
+            radius=radius,
+            fill=self.BRAND_GREEN,
+            outline=self.BRAND_NAVY,
+            width=max(2, logo_size // 18),
+        )
+        shield = [
+            (x + logo_size // 2, y + 8),
+            (x + logo_size - 10, y + 15),
+            (x + logo_size - 13, y + logo_size // 2 + 5),
+            (x + logo_size // 2, y + logo_size - 8),
+            (x + 13, y + logo_size // 2 + 5),
+            (x + 10, y + 15),
+        ]
+        draw.polygon(shield, fill=self.BRAND_NAVY)
+        label_x = x + logo_size + int(10 * self.canvas_width / 1080)
+        label_y = y + max(0, (logo_size - getattr(font, "size", logo_size)) // 2)
+        draw.text(
+            (label_x, label_y),
+            label,
+            font=font,
+            fill=self._template_color("headline", self.BRAND_TEXT),
+            stroke_width=max(1, getattr(font, "size", logo_size) // 18),
+            stroke_fill=self._template_color("scrim", (6, 12, 24)),
+        )
 
     def _draw_brand_card(
         self,
@@ -376,8 +484,11 @@ class MediaFactory:
         x0, y0, x1, y1 = box
         radius = int(16 * self.canvas_width / 1080)
         draw.rounded_rectangle(
-            box, radius=radius, fill=(15, 23, 42, 235),
-            outline=self.BRAND_CARD_BORDER, width=1,
+            box,
+            radius=radius,
+            fill=(*self._template_color("card", self.BRAND_CARD), 235),
+            outline=self._template_color("card_border", self.BRAND_CARD_BORDER),
+            width=1,
         )
         accent_w = max(4, int(6 * self.canvas_width / 1080))
         accent_pad = max(8, int(10 * self.canvas_height / 1920))
@@ -387,7 +498,12 @@ class MediaFactory:
         )
         text_x0 = x0 + accent_pad + accent_w + int(12 * self.canvas_width / 1080)
         font_title_size = self._scaled_font_size(17, min_size=12)
-        font_body_size = self._scaled_font_size(self.card_body_font_size, min_size=13)
+        template_body_size = int(
+            self._composition_template().get(
+                "card_body_font_size", self.card_body_font_size
+            )
+        )
+        font_body_size = self._scaled_font_size(template_body_size, min_size=13)
         font_title = self._load_font(font_title_size, bold=True)
         font_body = self._load_font(font_body_size, bold=True)
         title_y_offset = max(8, int(12 * self.canvas_height / 1920))
@@ -412,10 +528,20 @@ class MediaFactory:
 
     def _draw_cta_button(self, draw: ImageDraw.ImageDraw, box: tuple[int, int, int, int], main_text: str, url: str):
         radius = int(30 * self.canvas_width / 1080)
-        draw.rounded_rectangle(box, radius=radius, fill=self.BRAND_GREEN, outline=self.BRAND_GREEN_DARK, width=2)
+        cta_color = self._template_color("cta", self.BRAND_GREEN)
+        draw.rounded_rectangle(
+            box,
+            radius=radius,
+            fill=cta_color,
+            outline=self.BRAND_GREEN_DARK,
+            width=2,
+        )
         box_h = box[3] - box[1]
-        # fonte reduzida quando o botão é mais baixo (cards compactos) para caber sem cortar texto
-        font_main_size = self._scaled_font_size(20 if box_h < 110 else 24, min_size=14)
+        template_cta_size = int(self._composition_template().get("cta_font_size", 24))
+        font_main_size = self._scaled_font_size(
+            min(template_cta_size, 20 if box_h < 110 else template_cta_size),
+            min_size=14,
+        )
         font_url_size = self._scaled_font_size(14 if box_h < 110 else 18, min_size=11)
         font_main = self._load_font(font_main_size, bold=True)
         font_url = self._load_font(font_url_size, bold=True)
@@ -429,11 +555,21 @@ class MediaFactory:
         y = box[1] + max(6, (available_h - text_block_h) // 2) + max(6, int(10 * self.canvas_height / 1920))
         for line in lines:
             x = (box[0] + box[2]) // 2 - self._text_width(draw, line, font_main) // 2
-            draw.text((x, y), line, font=font_main, fill=self.BRAND_CTA_TEXT)
+            draw.text(
+                (x, y),
+                line,
+                font=font_main,
+                fill=self._template_color("cta_text", self.BRAND_CTA_TEXT),
+            )
             y += cta_line_h
         url_y = box[3] - font_url_size - max(6, int(10 * self.canvas_height / 1920))
         xu = (box[0] + box[2]) // 2 - self._text_width(draw, url_clean, font_url) // 2
-        draw.text((xu, url_y), url_clean, font=font_url, fill=self.BRAND_CTA_TEXT)
+        draw.text(
+            (xu, url_y),
+            url_clean,
+            font=font_url,
+            fill=self._template_color("cta_text", self.BRAND_CTA_TEXT),
+        )
 
     def _compose_frame_pillow(
         self,
@@ -451,6 +587,7 @@ class MediaFactory:
         draw = ImageDraw.Draw(img)
         highlights = frases_destaque or []
 
+        self._draw_logo(draw)
         self._draw_headline_branded(draw, headline, highlights)
         alerta_box, solucao_box, cta_box = self._card_layout()
         self._draw_ad_scrim(
@@ -464,14 +601,17 @@ class MediaFactory:
             draw, alerta_box,
             "MENSAGEM SUSPEITA NO WHATSAPP",
             alerta,
-            self.WHATSAPP_GREEN, self.BRAND_TEXT,
-            highlight_phrases=highlights, highlight_color=self.BRAND_HIGHLIGHT,
+            self._template_color("whatsapp", self.WHATSAPP_GREEN),
+            self._template_color("headline", self.BRAND_TEXT),
+            highlight_phrases=highlights,
+            highlight_color=self._template_color("highlight", self.BRAND_HIGHLIGHT),
         )
         self._draw_brand_card(
             draw, solucao_box,
             "GUARDIAN AI — PROTECAO WHATSAPP",
             solucao,
-            self.BRAND_GREEN, self.BRAND_TEXT,
+            self._template_color("cta", self.BRAND_GREEN),
+            self._template_color("headline", self.BRAND_TEXT),
         )
         self._draw_cta_button(draw, cta_box, cta, url)
 
@@ -492,6 +632,7 @@ class MediaFactory:
         draw = ImageDraw.Draw(img)
         highlights = frases_destaque or []
 
+        self._draw_logo(draw)
         self._draw_headline_branded(draw, headline, highlights)
         alerta_box, solucao_box, cta_box = self._card_layout()
         self._draw_ad_scrim(
@@ -505,14 +646,17 @@ class MediaFactory:
             draw, alerta_box,
             "MENSAGEM SUSPEITA NO WHATSAPP",
             alerta,
-            self.WHATSAPP_GREEN, self.BRAND_TEXT,
-            highlight_phrases=highlights, highlight_color=self.BRAND_HIGHLIGHT,
+            self._template_color("whatsapp", self.WHATSAPP_GREEN),
+            self._template_color("headline", self.BRAND_TEXT),
+            highlight_phrases=highlights,
+            highlight_color=self._template_color("highlight", self.BRAND_HIGHLIGHT),
         )
         self._draw_brand_card(
             draw, solucao_box,
             "GUARDIAN AI — PROTECAO WHATSAPP",
             solucao,
-            self.BRAND_GREEN, self.BRAND_TEXT,
+            self._template_color("cta", self.BRAND_GREEN),
+            self._template_color("headline", self.BRAND_TEXT),
         )
         self._draw_cta_button(draw, cta_box, cta, url)
         os.makedirs(os.path.dirname(out_path), exist_ok=True)
@@ -591,7 +735,10 @@ class MediaFactory:
         proibicoes = visuais.get("proibicoes", [])
         estilo = visuais.get(
             "estilo_fotografico",
-            "Photorealistic documentary advertising, natural daylight, Brazilian everyday environment.",
+            (creative_data.get("creative_brief") or {}).get(
+                "estilo_visual",
+                "Photorealistic documentary advertising, natural daylight, Brazilian everyday environment.",
+            ),
         )
         preset = creative_data.get("preset_midia") or {}
         ratio_hint = preset.get("visual_ratio_hint") or (
@@ -600,10 +747,37 @@ class MediaFactory:
         )
         is_video = "Vídeo" in creative_data.get("tipo_midia_selecionada", "")
         motion = motion_prompt_suffix() if is_video else ""
+        brief = creative_data.get("creative_brief") or {}
+        brief_block = (
+            f"CREATIVE BRIEF: audience {brief.get('publico', '')}; "
+            f"scam {brief.get('golpe', '')}; character {brief.get('personagem', '')}; "
+            f"scenario {brief.get('cenario', '')}. "
+            "Keep the visual aligned with this brief; do not render text."
+        )
+        reference = creative_data.get("visual_reference") or {}
+        reference_block = ""
+        if reference:
+            accepted = "; ".join(str(item) for item in reference.get("aceito", [])[:3])
+            rejected = "; ".join(str(item) for item in reference.get("rejeitado", [])[:4])
+            reference_block = (
+                "VISUAL REFERENCE LOCK: "
+                f"id {reference.get('reference_id', '')}; "
+                f"wardrobe {reference.get('vestuario', '')}; "
+                f"setting {reference.get('ambiente', '')}; "
+                f"lighting {reference.get('iluminacao', '')}; "
+                f"framing {reference.get('enquadramento', '')}; "
+                f"palette {reference.get('paleta', '')}; "
+                f"accept {accepted}; reject {rejected}."
+            )
+        storyboard_block = format_storyboard_prompt(creative_data.get("storyboard") or [])
         # Identidade única da campanha já é garantida pelo sufixo do VisualVarietyEngine
         # embutido em `cena` (evita duplicar instrução de unicidade no prompt).
 
-        essenciais = [self.APPEARANCE_MANDATE, cena.strip()]
+        essenciais = [self.APPEARANCE_MANDATE, brief_block, cena.strip()]
+        if reference_block:
+            essenciais.append(reference_block)
+        if storyboard_block:
+            essenciais.append(storyboard_block)
         phone_clause = (creative_data.get("phone_screen_clause") or "").strip()
         if phone_clause:
             essenciais.append(phone_clause)
@@ -930,6 +1104,65 @@ class MediaFactory:
             "base_image_file": base_image_path,
             "commercial_video_file": video_output_path if video_ok else prior_assets.get("commercial_video_file"),
             "visual_regenerated": True,
+        }
+
+    def regenerate_video_only(
+        self, creative_data: dict, prior_assets: dict, feedback: str = ""
+    ) -> dict:
+        """Regera movimento Kling mantendo imagem-base, copy e áudio aprovados."""
+        print(f"\n🎞️ [Fábrica v{MEDIA_FACTORY_VERSION}] Regerando somente vídeo...")
+        if not self.kling_key and not os.getenv("KLING_ACCESS_KEY"):
+            print("❌ Kling indisponível — vídeo não foi regerado.")
+            return prior_assets
+
+        self.preset_midia = creative_data.get("preset_midia") or resolve_channel_preset(
+            creative_data.get("canal_veiculacao_selecionado", ""),
+            creative_data.get("tipo_midia_selecionada", ""),
+        )
+        self.canvas_width = int(self.preset_midia.get("width", 1080))
+        self.canvas_height = int(self.preset_midia.get("height", 1920))
+        basename = prior_assets.get("basename", "campanha")
+        audio_path = prior_assets.get("audio_file", "")
+        if not self._audio_ok(audio_path):
+            print("❌ Áudio aprovado ausente — vídeo não foi recomposto.")
+            return prior_assets
+
+        prompt_data = dict(creative_data)
+        if feedback:
+            prompt_data["direcao_arte_emocional"] = (
+                f"{creative_data.get('direcao_arte_emocional', '').rstrip()}. "
+                f"CORREÇÃO DE MOVIMENTO OBRIGATÓRIA: {feedback}"
+            )
+        prompt = self._build_visual_prompt(prompt_data)
+        raw_path = prior_assets.get("kling_raw_file") or os.path.join(
+            self.work_dir, f"{basename}_kling_raw.mp4"
+        )
+        video_path = prior_assets.get("commercial_video_file") or os.path.join(
+            self.output_dir, f"{basename}.mp4"
+        )
+        overlay_path = os.path.join(self.work_dir, f"{basename}_overlay.png")
+        self._compose_overlay_png(
+            overlay_path,
+            creative_data.get("gancho_atencao_inicial", ""),
+            creative_data.get("texto_card_notificacao", ""),
+            card_solucao_text(),
+            resolve_overlay_cta(creative_data),
+            creative_data.get("link_conversao", self.url_conversao),
+            [],
+        )
+        generated_raw = self._generate_kling_video(prompt, raw_path, basename=basename)
+        if not generated_raw or not os.path.isfile(generated_raw):
+            return prior_assets
+        boom_path = os.path.join(self.work_dir, f"{basename}_boomerang.mp4")
+        if not self._compile_kling_native(
+            generated_raw, overlay_path, audio_path, video_path, boom_path
+        ):
+            return prior_assets
+        return {
+            **prior_assets,
+            "commercial_video_file": video_path,
+            "kling_raw_file": generated_raw,
+            "video_regenerated": True,
         }
 
     def generate_campaign_assets(self, creative_data: dict) -> dict:
@@ -1501,7 +1734,8 @@ class MediaFactory:
             trilhas = [f for f in os.listdir(pasta_alvo) if f.lower().endswith(".mp3")]
         if not trilhas:
             print(f"⚠️ Sem trilha em {os.path.basename(pasta_alvo)}/ — usando só narração.")
-            return voz_path
+            destino = output_path or voz_path
+            return self._normalize_audio(voz_path, destino)
 
         trilha_path = os.path.join(pasta_alvo, random.choice(trilhas))
         voice_vol = preset.get("voice_volume", "1.5")
@@ -1521,10 +1755,92 @@ class MediaFactory:
         ]
         result = subprocess.run(cmd, capture_output=True, text=True)
         if result.returncode == 0 and self._audio_ok(mixed_path):
-            print(f"✅ Áudio mixado: {mixed_path}")
-            return mixed_path
+            normalized = self._normalize_audio(mixed_path, mixed_path)
+            if normalized and self._audio_ok(normalized):
+                print(f"✅ Áudio mixado e normalizado: {normalized}")
+                return normalized
         print(f"⚠️ Mix falhou, usando narração pura: {result.stderr[-200:]}")
-        return voz_path
+        return self._normalize_audio(voz_path, output_path or voz_path)
+
+    def _normalize_audio(self, input_path: str, output_path: str) -> str:
+        """Normaliza em duas passagens para -16 LUFS, TP -1.5 dB e LRA 11."""
+        if not self._audio_ok(input_path):
+            return input_path
+        temporary_path = output_path
+        if os.path.abspath(input_path) == os.path.abspath(output_path):
+            temporary_path = f"{output_path}.normalized.tmp.mp3"
+        analysis = subprocess.run(
+            [
+                "ffmpeg",
+                "-hide_banner",
+                "-i",
+                input_path,
+                "-af",
+                "loudnorm=I=-16:TP=-1.5:LRA=11:print_format=json",
+                "-f",
+                "null",
+                "-",
+            ],
+            capture_output=True,
+            text=True,
+        )
+        stats = self._parse_loudnorm_stats(analysis.stderr)
+        if analysis.returncode != 0 or not stats:
+            print(f"⚠️ Análise de loudness falhou: {analysis.stderr[-200:]}")
+            return input_path
+        loudnorm_filter = (
+            "loudnorm=I=-16:TP=-1.5:LRA=11:"
+            f"measured_I={stats['input_i']}:"
+            f"measured_TP={stats['input_tp']}:"
+            f"measured_LRA={stats['input_lra']}:"
+            f"measured_thresh={stats['input_thresh']}:"
+            f"offset={stats['target_offset']}:linear=true:print_format=summary"
+        )
+        cmd = [
+            "ffmpeg",
+            "-y",
+            "-i",
+            input_path,
+            "-af",
+            loudnorm_filter,
+            "-ar",
+            "44100",
+            "-c:a",
+            "libmp3lame",
+            "-b:a",
+            "192k",
+            temporary_path,
+        ]
+        result = subprocess.run(cmd, capture_output=True, text=True)
+        if result.returncode != 0 or not self._audio_ok(temporary_path):
+            if temporary_path != output_path and os.path.isfile(temporary_path):
+                os.remove(temporary_path)
+            print(f"⚠️ Normalização de áudio falhou: {result.stderr[-200:]}")
+            return input_path
+        if temporary_path != output_path:
+            os.replace(temporary_path, output_path)
+        return output_path
+
+    @staticmethod
+    def _parse_loudnorm_stats(stderr: str) -> dict:
+        """Extrai com segurança o JSON emitido pelo filtro loudnorm."""
+        match = re.search(r"\{\s*\"input_i\".*?\}", stderr or "", flags=re.DOTALL)
+        if not match:
+            return {}
+        try:
+            payload = json.loads(match.group(0))
+        except (json.JSONDecodeError, TypeError):
+            return {}
+        required = (
+            "input_i",
+            "input_tp",
+            "input_lra",
+            "input_thresh",
+            "target_offset",
+        )
+        if not all(key in payload for key in required):
+            return {}
+        return {key: str(payload[key]) for key in required}
 
     def _generate_gemini_image(
         self,

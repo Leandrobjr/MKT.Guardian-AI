@@ -11,6 +11,7 @@ from feedback_router import (
     correction_tag,
     detect_narrative_override,
     describe_plan,
+    extract_card_message_edit,
     format_menu_conflict,
 )
 
@@ -78,6 +79,30 @@ class TestFeedbackRouter(unittest.TestCase):
         plan = classify_improvement("Quero estória de escola com diretor alertando pais")
         self.assertTrue(plan.get("narrative"))
         self.assertEqual(plan.get("narrative_override", {}).get("publico_slug"), "escolas")
+
+    def test_extract_exact_card_message(self):
+        feedback = (
+            "Melhorar a fala, pois faltou o sujeito. Mude para "
+            "Oi Mãe! Troquei de número! Preciso urgente de R$ 1.000,00. "
+            "Me manda um PIX neste"
+        )
+        edit = extract_card_message_edit(feedback)
+        self.assertEqual(
+            edit.get("exact"),
+            "Oi Mãe! Troquei de número! Preciso urgente de R$ 1.000,00. Me manda um PIX neste",
+        )
+
+    def test_extract_card_prefix(self):
+        edit = extract_card_message_edit("Comece a frase com: Oi, Mãe!!!")
+        self.assertEqual(edit.get("prefix"), "Oi, Mãe!!!")
+
+    def test_extract_card_edit_when_feedback_also_changes_script(self):
+        feedback = (
+            "No roteiro, mude para uma abordagem mais curta. "
+            "No card golpista altere para Sei quem vc é! Manda o PIX agora!"
+        )
+        edit = extract_card_message_edit(feedback)
+        self.assertEqual(edit.get("exact"), "Sei quem vc é! Manda o PIX agora!")
 
 
 if __name__ == "__main__":

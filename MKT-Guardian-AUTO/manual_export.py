@@ -4,12 +4,15 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import shutil
 import webbrowser
+from datetime import datetime, timezone
 from pathlib import Path
 
 
 TIKTOK_UPLOAD_URL = "https://www.tiktok.com/upload"
+DEFAULT_MAX_TIKTOK_BYTES = 1024 * 1024 * 1024
 
 
 def export_tiktok_package(
@@ -23,8 +26,15 @@ def export_tiktok_package(
     image = str(assets.get("static_image_file") or "")
     if not video or not os.path.isfile(video):
         return {"ok": False, "erro": "Vídeo MP4 não encontrado para exportação manual."}
+    if not video.lower().endswith(".mp4"):
+        return {"ok": False, "erro": "O asset TikTok precisa ser um arquivo MP4."}
+    max_size = int(os.getenv("TIKTOK_MAX_UPLOAD_BYTES", DEFAULT_MAX_TIKTOK_BYTES))
+    if os.path.getsize(video) > max_size:
+        return {"ok": False, "erro": "Vídeo excede o tamanho máximo configurado."}
 
-    basename = assets.get("basename") or Path(video).stem
+    raw_basename = str(assets.get("basename") or Path(video).stem)
+    basename = re.sub(r"[^A-Za-z0-9._-]+", "_", Path(raw_basename).name).strip("._")
+    basename = basename or "campanha"
     package_dir = Path(base_dir) / "output_campanha" / "tiktok" / str(basename)
     package_dir.mkdir(parents=True, exist_ok=True)
 
@@ -42,6 +52,9 @@ def export_tiktok_package(
     caption_target.write_text(caption + "\n", encoding="utf-8")
 
     metadata = {
+        "campaign_id": creative_data.get("campaign_id") or assets.get("campaign_id", ""),
+        "status": "PRONTA_PARA_PUBLICAR",
+        "gerado_em": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         "basename": basename,
         "canal": "TikTok / YouTube Shorts",
         "video": str(video_target),

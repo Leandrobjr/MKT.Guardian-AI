@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from storyboard import format_storyboard_compact
+
 
 def format_story_telegram(creative_data: dict, config: dict, job_id: str) -> str:
     copy = creative_data.get("desenvolvimento_copy", "")
@@ -20,6 +22,7 @@ def format_story_telegram(creative_data: dict, config: dict, job_id: str) -> str
         f"*Personagem:* {creative_data.get('genero_personagem_visual', '')}\n"
         f"*CTA botão:* {creative_data.get('texto_botao_conversao', '')}\n\n"
         f"*Cena (resumo):* {cena_show}\n\n"
+        f"*Storyboard:* {format_storyboard_compact(creative_data.get('storyboard') or [])}\n\n"
         f"Job: `{job_id}`\n"
         "_Nenhum vídeo/áudio será gerado até você aprovar._"
     )

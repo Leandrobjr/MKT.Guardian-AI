@@ -132,16 +132,21 @@ class TelegramApproval:
         job_id: str,
         timeout_segundos: int = 3600,
         audio_path: str | None = None,
+        metadata: dict | None = None,
     ) -> dict:
         if not os.path.exists(asset_path):
             print(f"❌ [Telegram] Asset não encontrado: {asset_path}")
             return {"action": "reject", "motivo": "asset_ausente"}
 
         copy_resumo = copy if len(copy) <= 300 else copy[:300] + "..."
+        metadata = metadata or {}
         caption = (
             f"*APROVAÇÃO — Guardian AI*\n\n"
+            f"*Canal:* {metadata.get('canal', '—')}\n"
+            f"*Mídia:* {metadata.get('midia', '—')}\n\n"
             f"*Headline:* {headline}\n\n"
             f"*Copy:* {copy_resumo}\n\n"
+            f"*Legenda:* {str(metadata.get('legenda', ''))[:700]}\n\n"
             f"Job: `{job_id}`"
         )
 
@@ -328,9 +333,18 @@ class TelegramApproval:
         job_id: str,
         timeout_segundos: int = 3600,
         audio_path: str | None = None,
+        metadata: dict | None = None,
     ) -> dict:
         return asyncio.run(
-            self.enviar_para_aprovacao(asset_path, headline, copy, job_id, timeout_segundos, audio_path)
+            self.enviar_para_aprovacao(
+                asset_path,
+                headline,
+                copy,
+                job_id,
+                timeout_segundos,
+                audio_path,
+                metadata,
+            )
         )
 
     async def notificar(self, mensagem: str):

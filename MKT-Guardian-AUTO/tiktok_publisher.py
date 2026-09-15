@@ -18,6 +18,7 @@ from env_loader import load_project_env
 load_project_env()
 
 TOKEN_URL = "https://open.tiktokapis.com/v2/oauth/token/"
+MAX_VIDEO_BYTES = 1024 * 1024 * 1024
 
 
 def _env_redirect_uri() -> str:
@@ -52,11 +53,20 @@ class TikTokPublisher:
         }
 
     def publish_video(self, caminho_video: str, caption: str = "") -> dict[str, Any]:
-        """Reservado: Direct Post / Upload da Content Posting API."""
-        raise NotImplementedError(
-            "Publicação TikTok ainda não implementada. "
-            "Use status() após sincronizar tokens do portal web."
-        )
+        """Valida o pedido, mas mantém publicação automática bloqueada."""
+        if not isinstance(caminho_video, str) or not os.path.isfile(caminho_video):
+            return {"ok": False, "erro": "Vídeo TikTok não encontrado."}
+        if not caminho_video.lower().endswith(".mp4"):
+            return {"ok": False, "erro": "A publicação TikTok exige MP4."}
+        if os.path.getsize(caminho_video) > MAX_VIDEO_BYTES:
+            return {"ok": False, "erro": "Vídeo TikTok excede 1 GB."}
+        return {
+            "ok": False,
+            "erro": (
+                "Publicação TikTok automática ainda não autorizada. "
+                "Use o pacote manual exportado pelo Desktop."
+            ),
+        }
 
 
 def is_tiktok_env_ready() -> bool:

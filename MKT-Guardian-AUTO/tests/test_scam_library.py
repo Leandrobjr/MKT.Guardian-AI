@@ -34,6 +34,33 @@ class TestScamLibrary(unittest.TestCase):
             self.assertIsNotNone(picked, golpe)
             self.assertTrue(picked.get("variant_id"))
 
+    def test_pais_nao_recebe_card_enderecado_a_avo(self):
+        allowed = {
+            "falso_pix_numero_novo",
+            "grooming_familiar_falso_filho",
+            "ia_voz_clonada",
+        }
+        for _ in range(6):
+            picked = self.library.pick_variant(
+                "falso_parente",
+                "pais",
+                allowed_variant_ids=allowed,
+            )
+            self.assertIsNotNone(picked)
+            self.assertNotRegex(
+                picked["frase_golpista"].lower(),
+                r"\b(vó|vovó|avó|vô|vovô|avô|neto|neta|chefe)\b",
+            )
+
+    def test_idosos_nao_recebem_card_enderecado_a_chefe(self):
+        picked = self.library.pick_variant(
+            "falso_parente",
+            "idosos",
+            allowed_variant_ids={"ia_voz_clonada"},
+        )
+        self.assertIsNotNone(picked)
+        self.assertNotRegex(picked["frase_golpista"].lower(), r"\bchefe\b")
+
     def test_avoids_recent_frase(self):
         cfg = {"publico_slug": "pais", "golpe_id": "grooming"}
         first = self.library.pick_variant("grooming", "pais")
@@ -60,6 +87,9 @@ class TestScamLibrary(unittest.TestCase):
         enriched = self.library.apply_to_context(ctx, "phishing", "massa")
         self.assertIn("scam_variant_id", enriched)
         self.assertNotEqual(enriched.get("frase_golpista"), "frase antiga")
+
+    def test_nao_faz_fallback_para_publico_geral(self):
+        self.assertIsNone(self.library.pick_variant("pix_fantasma", "geral"))
 
 
 if __name__ == "__main__":

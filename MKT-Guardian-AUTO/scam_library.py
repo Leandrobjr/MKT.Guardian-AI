@@ -68,11 +68,19 @@ class ScamLibrary:
         return used
 
     def _variant_pool(
-        self, golpe_id: str, publico_slug: str
+        self,
+        golpe_id: str,
+        publico_slug: str,
+        allowed_variant_ids: set[str] | frozenset[str] | None = None,
     ) -> list[dict]:
         variantes = self._data.get("variantes") or []
-        pool = [v for v in variantes if v.get("golpe_id") == golpe_id]
+        if allowed_variant_ids:
+            pool = [v for v in variantes if v.get("variant_id") in allowed_variant_ids]
+        else:
+            pool = [v for v in variantes if v.get("golpe_id") == golpe_id]
         if not pool:
+            return []
+        if publico_slug == "geral":
             return []
         if publico_slug:
             preferidos = [
@@ -85,20 +93,48 @@ class ScamLibrary:
             neutros = [v for v in pool if not v.get("publicos")]
             if neutros:
                 return neutros
-            return pool
+            return []
         return pool
 
-    def _pick_frase(self, variant: dict, used: set[str]) -> str:
+    def _phrase_allowed_for_publico(
+        self,
+        frase: str,
+        publico_slug: str,
+        golpe_id: str,
+    ) -> bool:
+        from campaign_coherence import is_recipient_role_coherent
+
+        return is_recipient_role_coherent(frase, publico_slug, golpe_id)
+
+    def _pick_frase(
+        self,
+        variant: dict,
+        used: set[str],
+        publico_slug: str,
+        golpe_id: str,
+    ) -> str:
         frases = variant.get("frases_golpista") or []
         if not frases:
             return ""
-        fresh = [f for f in frases if self._norm_frase(f) not in used]
-        pool = fresh if fresh else frases
+        elegiveis = [
+            f
+            for f in frases
+            if self._phrase_allowed_for_publico(f, publico_slug, golpe_id)
+        ]
+        if not elegiveis:
+            return ""
+        fresh = [f for f in elegiveis if self._norm_frase(f) not in used]
+        pool = fresh if fresh else elegiveis
         return random.choice(pool)
 
-    def pick_variant(self, golpe_id: str, publico_slug: str = "") -> dict | None:
+    def pick_variant(
+        self,
+        golpe_id: str,
+        publico_slug: str = "",
+        allowed_variant_ids: set[str] | frozenset[str] | None = None,
+    ) -> dict | None:
         """Retorna variante com frase_golpista rotativa para o combo."""
-        pool = self._variant_pool(golpe_id, publico_slug)
+        pool = self._variant_pool(golpe_id, publico_slug, allowed_variant_ids)
         if not pool:
             return None
 
@@ -116,7 +152,7 @@ class ScamLibrary:
             vid = variant.get("variant_id", "")
             if vid and f"variant:{vid}" in used:
                 continue
-            frase = self._pick_frase(variant, used)
+            frase = self._pick_frase(variant, used, publico_slug, golpe_id)
             if not frase:
                 continue
             if last_idx >= 0:
@@ -136,7 +172,7 @@ class ScamLibrary:
             }
 
         variant = random.choice(pool)
-        frase = self._pick_frase(variant, used)
+        frase = self._pick_frase(variant, used, publico_slug, golpe_id)
         if not frase:
             return None
         return {
@@ -147,9 +183,23 @@ class ScamLibrary:
             "ordem_md": variant.get("ordem_md"),
         }
 
-    def apply_to_context(self, campaign_ctx: dict, golpe_id: str, publico_slug: str) -> dict:
+    def has_compatible_variant(
+        self,
+        golpe_id: str,
+        publico_slug: str,
+        allowed_variant_ids: set[str] | frozenset[str] | None = None,
+    ) -> bool:
+        return bool(self._variant_pool(golpe_id, publico_slug, allowed_variant_ids))
+
+    def apply_to_context(
+        self,
+        campaign_ctx: dict,
+        golpe_id: str,
+        publico_slug: str,
+        allowed_variant_ids: set[str] | frozenset[str] | None = None,
+    ) -> dict:
         """Enriquece campaign_ctx com frase rotativa da biblioteca."""
-        picked = self.pick_variant(golpe_id, publico_slug)
+        picked = self.pick_variant(golpe_id, publico_slug, allowed_variant_ids)
         if not picked:
             return campaign_ctx
         ctx = dict(campaign_ctx)

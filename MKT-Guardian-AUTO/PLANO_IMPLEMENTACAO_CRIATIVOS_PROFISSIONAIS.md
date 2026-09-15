@@ -397,7 +397,181 @@ Usar Supabase como ponte:
 7. Linux grava o resultado.
 8. Desktop mostra sucesso ou erro.
 
+**Implementação v5.25:** ponte operacional concluída com bucket privado,
+`mkt_campaigns`, `mkt_campaign_commands`, RLS restritivo e módulo backend
+`supabase_campaign_bridge.py`. O worker `campaign_command_worker.py` executa
+comandos Meta com dry-run padrão; TikTok permanece manual. A interface
+Desktop recebe o cliente seguro `desktop_campaign_client.py` e uma interface
+web responsiva em `desktop/`, consumindo o contrato documentado em
+`docs/SUPABASE_PONTE_CAMPANHAS.md`.
+
 Tokens nunca deverão ser expostos no navegador.
+
+**Implementação v5.26 — contrato canônico de criatividade:** o catálogo ativo
+`contexto_negocio/golpes_catalogo.json` consolida 20 tipos documentados e 26
+variantes operacionais. A geração agora rejeita o público genérico `geral`,
+filtra variantes incompatíveis e bloqueia campanhas cujo golpe, pretexto,
+headline, roteiro, protagonista ou casting visual não estejam coerentes. O
+casting é definido antes do redator e a mídia só é produzida após a validação
+determinística do contrato.
+
+**Correção v5.27:** mensagens reais do golpista passaram a ser protegidas
+contra o saneador de capacidades do produto. Termos como “sua conta será
+bloqueada” permanecem no card quando fazem parte da fala criminosa; as
+restrições do Guardian AI continuam aplicadas ao roteiro, CTA e card de solução.
+
+**Correção v5.28:** headlines ambíguas de PIX passaram a ser rejeitadas ou
+substituídas por frases com sujeito explícito, como “UM GOLPISTA PODE DESVIAR
+O PIX PEDIDO NO WHATSAPP”.
+
+**Correção v5.29:** o contrato da variante de falso pedido de PIX passou a
+separar transferência autorizada, roubo de credenciais e tomada de conta. No
+falso PIX familiar, o roteiro deve informar perda somente do valor enviado,
+bloquear afirmações de esvaziamento da conta e alinhar a cena visual ao vínculo
+real da mensagem, como “amigo” em vez de “parente”.
+
+**Correção v5.30:** o vocativo do card passou a ser tratado como destinatário
+da mensagem recebida. Assim, “Mãe” exige protagonista feminina e “Pai” exige
+protagonista masculino; o casting é definido depois da seleção da variante e
+o contrato bloqueia combinações incompatíveis.
+
+**Correção v5.31:** headlines de falso PIX passaram a ser validadas como
+frases completas. Estruturas como “o PIX que você receber pode fazer você
+perder...” são substituídas por “PIX PEDIDO POR FAMILIAR NO WHATSAPP PODE SER
+GOLPE”, e a copy não pode afirmar perda das economias, da aposentadoria ou da
+conta quando a vítima apenas autorizou uma transferência.
+
+**Correção v5.32:** corrigida a composição visual do logo e da headline. O
+wordmark agora possui símbolo visual de escudo e área reservada própria, sem
+sobreposição com a primeira linha da manchete. Também foram cobertas as formas
+singulares de claims incorretos, como “perder sua economia”, no falso PIX.
+
+**Correção v5.33:** quando o roteiro usa apenas o nome contratado, o motor
+passa a explicitar o tratamento correspondente — “Dona Helena” ou “Seu Carlos”.
+Isso mantém a identidade do protagonista coerente no roteiro, no resumo e no
+casting visual.
+
+**Correção v5.34:** claims absolutos como “o PIX não volta mais” passaram a
+ser substituídos por “o PIX pode ser difícil de recuperar”. A consequência
+continua limitada ao valor enviado, sem afirmar retorno impossível ou acesso
+ao saldo da conta.
+
+**Correção v5.35:** ampliada a proteção contra formas equivalentes de
+exagero no falso PIX, como “levar sua economia”, e corrigida a concordância
+de headlines que usam “difícil de recuperar”.
+
+**Correção v5.36:** o tratamento “Dona” ou “Seu” agora é aplicado mesmo
+quando o roteiro já contém pronomes de gênero, mas apresenta o nome do
+protagonista sem marcador explícito.
+
+**Correção v5.37:** corrigida a validação de nomes compostos no casting e
+flexibilizado o nexo do falso PIX para aceitar redações naturais que mantenham
+os elementos essenciais: WhatsApp, pedido/transferência de PIX e contexto da
+fraude.
+
+**Correção v5.38:** headlines de falso PIX são normalizadas em maiúsculas e
+claims como “proteja sua aposentadoria” são ajustados para “proteja o valor
+antes de enviar”, evitando sugerir perda da aposentadoria inteira.
+
+**Correção v5.39:** claims equivalentes envolvendo poupança passaram a seguir
+a mesma regra: no falso PIX, a copy orienta confirmar o pedido antes de fazer
+a transferência, sem sugerir risco sobre toda a poupança.
+
+**Correção v5.40:** expressões como “levar seu dinheiro” são limitadas ao
+valor efetivamente enviado, e headlines com complementos artificiais, como
+“perdeu o valor transferido agora”, são normalizadas para “PIX ENVIADO AO
+GOLPISTA PODE SER DIFÍCIL DE RECUPERAR”.
+
+**Correção v5.41:** corrigido o catálogo operacional de Grooming. A variante
+de sextorsão deixou de ser elegível para o golpe `grooming`, e a variante
+“Grooming com Falso Filho/Familiar” passou a ser selecionada corretamente
+nesse grupo. O tipo de golpe agora permanece coerente com o menu escolhido.
+
+**Correção v5.42:** cenas de Pais passaram a obedecer ao gênero do responsável
+contratado — pai com filho ou mãe com filha — mesmo quando a matriz narrativa
+fornece uma direção visual fixa. Também foi corrigida a concordância de CTA
+como “do seu filho”.
+
+**Correção v5.43:** a variante operacional de Grooming passou a ser elegível
+para Pais e Escolas. O menu deixa de rejeitar `Pais + Grooming` após a retirada
+das variantes de sextorsão e falso parente desse grupo.
+
+**Correção v5.44:** a seleção de variantes passou a usar o catálogo canônico
+antes do `golpe_id` legado. Para o público Pais, frases dirigidas a “Vó”, “Vô”,
+“avó” ou “avô” são rejeitadas; esse vocativo continua permitido para Idosos.
+
+**Correção v5.45:** para Pais, também foram bloqueadas mensagens dirigidas a
+“Chefe” ou com relação de neto, mantendo o falso parente restrito a relações
+familiares compatíveis com o responsável de 35–50 anos.
+
+**Correção v5.46:** criada auditoria automatizada de todas as combinações
+público × tipo de golpe. A seleção canônica passou a verificar a existência de
+variantes operacionais, relações de destinatário, faixas etárias e públicos
+institucionais, evitando misturas como Idoso + “Chefe” e Grooming para Idosos.
+
+**Correção v5.47:** vocativos isolados “Vó” e “Vô” passaram a definir
+corretamente o gênero do protagonista, além de “Avó” e “Avô”. Isso evita que
+uma mensagem para avó seja apresentada com personagem masculino, ou vice-versa.
+
+**Correção v5.48:** a validação de gênero da headline deixou de interpretar
+menções indiretas, como “NÃO CONTA PRO MEU PAI”, como identidade do protagonista.
+Somente sujeito explícito ou vocativo inicial define o gênero da manchete.
+
+**Correção v5.49:** a variante de voz clonada que solicita PIX passou a usar
+o mesmo mecanismo de transferência autorizada do falso PIX. Claims como
+“conta zerada”, “aposentadoria sumiu” e “economia de uma vida inteira” são
+normalizados para a perda limitada ao valor enviado.
+
+**Correção v5.50:** fechadas as últimas brechas estruturais da matriz:
+`publico_id` divergente é rejeitado, persona de outro público não é usada como
+fallback, idades de Empresários e Escolas recebem guardrail, CTA usa o slug
+canônico e overrides que mudam público ou golpe não misturam mais contrato,
+casting e cena.
+
+**Correção v5.51:** cenas do público Idosos passaram a variar conforme o tipo
+de golpe. Falso investimento mostra oferta de investimento/cripto; phishing,
+emprego, falsa central, clonagem, link malicioso e PIX recebem descrições
+visuais próprias, sem reutilizar automaticamente o contexto de falso parente.
+
+**Correção v5.52:** CTAs parentais passaram a manter a caixa alta consistente
+em artigos após `PROTEJA`, evitando saídas como `PROTEJA o WhatsApp`.
+
+**Correção v5.53:** a variante `ia_voz_clonada` passou a preservar seu
+pretexto na headline (`VOZ CLONADA PODE PEDIR PIX EM SEU NOME`) e recebeu uma
+regra de nexo específica para relacionar voz clonada, WhatsApp e pedido de PIX.
+
+**Correção v5.54:** o gerador visual deixou de receber a instrução para escrever
+texto legível dentro da tela do celular. A interface passa a ser desfocada e o
+texto exato fica sob responsabilidade do compositor determinístico, evitando
+artefatos de caracteres gerados por IA.
+
+**Correção v5.55:** para o público Pais, a headline de voz clonada identifica
+explicitamente o alvo familiar: `VOZ CLONADA PODE PEDIR PIX EM NOME DE SEU
+FILHO!`. Outros públicos mantêm formulação familiar genérica.
+
+**Correção v5.56:** a direção visual e a QA passaram a exigir que o telefone e
+sua tela fiquem totalmente dentro do enquadramento, com margem visível e sem
+corte nas bordas. O texto da mensagem continua sendo aplicado pelo compositor.
+
+**Correção v5.57:** as variações de enquadramento foram restringidas para manter
+o celular inteiro acima do terço inferior, com margem em todas as bordas e sem
+mockups ampliados nas extremidades da imagem.
+
+**Correção v5.58:** a direção visual passou a proibir mockup ampliado, segunda
+tela e notificações flutuantes; no feed quadrado, a escala tipográfica deixou
+de ser reduzida como se fosse vertical, melhorando a leitura dos cards.
+
+**Correção v5.59:** as cenas por público passaram a descrever um único
+smartphone físico, inteiro e discretamente desfocado, sem induzir o modelo a
+criar uma tela grande nas bordas da composição.
+
+**Correção v5.60:** a mixagem final passou a aplicar normalização FFmpeg em
+`-16 LUFS`, `TP -1.5 dB` e `LRA 11`, inclusive quando não há trilha disponível,
+eliminando o aviso de áudio baixo na QA.
+
+**Correção v5.61:** a normalização EBU R128 passou a usar duas etapas. A segunda
+passagem utiliza as métricas reais medidas na primeira para atingir `-16 LUFS`
+com precisão e manter true peak máximo de `-1,5 dBTP`.
 
 ## 6. Segurança obrigatória
 

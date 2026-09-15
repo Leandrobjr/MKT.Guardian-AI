@@ -1,0 +1,148 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; script-src 'self' https://esm.sh; connect-src 'self' https://*.supabase.co; img-src 'self' data: blob: https://*.supabase.co; media-src 'self' blob: https://*.supabase.co; style-src 'self'"
+    >
+    <title>Guardian AI · Campanhas</title>
+    <link rel="stylesheet" href="styles.css">
+  </head>
+  <body>
+    <main class="shell">
+      <header class="topbar">
+        <div>
+          <p class="eyebrow">GUARDIAN AI</p>
+          <h1>Central de campanhas</h1>
+          <p class="subtitle">Aprovação humana antes da publicação.</p>
+        </div>
+        <div class="session-actions">
+          <span id="session-label" class="session-label">Desconectado</span>
+          <button id="logout-button" class="button button-quiet hidden" type="button">
+            Sair
+          </button>
+        </div>
+      </header>
+
+      <section id="config-panel" class="panel">
+        <div class="panel-heading">
+          <div>
+            <p class="eyebrow">CONFIGURAÇÃO LOCAL</p>
+            <h2>Conectar ao Supabase</h2>
+          </div>
+          <span class="security-badge">Chave publicável</span>
+        </div>
+        <p class="muted">
+          Use somente a URL do projeto e a chave publicável. Nunca cole uma
+          chave service_role nesta página.
+        </p>
+        <div id="config-message" class="message hidden" role="status" aria-live="polite"></div>
+        <form id="config-form" class="form-grid">
+          <label>
+            URL do projeto
+            <input id="supabase-url" name="supabase-url" type="url" autocomplete="url" required>
+          </label>
+          <label>
+            Chave publicável
+            <input id="publishable-key" name="publishable-key" type="password" autocomplete="off" required>
+          </label>
+          <button class="button button-primary form-submit" type="submit">
+            Conectar
+          </button>
+        </form>
+      </section>
+
+      <section id="login-panel" class="panel hidden">
+        <div class="panel-heading">
+          <div>
+            <p class="eyebrow">ACESSO AUTENTICADO</p>
+            <h2>Entrar no painel</h2>
+          </div>
+          <span class="security-badge">RLS ativo</span>
+        </div>
+        <div id="auth-message" class="message hidden" role="status" aria-live="polite"></div>
+        <form id="login-form" class="form-grid">
+          <label>
+            E-mail
+            <input id="email" name="email" type="email" autocomplete="username" required>
+          </label>
+          <label>
+            Senha
+            <input id="password" name="password" type="password" autocomplete="current-password" required>
+          </label>
+          <button class="button button-primary form-submit" type="submit">
+            Entrar
+          </button>
+        </form>
+        <button id="reset-config-button" class="button button-quiet reset-config" type="button">
+          Trocar URL ou chave
+        </button>
+      </section>
+
+      <section id="dashboard" class="hidden">
+        <div class="dashboard-toolbar">
+          <div>
+            <p class="eyebrow">VISÃO OPERACIONAL</p>
+            <h2>Campanhas</h2>
+          </div>
+          <div class="toolbar-actions">
+            <label class="filter-label" for="status-filter">Status</label>
+            <select id="status-filter">
+              <option value="">Todas</option>
+              <option value="APROVADA">Aprovadas</option>
+              <option value="PRONTA_PARA_PUBLICAR">Prontas</option>
+              <option value="PUBLICANDO">Publicando</option>
+              <option value="PUBLICADA">Publicadas</option>
+              <option value="ERRO_PUBLICACAO">Com erro</option>
+            </select>
+            <button id="refresh-button" class="button button-quiet" type="button">
+              Atualizar
+            </button>
+          </div>
+        </div>
+
+        <div id="message" class="message hidden" role="status" aria-live="polite"></div>
+        <div id="campaign-list" class="campaign-grid"></div>
+        <div id="empty-state" class="empty-state hidden">
+          Nenhuma campanha encontrada para este filtro.
+        </div>
+      </section>
+
+      <section id="commands-panel" class="panel hidden">
+        <div class="panel-heading">
+          <div>
+            <p class="eyebrow">AUDITORIA</p>
+            <h2>Comandos recentes</h2>
+          </div>
+        </div>
+        <div id="command-list" class="command-list"></div>
+      </section>
+    </main>
+
+    <template id="campaign-template">
+      <article class="campaign-card">
+        <div class="asset-frame"></div>
+        <div class="campaign-content">
+          <div class="campaign-heading">
+            <div>
+              <p class="campaign-id"></p>
+              <h3 class="campaign-title"></h3>
+            </div>
+            <span class="status-pill"></span>
+          </div>
+          <p class="campaign-copy"></p>
+          <dl class="campaign-meta"></dl>
+          <div class="campaign-actions">
+            <button class="button button-primary publish-button" type="button">
+              Aprovar e publicar
+            </button>
+          </div>
+        </div>
+      </article>
+    </template>
+
+    <script type="module" src="app.js"></script>
+  </body>
+</html>

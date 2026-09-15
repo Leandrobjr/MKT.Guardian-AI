@@ -1,5 +1,14 @@
 .env
+venv/
+.venv/
 output_videos/
+output_campanha/
+TIK_TOK/
 __pycache__/
 *.pyc
+*.log
+*.local.bak
+*.odt
+*.odt#
+.~lock.*
 .DS_Store

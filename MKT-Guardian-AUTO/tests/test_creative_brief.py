@@ -8,7 +8,7 @@ import unittest
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from campaign_history import CampaignHistory
-from creative_brief import HeadlineRotator, jaccard_similarity
+from creative_brief import HeadlineRotator, build_creative_brief, jaccard_similarity
 
 
 class TestCreativeBrief(unittest.TestCase):
@@ -69,6 +69,58 @@ class TestCreativeBrief(unittest.TestCase):
             "GOLPE NO WHATSAPP PRIVADO DO SEU FILHO AGORA",
         )
         self.assertTrue(result.get("headline_escolhida"))
+
+    def test_builds_single_brief_for_all_agents(self):
+        brief = build_creative_brief(
+            {
+                "objetivo": "Geração de leads",
+                "publico": "Pais e responsáveis",
+                "publico_slug": "pais",
+                "golpe": "Falso parente",
+                "golpe_id": "falso_parente",
+                "canal": "TikTok / YouTube Shorts",
+                "midia": "Vídeo Vertical Animado",
+            },
+            {
+                "icp_nome": "Pais e Responsáveis",
+                "protagonista": "Mãe brasileira",
+                "direcao_arte_emocional": "Sala organizada com celular em destaque",
+                "dores": ["Medo de transferir dinheiro por urgência falsa"],
+                "gatilhos": ["proteção familiar", "urgência"],
+                "frase_golpista": "Seu filho sofreu um acidente. Faça um PIX.",
+                "scam_variant_titulo": "Falso médico do hospital",
+                "cta_template": "PROTEJA O WHATSAPP DOS SEUS FILHOS",
+                "proibicoes_narrativa": ["Não usar grupos como origem do alerta."],
+            },
+            {
+                "nome": "Golpe do falso parente",
+                "frase_golpista": "Seu filho sofreu um acidente. Faça um PIX.",
+            },
+            {
+                "preset_id": "shorts_urgente",
+                "width": 1080,
+                "height": 1920,
+                "aspect_ratio": "9:16",
+                "copy_duration": "12-18 segundos",
+            },
+            {
+                "PRODUTO_E_POSICIONAMENTO": {
+                    "proposta_unica_de_valor": "Detecta ameaças e envia alertas.",
+                    "capacidades_reais": {"nao_faz": ["Não bloqueia mensagens."]},
+                },
+                "DIRETRIZES_VISUAIS": {
+                    "estilo_fotografico": "Fotografia documental realista.",
+                },
+            },
+        )
+
+        data = brief.to_dict()
+        prompt = brief.to_prompt_block()
+        self.assertEqual(data["formato"]["aspect_ratio"], "9:16")
+        self.assertEqual(data["variante_golpe"], "Falso médico do hospital")
+        self.assertEqual(data["chamada_para_acao"], "PROTEJA O WHATSAPP DOS SEUS FILHOS")
+        self.assertIn("BRIEF CRIATIVO ÚNICO", prompt)
+        self.assertIn("Não inserir texto essencial", prompt)
 
 
 if __name__ == "__main__":

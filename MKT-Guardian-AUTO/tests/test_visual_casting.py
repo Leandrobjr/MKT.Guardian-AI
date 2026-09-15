@@ -10,6 +10,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from campaign_history import CampaignHistory
 from visual_variety import VisualVarietyEngine
+from visual_reference import VisualReferenceCatalog, validate_visual_reference
 
 
 MINIMAL_CONTEXT = {
@@ -70,6 +71,19 @@ class TestVisualCasting(unittest.TestCase):
         picked = self.engine.pick_persona(MINIMAL_CONTEXT, "pais", "pais")
         self.assertNotEqual(picked.get("persona_id"), "ana_professora_bh")
 
+    def test_nao_faz_fallback_para_persona_de_outro_publico(self):
+        with self.assertRaises(ValueError):
+            self.engine.pick_persona(MINIMAL_CONTEXT, "idosos", "idosos")
+
+    def test_aplica_faixa_etaria_para_escolas(self):
+        persona = {
+            "nome": "Ana",
+            "idade": 28,
+            "publico_id": "escolas",
+        }
+        result = self.engine._apply_age_guardrails(persona, "escolas", MINIMAL_CONTEXT)
+        self.assertEqual(result["idade"], 40)
+
     def test_pick_ambiente_rotates(self):
         a = self.engine.pick_ambiente("pais")
         b = self.engine.pick_ambiente("pais")
@@ -82,6 +96,14 @@ class TestVisualCasting(unittest.TestCase):
         self.assertFalse(self.engine.is_duplicate_prompt(prompt))
         self.engine.register_generated(prompt, "test_asset", engine="gemini")
         self.assertTrue(self.engine.is_duplicate_prompt(prompt))
+
+    def test_enquadramentos_mantem_celular_inteiro(self):
+        self.assertTrue(
+            all(
+                "entire smartphone" in shot or "complete smartphone" in shot
+                for shot in self.engine.SHOT_VARIANTS
+            )
+        )
 
     def test_register_returns_false_on_duplicate(self):
         prompt = "Unique prompt for duplicate test"
@@ -98,7 +120,22 @@ class TestVisualCasting(unittest.TestCase):
         self.assertIn("persona_id", result)
         self.assertIn("ambiente_cena", result)
         self.assertIn("visual_shot_variant", result)
+        self.assertIn("visual_reference", result)
+        self.assertTrue(result["visual_reference_id"].startswith("ref_"))
+        self.assertEqual(validate_visual_reference(result["visual_reference"]), [])
         self.assertTrue(result["direcao_arte_emocional"].startswith("Base scene"))
+
+    def test_catalog_avoids_recent_reference(self):
+        persona = MINIMAL_CONTEXT["PERSONAS_EXEMPLO"][0]
+        first = VisualReferenceCatalog(MINIMAL_CONTEXT).pick(
+            "pais", persona, "sala brasileira organizada"
+        )
+        second = VisualReferenceCatalog(
+            MINIMAL_CONTEXT, {first.reference_id}
+        ).pick("pais", persona, "sala brasileira organizada")
+        self.assertNotEqual(first.reference_id, second.reference_id)
+        self.assertTrue(second.aceito)
+        self.assertTrue(second.rejeitado)
 
 
 if __name__ == "__main__":

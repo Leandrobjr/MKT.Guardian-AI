@@ -8,7 +8,7 @@
       "golpe_id": "clonagem_whatsapp",
       "ordem_md": 1,
       "titulo": "Clonagem de WhatsApp",
-      "publicos": ["massa", "idosos", "pais", "empresarios"],
+      "publicos": ["massa", "idosos", "pais", "empresarios", "escolas"],
       "frases_golpista": [
         "Recebemos sua solicitação. Digite o código de 6 dígitos enviado por SMS para confirmar sua conta do WhatsApp.",
         "Somos da central de segurança do WhatsApp. Envie o código que chegou por SMS agora ou perderá o acesso.",
@@ -80,7 +80,7 @@
       "golpe_id": "falso_emprego",
       "ordem_md": 7,
       "titulo": "Golpe do Falso Emprego",
-      "publicos": ["massa", "pais"],
+      "publicos": ["massa", "pais", "idosos", "empresarios"],
       "frases_golpista": [
         "Vaga home office R$ 3.500/semana! Cadastre-se e pague taxa de admissão de R$ 97 para garantir sua vaga.",
         "Trabalhe pelo celular, renda extra garantida. Envie documentos e taxa de treinamento via PIX.",
@@ -92,7 +92,7 @@
       "golpe_id": "falso_investimento",
       "ordem_md": 8,
       "titulo": "Golpe do Falso Investimento",
-      "publicos": ["massa", "empresarios", "idosos"],
+      "publicos": ["massa", "empresarios", "idosos", "pais"],
       "frases_golpista": [
         "Lucro de 15% ao dia garantido! Entre no grupo VIP e faça seu primeiro aporte via PIX.",
         "Robô de investimento automático — R$ 500 viram R$ 5.000 em 7 dias. Cadastre-se pelo link.",
@@ -161,7 +161,7 @@
     },
     {
       "variant_id": "falso_advogado_processo",
-      "golpe_id": "falsa_central",
+      "golpe_id": "falso_advogado",
       "ordem_md": 14,
       "titulo": "Golpe do Falso Advogado",
       "publicos": ["massa", "empresarios", "idosos"],
@@ -173,7 +173,7 @@
     },
     {
       "variant_id": "falso_medico_hospital",
-      "golpe_id": "falso_parente",
+      "golpe_id": "falso_medico",
       "ordem_md": 15,
       "titulo": "Golpe do Falso Médico/Hospital",
       "publicos": ["pais", "idosos"],
@@ -185,7 +185,7 @@
     },
     {
       "variant_id": "sextorsao_ameaca",
-      "golpe_id": "grooming",
+      "golpe_id": "sextorsao",
       "ordem_md": 16,
       "titulo": "Golpe de Sextorsão",
       "publicos": ["pais", "massa"],
@@ -248,7 +248,7 @@
       "golpe_id": "grooming",
       "ordem_md": 21,
       "titulo": "Grooming Romântico",
-      "publicos": ["massa", "idosos"],
+      "publicos": ["pais", "escolas"],
       "frases_golpista": [
         "Vc é muito especial... conversamos todo dia no segredo? Não conta pra ninguém 😉",
         "Te achei linda no perfil. Podemos ser só nós dois? Manda uma foto sua?",
@@ -257,7 +257,7 @@
     },
     {
       "variant_id": "grooming_familiar_falso_filho",
-      "golpe_id": "falso_parente",
+      "golpe_id": "pix_fantasma",
       "ordem_md": 22,
       "titulo": "Grooming com Falso Filho/Familiar",
       "publicos": ["pais", "idosos"],

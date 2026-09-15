@@ -30,12 +30,51 @@ def _is_surgical_copy_edit(t: str) -> bool:
         "monitora conversas",
         "monitora essas conversas",
         "texto exato",
+        "comece a frase com",
     )
     if any(m in t for m in markers):
         return True
     if "altere" in t and any(x in t for x in ("roteiro", "frase", "card")):
         return True
     return False
+
+
+def extract_card_message_edit(feedback: str) -> dict:
+    """Extrai uma fala explícita sem deixar o redator substituí-la pela variante padrão."""
+    text = " ".join(str(feedback or "").strip().split())
+    lowered = text.lower()
+    if not text or not any(
+        marker in lowered for marker in ("fala", "frase", "card", "mensagem")
+    ):
+        return {}
+
+    exact = re.search(
+        r"card\s+golp[ií]sta\s+(?:alter[ea]|mude)\s+para\s*:?\s*(.+)$",
+        text,
+        flags=re.IGNORECASE,
+    )
+    if exact:
+        value = exact.group(1).strip()
+        if value:
+            return {"exact": value[:280]}
+
+    if "roteiro" not in lowered and "fala" in lowered:
+        exact = re.search(
+            r"(?:mude para|substitua por)\s*:?\s*(.+)$",
+            text,
+            flags=re.IGNORECASE,
+        )
+        if exact and exact.group(1).strip():
+            return {"exact": exact.group(1).strip()[:280]}
+
+    prefix = re.search(
+        r"comece\s+a\s+frase\s+com\s*:?\s*(.+)$",
+        text,
+        flags=re.IGNORECASE,
+    )
+    if prefix and prefix.group(1).strip():
+        return {"prefix": prefix.group(1).strip()[:100]}
+    return {}
 
 
 def _has_explicit_icp_change_intent(t: str) -> bool:

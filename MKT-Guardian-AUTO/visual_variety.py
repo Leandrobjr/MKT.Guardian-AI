@@ -9,6 +9,8 @@ import random
 import time
 from typing import TYPE_CHECKING
 
+from visual_reference import VisualReferenceCatalog
+
 if TYPE_CHECKING:
     from campaign_history import CampaignHistory
 
@@ -17,11 +19,26 @@ class VisualVarietyEngine:
     """VisualCastingDirector — personas, ambientes e dedup de prompts."""
 
     SHOT_VARIANTS = [
-        "Medium documentary shot, 50mm lens, shallow depth of field.",
-        "Over-the-shoulder angle, WhatsApp chat clearly visible on phone screen.",
-        "Close-up on hands holding smartphone, worried expression on face.",
-        "Three-quarter candid pose, subject not looking at camera.",
-        "Waist-up portrait, phone held at chest height showing chat.",
+        (
+            "Medium documentary shot, 50mm lens, subject and entire smartphone "
+            "fully visible with margin from every image edge."
+        ),
+        (
+            "Over-the-shoulder angle with the entire smartphone and screen inside "
+            "the frame, never cropped or placed against an image edge."
+        ),
+        (
+            "Close-up on hands holding a complete smartphone above the lower third, "
+            "with the full device visible and a worried expression on the face."
+        ),
+        (
+            "Three-quarter candid pose, subject holding the complete phone at chest "
+            "height, with safe space around the entire smartphone."
+        ),
+        (
+            "Waist-up portrait, entire smartphone held at chest height fully inside the frame; "
+            "do not use an oversized phone mockup or cropped screen."
+        ),
     ]
     LIGHTING = [
         "Warm morning window light from the left side.",
@@ -149,6 +166,10 @@ class VisualVarietyEngine:
         elif publico_slug == "pais":
             rng = self._age_range(context_data, "pais") or (35, 50)
             p["idade"] = self._clamp_age(p.get("idade", 42), *rng)
+        elif publico_slug == "empresarios":
+            p["idade"] = self._clamp_age(p.get("idade", 42), 35, 55)
+        elif publico_slug == "escolas":
+            p["idade"] = self._clamp_age(p.get("idade", 45), 40, 55)
         return p
 
     def _persona_id(self, persona: dict) -> str:
@@ -164,6 +185,16 @@ class VisualVarietyEngine:
             pid = row.get("persona_id") or ""
             if pid:
                 ids.add(pid)
+            if len(ids) >= limit:
+                break
+        return ids
+
+    def _recent_reference_ids(self, publico_slug: str, limit: int = 8) -> set[str]:
+        ids: set[str] = set()
+        for row in self._get_history().get_recent(publico_slug, "", limit=limit * 3):
+            reference_id = row.get("visual_reference_id") or ""
+            if reference_id:
+                ids.add(reference_id)
             if len(ids) >= limit:
                 break
         return ids
@@ -190,19 +221,9 @@ class VisualVarietyEngine:
         if not candidatos:
             candidatos = [p for p in personas if p.get("publico_id") == publico_id]
         if not candidatos:
-            candidatos = personas
-        if not candidatos:
-            return {
-                "persona_id": "bruno_trabalhador_sp",
-                "nome": "Bruno",
-                "idade": 42,
-                "profissao": "trabalhador",
-                "cidade": "São Paulo",
-                "genero": "masculino",
-                "estilo_vestuario": "camisa polo e jeans limpos",
-                "ambiente_preferido": "sala_tv",
-                "nivel_socioeconomico": "classe_media",
-            }
+            raise ValueError(
+                f"Nenhuma persona compatível com o público {publico_slug or publico_id!r}."
+            )
 
         used_ids = self._recent_persona_ids(publico_slug or publico_id)
         fresh = [p for p in candidatos if self._persona_id(p) not in used_ids]
@@ -293,13 +314,21 @@ class VisualVarietyEngine:
     def enrich(self, creative_data: dict, config: dict, context_data: dict) -> dict:
         publico_id = config.get("publico_id", "massa")
         publico_slug = config.get("publico_slug", publico_id)
-        persona = self.pick_persona(
-            context_data, publico_id, publico_slug,
+        persona = config.get("_protagonist_persona") or self.pick_persona(
+            context_data,
+            publico_id,
+            publico_slug,
             genero=creative_data.get("genero_campanha", ""),
         )
         ambiente = self.pick_ambiente(publico_slug, persona)
-        shot = random.choice(self.SHOT_VARIANTS)
-        lighting = random.choice(self.LIGHTING)
+        reference = VisualReferenceCatalog(
+            context_data,
+            self._recent_reference_ids(publico_slug),
+            shot_variants=self.SHOT_VARIANTS,
+            lighting_variants=self.LIGHTING,
+        ).pick(publico_slug, persona, ambiente)
+        shot = reference.enquadramento
+        lighting = reference.iluminacao
         variation_id = f"{int(time.time())}-{random.randint(1000, 9999)}"
 
         genero = creative_data.get("genero_campanha", "")
@@ -313,7 +342,7 @@ class VisualVarietyEngine:
             creative_data.get("direcao_arte_emocional", ""), lock_gender=bool(genero_lock)
         )
 
-        estilo = persona.get("estilo_vestuario", "clean pressed casual shirt and neat jeans or chinos")
+        estilo = reference.vestuario
         genero_hint = creative_data.get("genero_personagem_visual", "")
 
         creative_data["persona_visual"] = persona
@@ -322,6 +351,8 @@ class VisualVarietyEngine:
         creative_data["visual_shot_variant"] = shot
         creative_data["visual_lighting"] = lighting
         creative_data["visual_variation_id"] = variation_id
+        creative_data["visual_reference"] = reference.to_dict()
+        creative_data["visual_reference_id"] = reference.reference_id
 
         sufixo = (
             f"{genero_lock}"
@@ -351,6 +382,7 @@ class VisualVarietyEngine:
         print(f"   Ambiente: {amb[:90]}{'…' if len(amb) > 90 else ''}")
         print(f"   Personagem: {creative_data.get('genero_personagem_visual', '—')}")
         print(f"   Shot: {(creative_data.get('visual_shot_variant') or '')[:60]}…")
+        print(f"   Referência: {creative_data.get('visual_reference_id', '—')}")
 
 
 VisualCastingDirector = VisualVarietyEngine

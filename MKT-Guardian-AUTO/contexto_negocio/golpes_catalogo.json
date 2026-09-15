@@ -1,0 +1,213 @@
+{
+  "version": 1,
+  "fonte_principal": "GOLPES WHATSAPP.md.local.bak",
+  "descricao": "Catálogo canônico de golpes e subtipos usados no WhatsApp.",
+  "tipos": [
+    {
+      "id": "clonagem_whatsapp",
+      "nome": "Clonagem de WhatsApp",
+      "familia": "tomada_de_conta",
+      "variantes": ["clonagem_codigo_sms"],
+      "publicos": ["massa", "idosos", "pais", "empresarios", "escolas"]
+    },
+    {
+      "id": "falso_pix_familiar",
+      "nome": "Falso pedido de PIX por familiar",
+      "familia": "engenharia_social",
+      "mecanismo": "transferencia_pix_autorizada",
+      "consequencia": "A vítima perde somente o valor do PIX enviado; não há acesso automático ao saldo da conta.",
+      "termos_proibidos": [
+        "esvaziou a conta",
+        "esvaziar a conta",
+        "conta zerada",
+        "aposentadoria inteira",
+        "aposentadoria sumiu",
+        "aposentadoria sumiram",
+        "economia de uma vida inteira",
+        "roubou a aposentadoria inteira",
+        "roubar sua aposentadoria",
+        "perdeu a aposentadoria",
+        "perder a aposentadoria",
+        "roubar suas economias",
+        "perdeu suas economias",
+        "perder suas economias",
+        "roubar sua economia",
+        "perdeu sua economia",
+        "perder sua economia",
+        "levar suas economias",
+        "levar sua economia",
+        "levar seu dinheiro",
+        "roubar seu dinheiro",
+        "não volta mais",
+        "que não volta mais",
+        "proteja sua aposentadoria",
+        "proteger sua poupança",
+        "proteja sua poupança",
+        "perder sua poupança",
+        "levar sua poupança",
+        "roubar sua poupança",
+        "roubou todo o saldo",
+        "perder todo o saldo"
+      ],
+      "variantes": ["falso_pix_numero_novo", "grooming_familiar_falso_filho"],
+      "publicos": ["massa", "idosos", "pais"]
+    },
+    {
+      "id": "falso_suporte_bancario",
+      "nome": "Falso suporte ou central bancária",
+      "familia": "engenharia_social",
+      "variantes": ["falso_suporte_bancario", "central_seguranca_invasao"],
+      "publicos": ["massa", "idosos", "empresarios"]
+    },
+    {
+      "id": "engenharia_social_urgencia",
+      "nome": "Engenharia social por urgência",
+      "familia": "engenharia_social",
+      "variantes": ["engenharia_social_urgencia"],
+      "publicos": ["massa", "idosos", "pais"]
+    },
+    {
+      "id": "link_malicioso",
+      "nome": "Link malicioso",
+      "familia": "phishing_malware",
+      "variantes": ["link_promocao_rastreamento", "link_fornecedor_cadastro_b2b", "link_phishing_cliente_b2b"],
+      "publicos": ["massa", "idosos", "pais", "empresarios"]
+    },
+    {
+      "id": "falso_emprego",
+      "nome": "Falso emprego",
+      "familia": "engenharia_social",
+      "variantes": ["vaga_home_office"],
+      "publicos": ["massa", "pais", "idosos", "empresarios"]
+    },
+    {
+      "id": "falso_investimento",
+      "nome": "Falso investimento",
+      "familia": "fraude_financeira",
+      "variantes": ["lucro_garantido_cripto"],
+      "publicos": ["massa", "idosos", "pais", "empresarios"]
+    },
+    {
+      "id": "boleto_falso",
+      "nome": "Boleto falso",
+      "familia": "fraude_financeira",
+      "variantes": ["boleto_falso_qr"],
+      "publicos": ["empresarios", "escolas"]
+    },
+    {
+      "id": "qr_code_pix",
+      "nome": "QR Code ou PIX adulterado",
+      "familia": "fraude_financeira",
+      "variantes": ["qr_code_pix_adulterado"],
+      "publicos": ["massa", "empresarios"]
+    },
+    {
+      "id": "catalogo_falso_produto",
+      "nome": "Catálogo ou falso produto",
+      "familia": "comercio_fraudulento",
+      "variantes": ["catalogo_falso_produto"],
+      "publicos": ["massa"]
+    },
+    {
+      "id": "falso_sorteio",
+      "nome": "Falso sorteio ou prêmio",
+      "familia": "phishing_malware",
+      "variantes": ["falso_sorteio_premio"],
+      "publicos": ["massa", "idosos", "pais"]
+    },
+    {
+      "id": "confirmacao_codigo",
+      "nome": "Confirmação fraudulenta de código",
+      "familia": "tomada_de_conta",
+      "variantes": ["confirmacao_codigo_sms"],
+      "publicos": ["massa", "idosos", "pais"]
+    },
+    {
+      "id": "falso_advogado",
+      "nome": "Falso advogado ou processo",
+      "familia": "engenharia_social",
+      "variantes": ["falso_advogado_processo"],
+      "publicos": ["massa", "idosos", "empresarios"]
+    },
+    {
+      "id": "falso_medico",
+      "nome": "Falso médico ou hospital",
+      "familia": "engenharia_social",
+      "variantes": ["falso_medico_hospital"],
+      "publicos": ["massa", "idosos", "pais"]
+    },
+    {
+      "id": "sextorsao",
+      "nome": "Sextorsão",
+      "familia": "extorsao",
+      "variantes": ["sextorsao_ameaca"],
+      "publicos": ["massa", "pais"]
+    },
+    {
+      "id": "malware_apk",
+      "nome": "Malware ou APK falso",
+      "familia": "phishing_malware",
+      "variantes": ["malware_apk_falso", "link_apk_seguranca_b2b"],
+      "publicos": ["massa", "pais", "empresarios"]
+    },
+    {
+      "id": "falsa_encomenda",
+      "nome": "Falsa encomenda ou entrega retida",
+      "familia": "phishing_malware",
+      "variantes": ["falsa_encomenda_retida", "link_encomenda_b2b"],
+      "publicos": ["massa", "pais", "idosos", "empresarios"]
+    },
+    {
+      "id": "falsa_cobranca_empresarial",
+      "nome": "Falsa cobrança empresarial",
+      "familia": "fraude_financeira",
+      "variantes": ["falsa_cobranca_empresarial"],
+      "publicos": ["empresarios", "escolas"]
+    },
+    {
+      "id": "voz_clonada",
+      "nome": "Voz clonada ou deepfake",
+      "familia": "engenharia_social",
+      "mecanismo": "transferencia_pix_autorizada",
+      "consequencia": "A vítima perde somente o valor do PIX enviado; não há acesso automático ao saldo da conta.",
+      "termos_proibidos": [
+        "esvaziou a conta",
+        "esvaziar a conta",
+        "conta zerada",
+        "aposentadoria inteira",
+        "aposentadoria sumiu",
+        "aposentadoria sumiram",
+        "economia de uma vida inteira",
+        "roubou suas economias",
+        "perdeu suas economias",
+        "perder suas economias",
+        "roubar sua economia",
+        "perdeu sua economia",
+        "perder sua economia",
+        "levar suas economias",
+        "levar sua economia",
+        "levar seu dinheiro",
+        "roubar seu dinheiro",
+        "não volta mais",
+        "que não volta mais",
+        "proteja sua aposentadoria",
+        "proteger sua poupança",
+        "proteja sua poupança",
+        "perder sua poupança",
+        "levar sua poupança",
+        "roubar sua poupança",
+        "roubou todo o saldo",
+        "perder todo o saldo"
+      ],
+      "variantes": ["ia_voz_clonada"],
+      "publicos": ["massa", "idosos", "pais", "empresarios"]
+    },
+    {
+      "id": "grooming",
+      "nome": "Grooming e aliciamento digital",
+      "familia": "protecao_de_menores",
+      "variantes": ["grooming_romantico"],
+      "publicos": ["pais", "escolas"]
+    }
+  ]
+}

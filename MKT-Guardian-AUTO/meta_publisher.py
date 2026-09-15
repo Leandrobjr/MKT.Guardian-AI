@@ -14,6 +14,8 @@ load_project_env()
 
 GRAPH_BASE = "https://graph.facebook.com/v21.0"
 RUPLOAD_BASE = "https://rupload.facebook.com/ig-api-upload/v21.0"
+ALLOWED_ASSET_EXTENSIONS = {".mp4", ".jpg", ".jpeg", ".png"}
+DEFAULT_MAX_UPLOAD_BYTES = 1024 * 1024 * 1024
 
 
 class MetaPublisher:
@@ -63,7 +65,7 @@ class MetaPublisher:
                         "ok": False,
                         "erro": (
                             f"Token expira em ~{dias:.1f} dias — não é long-lived (60d). "
-                            "Cole o token do curl (expires_in: 5183999) e rm AUTO/.env"
+                            "Cole um token long-lived novo e alinhe os arquivos .env."
                         ),
                     }
             scopes = set(data.get("scopes") or [])
@@ -74,8 +76,73 @@ class MetaPublisher:
                     "ok": False,
                     "erro": f"Token sem permissões Instagram: {falta}",
                 }
-        except Exception:
-            pass
+        except Exception as exc:
+            return {
+                "ok": False,
+                "erro": f"Não foi possível validar o token Meta: {exc}",
+            }
+        return None
+
+    def verificar_conta_profissional(self) -> dict | None:
+        """Confirma conta profissional pelo endpoint IG User compatível com v21."""
+        try:
+            response = requests.get(
+                f"{GRAPH_BASE}/{self.ig_user}",
+                params={
+                    "fields": "id,username",
+                    "access_token": self.token,
+                },
+                timeout=15,
+            )
+            if not response.ok:
+                return {
+                    "ok": False,
+                    "erro": f"Conta Instagram inválida ou inacessível: {self._meta_error(response)}",
+                }
+            data = response.json()
+            if str(data.get("id") or "") != str(self.ig_user):
+                return {
+                    "ok": False,
+                    "erro": "META_IG_USER_ID não corresponde à conta retornada pela Meta.",
+                }
+            if not data.get("username"):
+                return {
+                    "ok": False,
+                    "erro": (
+                        "A conta Instagram não retornou username. "
+                        "Confirme que é Business ou Creator."
+                    ),
+                }
+        except Exception as exc:
+            return {
+                "ok": False,
+                "erro": f"Não foi possível validar a conta Instagram: {exc}",
+            }
+        return None
+
+    def preflight(self) -> dict:
+        """Valida token, permissões e conta antes de qualquer upload."""
+        token_error = self.verificar_token()
+        if token_error:
+            return token_error
+        account_error = self.verificar_conta_profissional()
+        if account_error:
+            return account_error
+        return {"ok": True}
+
+    @staticmethod
+    def _validate_asset_path(asset_path: str) -> str | None:
+        if not isinstance(asset_path, str) or not asset_path.strip():
+            return "Asset vazio."
+        normalized = os.path.abspath(asset_path)
+        extension = os.path.splitext(normalized)[1].lower()
+        if extension not in ALLOWED_ASSET_EXTENSIONS:
+            return "Extensão de asset não permitida."
+        if not os.path.isfile(normalized):
+            return "Asset não encontrado."
+        max_size = int(os.getenv("META_MAX_UPLOAD_BYTES", DEFAULT_MAX_UPLOAD_BYTES))
+        if os.path.getsize(normalized) > max_size:
+            return "Asset excede o tamanho máximo configurado."
         return None
 
     @staticmethod
@@ -223,10 +290,13 @@ class MetaPublisher:
         return {"ok": False, "erro": last_err}
 
     def postar_reel(self, caminho_video: str, caption: str) -> dict:
-        token_err = self.verificar_token()
-        if token_err:
-            print(f"❌ [Meta] {token_err['erro']}")
-            return token_err
+        asset_error = self._validate_asset_path(caminho_video)
+        if asset_error or not caminho_video.lower().endswith(".mp4"):
+            return {"ok": False, "erro": asset_error or "Asset de vídeo inválido."}
+        preflight = self.preflight()
+        if not preflight.get("ok"):
+            print(f"❌ [Meta] {preflight.get('erro', 'Preflight falhou.')}")
+            return preflight
 
         container_id = self._upload_video_resumable(caminho_video, caption)
         if not container_id:
@@ -242,6 +312,13 @@ class MetaPublisher:
         return resultado
 
     def postar_imagem(self, caminho_imagem: str, caption: str) -> dict:
+        asset_error = self._validate_asset_path(caminho_imagem)
+        if asset_error or caminho_imagem.lower().endswith(".mp4"):
+            return {"ok": False, "erro": asset_error or "Asset de imagem inválido."}
+        preflight = self.preflight()
+        if not preflight.get("ok"):
+            print(f"❌ [Meta] {preflight.get('erro', 'Preflight falhou.')}")
+            return preflight
         image_url = self._upload_para_imgbb(caminho_imagem)
         if not image_url:
             return {"ok": False, "erro": "Falha ImgBB."}
@@ -267,6 +344,9 @@ class MetaPublisher:
             return {"ok": False, "erro": str(e)}
 
     def postar_asset(self, asset_path: str, caption: str) -> dict:
+        asset_error = self._validate_asset_path(asset_path)
+        if asset_error:
+            return {"ok": False, "erro": asset_error}
         if asset_path.lower().endswith(".mp4"):
             return self.postar_reel(asset_path, caption)
         return self.postar_imagem(asset_path, caption)

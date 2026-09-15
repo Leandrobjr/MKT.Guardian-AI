@@ -76,6 +76,83 @@ def is_coherent(roteiro: str, frase: str, headline: str = "", min_score: float =
     return nexo_score(roteiro, frase, headline) >= min_score
 
 
+def is_coherent_for_campaign(
+    roteiro: str,
+    frase: str,
+    headline: str = "",
+    canonical_type_id: str = "",
+) -> bool:
+    """Aplica nexo semântico específico quando a variante tem vocabulário variável."""
+    if is_coherent(roteiro, frase, headline):
+        return True
+    if canonical_type_id == "voz_clonada":
+        text = _norm(f"{roteiro} {frase} {headline}")
+        has_voice_signal = any(
+            term in text
+            for term in ("voz clonada", "audio", "áudio", "imitando a voz", "deepfake")
+        )
+        has_pix_signal = any(term in text for term in ("pix", "dinheiro", "transfer"))
+        return has_voice_signal and has_pix_signal
+    if canonical_type_id != "falso_pix_familiar":
+        return False
+    text = _norm(f"{roteiro} {headline}")
+    return (
+        "pix" in text
+        and "whatsapp" in text
+        and any(term in text for term in ("pedir", "pedido", "enviar", "transfer"))
+    )
+
+
+def is_ambiguous_pix_headline(headline: str) -> bool:
+    """Bloqueia headlines que atribuem à vítima a prática do golpe."""
+    normalized = _norm(headline)
+    return bool(
+        re.search(
+            r"\bpix\s+que\s+voce\s+fizer\b.*\b(pode\s+ser\s+um\s+golpe|cair\s+na\s+conta)\b",
+            normalized,
+        )
+    )
+
+
+def infer_recipient_gender(message: str) -> str:
+    """Infere o gênero do protagonista pelo vocativo da mensagem recebida."""
+    text = (message or "").lower()
+    feminine = r"\b(mãe|mae|vó|avó|vovó|tia|irmã|irma|amiga|filha|senhora)\b"
+    masculine = r"\b(pai|vô|avô|vovô|tio|irmão|irmao|amigo|filho|senhor)\b"
+    feminine_match = re.search(feminine, text)
+    masculine_match = re.search(masculine, text)
+    if feminine_match and not masculine_match:
+        return "feminino"
+    if masculine_match and not feminine_match:
+        return "masculino"
+    return ""
+
+
+def is_recipient_role_coherent(
+    message: str,
+    publico_slug: str,
+    golpe_id: str = "",
+) -> bool:
+    """Valida o vínculo do destinatário com o público e o golpe selecionados."""
+    if golpe_id != "falso_parente":
+        return True
+    text = (message or "").lower()
+    if publico_slug == "idosos":
+        return not bool(re.search(r"\bchefe\b", text))
+    if publico_slug == "pais":
+        return not bool(
+            re.search(
+                r"\b(vó|vovó|avó|vô|vovô|avô|neto|neta|chefe)\b",
+                text,
+            )
+        )
+    if publico_slug == "empresarios":
+        return not bool(
+            re.search(r"\b(mãe|mae|pai|filho|filha|vó|vô|avó|avô|neto|neta)\b", text)
+        )
+    return True
+
+
 def pick_coherent_gancho(ganchos: list[str], frase: str, start_idx: int = 0) -> tuple[str | None, int]:
     """Escolhe gancho com melhor nexo com a frase_golpista (rotação como desempate)."""
     if not ganchos:
@@ -117,9 +194,9 @@ def _gender_from_roteiro(roteiro: str) -> str:
     m = re.search(r"\b(?:o\s+)?seu\s+(\w+)", r)
     if m and m.group(1).lower() not in SEU_POSSESSIVE:
         return "masculino"
-    if re.search(r"\bm[ãa]e\b|\bvov[óo]\b|\bav[óo]\b|\btitia\b|\bsogra\b", r):
+    if re.search(r"\bm[ãa]e\b|\bvó\b|\bvovó\b|\bavó\b|\btitia\b|\bsogra\b", r):
         return "feminino"
-    if re.search(r"\bpai\b|\bvov[ôo]\b|\bav[ôo]\b|\btitio\b|\bsogro\b", r):
+    if re.search(r"\bpai\b|\bvô\b|\bvovô\b|\bavô\b|\btitio\b|\bsogro\b", r):
         return "masculino"
     tem_dela = bool(re.search(r"\bdela\b|\bela\b", r))
     tem_dele = bool(re.search(r"\bdele\b", r))

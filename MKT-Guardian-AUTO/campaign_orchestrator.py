@@ -4,6 +4,7 @@ import random
 import re
 import time
 import uuid
+from dataclasses import asdict
 from google import genai
 from google.genai import types
 from dotenv import load_dotenv
@@ -12,26 +13,50 @@ from mkt_agent_01 import MediaFactory
 from traffic_manager import TrafficManager
 from agent_memory import AgentMemory
 from campaign_history import CampaignHistory
-from creative_brief import HeadlineRotator
-from feedback_router import classify_improvement, describe_plan, correction_tag, format_menu_conflict
+from creative_asset_audit import audit_creative_assets, format_audit_result
+from creative_brief import HeadlineRotator, build_creative_brief
+from feedback_router import (
+    classify_improvement,
+    correction_tag,
+    describe_plan,
+    extract_card_message_edit,
+    format_menu_conflict,
+)
+from visual_quality_audit import GeminiVisualQualityAuditor
 from visual_variety import VisualVarietyEngine
-from channel_presets import resolve_channel_preset, format_preset_summary
+from channel_presets import (
+    format_preset_summary,
+    is_video_media,
+    resolve_channel_preset,
+    validate_channel_media,
+)
 from tts_narration import strip_written_site_urls, card_solucao_text, NARRATION_CLOSING
 from build_info import ORCHESTRATOR_VERSION, print_build_banner
 from campaign_coherence import (
     describe_protagonist,
     format_nexo_prompt_block,
     infer_protagonist_gender,
+    is_coherent_for_campaign,
     is_coherent,
     is_gender_coherent,
     nexo_score,
     pick_coherent_gancho,
     _gender_from_personagem_field,
     _gender_from_roteiro,
+    infer_recipient_gender,
+    is_ambiguous_pix_headline,
 )
 from campaign_context_engine import CampaignContextEngine
+from campaign_contract import (
+    CampaignContractCatalog,
+    CampaignContractError,
+    VALID_PUBLICO_SLUGS,
+    validate_creative_contract,
+)
 from scam_library import ScamLibrary
+from campaign_catalog import CampaignCatalog
 from story_approval import format_story_telegram, story_keyboard
+from storyboard import build_storyboard, format_storyboard_compact, format_storyboard_prompt
 from copy_lexicon import CopyLexicon
 from manual_export import export_tiktok_package
 
@@ -50,6 +75,12 @@ try:
 except ImportError:
     TikTokPublisher = None
 
+try:
+    from supabase_campaign_bridge import SupabaseBridgeError, SupabaseCampaignBridge
+except ImportError:
+    SupabaseBridgeError = None
+    SupabaseCampaignBridge = None
+
 class CampaignOrchestrator:
     BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
@@ -59,6 +90,19 @@ class CampaignOrchestrator:
         self.api_key = os.getenv("GEMINI_API_KEY")
         self.client = genai.Client(api_key=self.api_key)
         self.model_name = os.getenv("GEMINI_MODEL_TEXTO", "gemini-3.1-flash-lite")
+        qa_enabled = os.getenv("GEMINI_QA_ENABLED", "true").lower() in (
+            "1", "true", "yes"
+        )
+        qa_required = os.getenv("GEMINI_QA_REQUIRED", "false").lower() in (
+            "1", "true", "yes"
+        )
+        self.visual_quality_auditor = GeminiVisualQualityAuditor(
+            self.client if self.api_key else None,
+            model=os.getenv("GEMINI_MODEL_QA", "gemini-3.6-flash"),
+            enabled=qa_enabled and bool(self.api_key),
+            required=qa_required,
+            minimum_score=float(os.getenv("GEMINI_QA_MIN_SCORE", "7.0")),
+        )
 
         self.context_path = os.path.join(self.BASE_DIR, "contexto_negocio", "guardian_base.json")
         self.context_data = self._load_business_context()
@@ -70,10 +114,18 @@ class CampaignOrchestrator:
         self.traffic_manager = TrafficManager()
         self.memory = AgentMemory(self.BASE_DIR)
         self.history = CampaignHistory(self.BASE_DIR)
+        self.catalog = CampaignCatalog(self.BASE_DIR)
         self.headline_rotator = HeadlineRotator(self.BASE_DIR, self.history)
         self.visual_variety = VisualVarietyEngine(self.BASE_DIR, self.history)
         self.scam_library = ScamLibrary(self.BASE_DIR, self.history)
+        self.contract_catalog = CampaignContractCatalog(self.BASE_DIR)
         self.context_engine = CampaignContextEngine(self.BASE_DIR)
+        self.supabase_bridge = None
+        if SupabaseCampaignBridge is not None:
+            try:
+                self.supabase_bridge = SupabaseCampaignBridge.from_env(self.BASE_DIR)
+            except (EnvironmentError, SupabaseBridgeError) as exc:
+                print(f"⚠️ Ponte Supabase desativada: {exc}")
         self.max_revisoes = int(os.getenv("MAX_REVISOES", "3"))
         self.telegram_timeout = int(os.getenv("TELEGRAM_TIMEOUT", "3600"))
         self.telegram = None
@@ -97,6 +149,11 @@ class CampaignOrchestrator:
             return False
         try:
             self.publisher = MetaPublisher()
+            preflight = self.publisher.preflight()
+            if not preflight.get("ok"):
+                print(f"⚠️ Meta desativado no preflight: {preflight.get('erro', 'falha desconhecida')}")
+                self.publisher = None
+                return False
             return True
         except EnvironmentError as e:
             print(f"⚠️ Meta Publisher desativado: {e}")
@@ -117,7 +174,11 @@ class CampaignOrchestrator:
         """Carrega documentos estratégicos de contexto_negocio/ para enriquecer o copy."""
         ctx_dir = os.path.join(self.BASE_DIR, "contexto_negocio")
         partes = []
-        for nome in ("GOLPES WHATSAPP.md", "PLANO MKT Guardian AUTO.md"):
+        for nome in (
+            "GOLPES WHATSAPP.md",
+            "GOLPES WHATSAPP.md.local.bak",
+            "PLANO MKT Guardian AUTO.md",
+        ):
             caminho = os.path.join(ctx_dir, nome)
             if os.path.exists(caminho):
                 try:
@@ -149,31 +210,56 @@ class CampaignOrchestrator:
             return {}
 
     def _build_cta_button(
-        self, config: dict, genero_campanha: str = "neutro", campaign_ctx: dict | None = None
+        self,
+        config: dict,
+        genero_campanha: str = "neutro",
+        campaign_ctx: dict | None = None,
+        creative_data: dict | None = None,
     ) -> str:
+        narrative = " ".join(
+            str((creative_data or {}).get(field) or "")
+            for field in (
+                "gancho_atencao_inicial",
+                "desenvolvimento_copy",
+                "texto_card_notificacao",
+            )
+        ).lower()
+        child_gender = ""
+        has_female_child = bool(re.search(r"\b(filha|menina)\b", narrative))
+        has_male_child = bool(re.search(r"\b(filho|menino)\b", narrative))
+        if has_female_child and not has_male_child:
+            child_gender = "feminino"
+        elif has_male_child and not has_female_child:
+            child_gender = "masculino"
+
         if campaign_ctx and campaign_ctx.get("cta_template"):
             cta = campaign_ctx["cta_template"]
-            if campaign_ctx.get("narrativa_parental") and genero_campanha == "feminino":
-                return cta.replace("SEUS FILHOS", "SUA FILHA").replace("SEU FILHO", "SUA FILHA")
-            if campaign_ctx.get("narrativa_parental") and genero_campanha == "masculino":
-                return cta.replace("SEUS FILHOS", "SEU FILHO").replace("SUA FILHA", "SEU FILHO")
-            return cta
+            if campaign_ctx.get("narrativa_parental") and child_gender == "feminino":
+                return self._fix_pt_artifacts(
+                    cta.replace("SEUS FILHOS", "SUA FILHA").replace("SEU FILHO", "SUA FILHA")
+                )
+            if campaign_ctx.get("narrativa_parental") and child_gender == "masculino":
+                return self._fix_pt_artifacts(
+                    cta.replace("SEUS FILHOS", "SEU FILHO").replace("SUA FILHA", "SEU FILHO")
+                )
+            return self._fix_pt_artifacts(cta)
         publico_slug = config.get("publico_slug", "")
         if publico_slug == "escolas":
             return (
                 "PROTEJA SEUS ALUNOS — PAIS USEM GUARDIAN AI. PLANOS PARA GRUPOS DE ALUNOS"
             )
-        publico_id = config.get("publico_id", "massa")
-        if publico_id == "pais":
-            if genero_campanha == "feminino":
-                return "TESTE GRÁTIS — PROTEJA o WhatsApp da SUA FILHA, AGORA!"
-            if genero_campanha == "masculino":
-                return "TESTE GRÁTIS — PROTEJA o WhatsApp do SEU FILHO, AGORA!"
-            return "TESTE GRÁTIS — PROTEJA o WhatsApp dos SEUS FILHOS, AGORA!"
-        if publico_id == "idosos":
+        if publico_slug == "pais":
+            if child_gender == "feminino":
+                return "TESTE GRÁTIS — PROTEJA O WhatsApp da SUA FILHA, AGORA!"
+            if child_gender == "masculino":
+                return "TESTE GRÁTIS — PROTEJA O WhatsApp do SEU FILHO, AGORA!"
+            return "TESTE GRÁTIS — PROTEJA O WhatsApp dos SEUS FILHOS, AGORA!"
+        if publico_slug == "idosos":
             return "TESTE GRÁTIS — PROTEJA SEU WHATSAPP AGORA!"
-        if publico_id == "profissionais":
+        if publico_slug == "empresarios":
             return "TESTE GRÁTIS — PROTEJA SEU WHATSAPP BUSINESS AGORA!"
+        if publico_slug == "escolas":
+            return "PROTEJA SEUS ALUNOS — PAIS USEM GUARDIAN AI. PLANOS PARA GRUPOS DE ALUNOS"
         return "TESTE GRÁTIS — PROTEJA SEU WHATSAPP AGORA!"
 
     def _apply_gender_pt(self, text: str, feminino: bool) -> str:
@@ -230,9 +316,21 @@ class CampaignOrchestrator:
 
     def _fix_pt_artifacts(self, text: str) -> str:
         """Corrige artefatos de concordância após substituição mecânica."""
+        text = re.sub(
+            r"\b(PROTEJA)\s+(o|a|os|as)\b",
+            lambda match: f"{match.group(1)} {match.group(2).upper()}",
+            text,
+            flags=re.IGNORECASE,
+        )
         text = re.sub(r"\bdo sua\b", "da sua", text, flags=re.IGNORECASE)
         text = re.sub(r"\bno sua\b", "na sua", text, flags=re.IGNORECASE)
         text = re.sub(r"\bo sua\b", "a sua", text, flags=re.IGNORECASE)
+        text = re.sub(r"\bdos SEU\b", "do SEU", text)
+        text = re.sub(r"\bdos seu\b", "do seu", text)
+        text = re.sub(r"\bdos Seu\b", "do Seu", text)
+        text = re.sub(r"\bdos SUA\b", "da SUA", text)
+        text = re.sub(r"\bdos sua\b", "da sua", text)
+        text = re.sub(r"\bdos Sua\b", "da Sua", text)
         text = re.sub(
             r"(Guardian AI[^.!?]*[.!?]\s*)Ela\s+(detecta|alerta|monitora|envia|avisa)",
             r"\1Ele \2",
@@ -297,7 +395,7 @@ class CampaignOrchestrator:
             (r"\bchat\s+privado\b", "chat do WhatsApp"),
             (r"\bconversa\s+privada\b", "conversa no WhatsApp"),
         ]
-        for field in ("desenvolvimento_copy", "gancho_atencao_inicial", "chamada_para_acao_cta", "texto_card_notificacao"):
+        for field in ("desenvolvimento_copy", "gancho_atencao_inicial", "chamada_para_acao_cta"):
             if not creative_data.get(field):
                 continue
             text = creative_data[field]
@@ -318,7 +416,12 @@ class CampaignOrchestrator:
             creative_data[field] = self._fix_pt_artifacts(text)
 
         creative_data["texto_card_solucao"] = card_solucao_text()
-        creative_data, violations = self.lexicon_guard.sanitize_creative(creative_data)
+        protected_card = creative_data.get("texto_card_notificacao")
+        lexical_data = dict(creative_data)
+        lexical_data.pop("texto_card_notificacao", None)
+        creative_data, violations = self.lexicon_guard.sanitize_creative(lexical_data)
+        if protected_card is not None:
+            creative_data["texto_card_notificacao"] = protected_card
         if violations:
             resumo = ", ".join(
                 f"{item['campo']}={item['expressao']!r}" for item in violations[:3]
@@ -333,10 +436,98 @@ class CampaignOrchestrator:
             creative_data, campaign_ctx, config
         )
 
+    def _sanitize_headline_semantics(
+        self, creative_data: dict, campaign_ctx: dict, config: dict | None = None
+    ) -> dict:
+        headline = (creative_data.get("gancho_atencao_inicial") or "").strip()
+        contract = (config or {}).get("_campaign_contract") or {}
+        phrase = (campaign_ctx.get("frase_golpista") or "").casefold()
+
+        if contract.get("mecanismo") == "transferencia_pix_autorizada":
+            corrected_headline = re.sub(
+                r"\bdifícil\s+recuperar\b",
+                "difícil de recuperar",
+                headline,
+                flags=re.IGNORECASE,
+            )
+            if corrected_headline != headline:
+                creative_data["gancho_atencao_inicial"] = corrected_headline
+                creative_data["headline_escolhida"] = corrected_headline
+                headline = corrected_headline
+            uppercase_headline = headline.upper()
+            if uppercase_headline != headline:
+                creative_data["gancho_atencao_inicial"] = uppercase_headline
+                creative_data["headline_escolhida"] = uppercase_headline
+                headline = uppercase_headline
+            normalized = re.sub(r"\s+", " ", headline.casefold()).strip()
+            if re.search(r"\bperdeu o valor transferido\b", normalized):
+                headline = "PIX ENVIADO AO GOLPISTA PODE SER DIFÍCIL DE RECUPERAR"
+                creative_data["gancho_atencao_inicial"] = headline
+                creative_data["headline_escolhida"] = headline
+                normalized = headline.casefold()
+            if "amigo" in phrase:
+                safe = "PIX PEDIDO POR AMIGO NO WHATSAPP PODE SER GOLPE"
+            elif any(term in phrase for term in ("mãe", "mae", "filho", "filha", "neto", "parente")):
+                safe = "PIX PEDIDO POR FAMILIAR NO WHATSAPP PODE SER GOLPE"
+            else:
+                safe = "PEDIDO DE PIX NO WHATSAPP PODE SER GOLPE"
+            if contract.get("canonical_type_id") == "voz_clonada":
+                if (config or {}).get("publico_slug") == "pais":
+                    safe = "VOZ CLONADA PODE PEDIR PIX EM NOME DE SEU FILHO!"
+                else:
+                    safe = "VOZ CLONADA PODE PEDIR PIX EM NOME DE UM FAMILIAR!"
+            valid_patterns = (
+                "pix pedido por",
+                "pix enviado ao golpista",
+                "valor transferido",
+                "difícil de recuperar",
+            )
+            invalid_patterns = (
+                r"\bpix que você (receber|fizer|enviar)\b",
+                r"\bpix\b.*\bpode fazer você perder\b",
+                r"\bpix\b.*\b(roubar|roubou|esvaziar|esvaziou)\b",
+            )
+            structurally_valid = any(pattern in normalized for pattern in valid_patterns)
+            structurally_invalid = any(
+                re.search(pattern, normalized, flags=re.IGNORECASE)
+                for pattern in invalid_patterns
+            )
+            if structurally_invalid or not structurally_valid:
+                creative_data["gancho_atencao_inicial"] = safe
+                creative_data["headline_escolhida"] = safe
+                print(f"📌 Headline de PIX ajustada para: {safe}")
+                return creative_data
+
+        if not is_ambiguous_pix_headline(headline):
+            return creative_data
+
+        if "amigo" in phrase:
+            safe = "PIX PEDIDO POR AMIGO NO WHATSAPP PODE SER GOLPE"
+        elif any(term in phrase for term in ("mãe", "mae", "filho", "neto", "parente")):
+            safe = "PIX PEDIDO POR FAMILIAR NO WHATSAPP PODE SER GOLPE"
+        elif any(term in phrase for term in ("banco", "conta", "bloqueada", "bloqueio")):
+            safe = "FALSO ALERTA DE BANCO PODE DESVIAR SEU PIX"
+        else:
+            safe = "UM GOLPISTA PODE DESVIAR O PIX PEDIDO NO WHATSAPP"
+
+        creative_data["gancho_atencao_inicial"] = safe
+        creative_data["headline_escolhida"] = safe
+        print(f"📌 Headline ambígua substituída por: {safe}")
+        return creative_data
+
     def _align_card_message(
         self, creative_data: dict, config: dict, campaign_ctx: dict, golpe_obj: dict
     ) -> dict:
         """Card golpista = frase da variante selecionada (nexo com roteiro e cena)."""
+        explicit_card = (config.get("_card_message_override") or "").strip()
+        if explicit_card:
+            if creative_data.get("texto_card_notificacao", "").strip() != explicit_card:
+                creative_data["texto_card_notificacao"] = explicit_card
+                print("📌 Card golpista preservado conforme edição explícita do admin.")
+            return creative_data
+        if config.get("_preserve_card_message"):
+            return creative_data
+
         frase_ref = (campaign_ctx.get("frase_golpista") or golpe_obj.get("frase_golpista", "")).strip()
         if not frase_ref:
             return creative_data
@@ -376,7 +567,7 @@ class CampaignOrchestrator:
     def _inject_phone_message_in_scene(
         self, creative_data: dict, campaign_ctx: dict, golpe_obj: dict
     ) -> dict:
-        """Instrui o gerador de imagem/vídeo a mostrar a mensagem exata do golpe na tela do celular."""
+        """Instrui o gerador a mostrar WhatsApp sem delegar texto legível à imagem."""
         msg = (creative_data.get("texto_card_notificacao") or "").strip()
         if not msg:
             msg = (campaign_ctx.get("frase_golpista") or golpe_obj.get("frase_golpista", "")).strip()
@@ -384,12 +575,18 @@ class CampaignOrchestrator:
             return creative_data
         msg_show = msg[:140] + ("…" if len(msg) > 140 else "")
         clause = (
-            f'Phone screen MUST show readable WhatsApp 1:1 chat with this exact suspicious '
-            f'incoming message in a green bubble (Portuguese): "{msg_show}"'
+            "Phone screen MUST show a WhatsApp-style 1:1 chat with green message bubbles "
+            "with the entire smartphone and screen fully inside the frame, never cropped "
+            "by any edge, and with visible margin around it. Show only one modest "
+            "handheld smartphone above the lower third; do not use an oversized phone "
+            "mockup, floating notification, second screen, or device behind the cards. "
+            "Use a softly defocused interface; do not render readable words, letters, "
+            "logos, or UI labels on the screen. The exact suspicious message will be "
+            f"rendered in the verified notification card by the compositor: {msg_show!r}"
         )
         creative_data["phone_screen_clause"] = clause
         cena = creative_data.get("direcao_arte_emocional", "")
-        if msg_show[:40].lower() not in cena.lower():
+        if "softly defocused interface" not in cena.lower():
             creative_data["direcao_arte_emocional"] = f"{cena.rstrip()}. {clause}"
         return creative_data
 
@@ -400,8 +597,9 @@ class CampaignOrchestrator:
         """Cena visual alinhada ao ICP; sobrescreve direção genérica do golpe quando necessário.
         `genero` ('feminino'/'masculino') força a coerência com o tratamento do golpe (Mãe/Pai)."""
         wa = (
-            "authentic WhatsApp chat with green message bubbles visible on phone screen, "
-            "worried focused expression, documentary photorealistic, "
+            "a fully visible smartphone held naturally within the frame, with a softly "
+            "blurred WhatsApp-style interface and no readable screen text, worried focused "
+            "expression, documentary photorealistic, "
         )
         if publico_slug == "empresarios":
             por_golpe = {
@@ -460,13 +658,26 @@ class CampaignOrchestrator:
             return por_golpe.get(golpe_id, padrao)
 
         if publico_slug == "idosos":
+            por_golpe = {
+                "falso_parente": "message pretending to be a relative",
+                "pix_fantasma": "urgent PIX request or fake payment message",
+                "falsa_central": "fake bank security message requesting password or code",
+                "phishing": "suspicious link asking for registration or personal data",
+                "clonagem_whatsapp": "fake WhatsApp verification code request",
+                "link_malicioso": "malicious link or fake delivery notice",
+                "falso_emprego": "fake job offer requesting a fee or documents",
+                "falso_investimento": (
+                    "fake investment or cryptocurrency offer promising unrealistic returns"
+                ),
+            }
+            foco = por_golpe.get(golpe_id, "suspicious WhatsApp scam message")
             cena_mulher = (
                 "Documentary photorealistic photo of a Brazilian senior woman (65-82) with reading glasses "
-                f"on sofa checking {wa} scam message pretending to be a relative, "
+                f"on sofa checking {wa}{foco}, "
             )
             cena_homem = (
                 "Documentary photorealistic photo of a Brazilian senior man (65-82) on a living room "
-                f"armchair reading {wa} urgent fake message pretending to be a relative, "
+                f"armchair reading {wa}{foco}, "
             )
             if genero == "feminino":
                 return cena_mulher
@@ -577,6 +788,23 @@ class CampaignOrchestrator:
 
     def _apply_protagonist_gender_from_roteiro(self, creative_data: dict, config: dict) -> dict:
         """Fonte única de gênero — roteiro vence; alternância só se roteiro neutro."""
+        contract_gender = config.get("_protagonist_gender")
+        if contract_gender in ("feminino", "masculino"):
+            inferred = infer_protagonist_gender(creative_data)
+            if inferred and inferred != contract_gender:
+                print(
+                    f"⚠️ Gênero do texto diverge do contrato: "
+                    f"{inferred} ≠ {contract_gender} — regenerando."
+                )
+            creative_data["genero_campanha"] = contract_gender
+            persona = config.get("_protagonist_persona") or {}
+            creative_data["protagonista_genero"] = contract_gender
+            if persona.get("nome"):
+                creative_data["protagonista_nome"] = persona["nome"]
+            if persona.get("idade"):
+                creative_data["protagonista_idade"] = persona["idade"]
+            return creative_data
+
         locked = config.get("_genero_locked")
         if locked in ("feminino", "masculino"):
             creative_data["genero_campanha"] = locked
@@ -599,6 +827,39 @@ class CampaignOrchestrator:
         genero = self.visual_variety.next_alternating_gender(publico_slug)
         creative_data["genero_campanha"] = genero
         self.visual_variety.record_gender(genero, publico_slug)
+        return creative_data
+
+    def _ensure_protagonist_gender_cue(self, creative_data: dict, config: dict) -> dict:
+        """Explicita o gênero quando o roteiro usa apenas o nome do protagonista."""
+        roteiro = creative_data.get("desenvolvimento_copy")
+        gender = config.get("_protagonist_gender")
+        persona = config.get("_protagonist_persona") or {}
+        name = str(persona.get("nome") or "").strip()
+        if (
+            not isinstance(roteiro, str)
+            or not roteiro.strip()
+            or gender not in ("feminino", "masculino")
+            or not name
+            or re.search(
+                rf"\b(?:dona|seu|senhor|senhora)\s+{re.escape(name)}\b",
+                roteiro,
+                flags=re.IGNORECASE,
+            )
+            or not re.search(rf"\b{re.escape(name)}\b", roteiro, flags=re.IGNORECASE)
+        ):
+            return creative_data
+
+        treatment = "Dona" if gender == "feminino" else "Seu"
+        updated, count = re.subn(
+            rf"\b{re.escape(name)}\b",
+            f"{treatment} {name}",
+            roteiro,
+            count=1,
+            flags=re.IGNORECASE,
+        )
+        if count:
+            creative_data["desenvolvimento_copy"] = updated
+            print(f"📌 Protagonista explicitado no roteiro: {treatment} {name}.")
         return creative_data
 
     def _enforce_gender_coherence(self, creative_data: dict) -> dict:
@@ -668,12 +929,31 @@ class CampaignOrchestrator:
     def _refresh_campaign_context(self, config: dict, golpe_obj: dict) -> dict:
         """Re-resolve matriz + biblioteca de golpes (respeita narrative_override)."""
         override = config.get("narrative_override") or {}
+        if (
+            override.get("publico_slug")
+            and override["publico_slug"] != config.get("publico_slug")
+        ) or (
+            override.get("golpe_id")
+            and override["golpe_id"] != config.get("golpe_id")
+        ):
+            config.pop("narrative_override", None)
+            print(
+                "⚠️ Override incompatível removido: público e tipo devem permanecer "
+                "atômicos durante a campanha."
+            )
+            override = {}
         pub = override.get("publico_slug") or config.get("publico_slug", "geral")
         golpe_id = override.get("golpe_id") or config.get("golpe_id", "")
         golpe_obj = self._resolve_golpe_obj(golpe_id, golpe_obj)
+        allowed_variant_ids = self.contract_catalog.variant_ids_for_golpe(golpe_id)
 
         ctx = self.context_engine.resolve(pub, golpe_id, golpe_obj, self.context_data)
-        ctx = self.scam_library.apply_to_context(ctx, golpe_id, pub)
+        ctx = self.scam_library.apply_to_context(
+            ctx,
+            golpe_id,
+            pub,
+            allowed_variant_ids=allowed_variant_ids,
+        )
         if override:
             ctx["narrative_override_active"] = True
             if override.get("publico_slug"):
@@ -695,6 +975,22 @@ class CampaignOrchestrator:
             config.pop("narrative_override", None)
             if plan.get("narrative"):
                 print("📖 Instrução narrativa livre — combo do menu mantido.")
+            return None
+
+        requested_publico = override.get("publico_slug")
+        requested_golpe = override.get("golpe_id")
+        if (
+            requested_publico
+            and requested_publico != config.get("publico_slug")
+        ) or (
+            requested_golpe
+            and requested_golpe != config.get("golpe_id")
+        ):
+            config.pop("narrative_override", None)
+            print(
+                "⚠️ Mudança de público ou tipo de golpe exige uma nova campanha; "
+                "override rejeitado para impedir mistura de casting, cena e contrato."
+            )
             return None
 
         config["narrative_override"] = override
@@ -769,6 +1065,98 @@ class CampaignOrchestrator:
         creative_data = self._apply_protagonist_gender_from_roteiro(creative_data, config)
         return creative_data.get("genero_campanha", "neutro")
 
+    def _align_visual_relationship(self, creative_data: dict, campaign_ctx: dict) -> dict:
+        """Mantém o vínculo visual igual ao vínculo descrito no card."""
+        scene = creative_data.get("direcao_arte_emocional")
+        if not isinstance(scene, str):
+            return creative_data
+        phrase = (campaign_ctx.get("frase_golpista") or "").casefold()
+        if "amigo" in phrase:
+            replacement = "pretending to be a friend"
+        elif any(term in phrase for term in ("mãe", "mae", "filho", "filha", "neto", "parente")):
+            replacement = "pretending to be a family member"
+        elif any(term in phrase for term in ("banco", "conta", "bloqueada", "bloqueio")):
+            replacement = "pretending to be the bank"
+        else:
+            return creative_data
+        updated = re.sub(
+            r"pretending to be a (?:fake )?relative",
+            replacement,
+            scene,
+            flags=re.IGNORECASE,
+        )
+        if updated != scene:
+            creative_data["direcao_arte_emocional"] = updated
+        return creative_data
+
+    def _align_parent_visual_gender(self, creative_data: dict, config: dict) -> dict:
+        """Alinha o responsável visual ao casting e o filho ao roteiro."""
+        if config.get("publico_slug") != "pais":
+            return creative_data
+        scene = creative_data.get("direcao_arte_emocional")
+        gender = config.get("_protagonist_gender")
+        if not isinstance(scene, str) or gender not in ("feminino", "masculino"):
+            return creative_data
+
+        narrative = " ".join(
+            str(creative_data.get(field) or "")
+            for field in (
+                "gancho_atencao_inicial",
+                "desenvolvimento_copy",
+                "texto_card_notificacao",
+            )
+        )
+        has_female_child = bool(re.search(r"\b(filha|menina)\b", narrative, re.IGNORECASE))
+        has_male_child = bool(re.search(r"\b(filho|menino)\b", narrative, re.IGNORECASE))
+        child_gender = (
+            "feminino"
+            if has_female_child and not has_male_child
+            else "masculino"
+            if has_male_child and not has_female_child
+            else None
+        )
+        replacements = (
+            (
+                "masculino",
+                (
+                    (r"\bBrazilian mother\b", "Brazilian father"),
+                    (r"\bworried mother\b", "worried father"),
+                    (r"\bchecking her teenage\b", "checking his teenage"),
+                ),
+            ),
+            (
+                "feminino",
+                (
+                    (r"\bBrazilian father\b", "Brazilian mother"),
+                    (r"\bworried father\b", "worried mother"),
+                    (r"\bchecking his teenage\b", "checking her teenage"),
+                ),
+            ),
+        )
+        updated = scene
+        for target_gender, rules in replacements:
+            if gender != target_gender:
+                continue
+            for pattern, replacement in rules:
+                updated = re.sub(pattern, replacement, updated, flags=re.IGNORECASE)
+        if child_gender == "masculino":
+            child_rules = (
+                (r"\bteenage daughter's\b", "teenage son's"),
+                (r"\bdaughter \(girl\b", "son (boy"),
+            )
+        elif child_gender == "feminino":
+            child_rules = (
+                (r"\bteenage son's\b", "teenage daughter's"),
+                (r"\bson \(boy\b", "daughter (girl"),
+            )
+        else:
+            child_rules = ()
+        for pattern, replacement in child_rules:
+            updated = re.sub(pattern, replacement, updated, flags=re.IGNORECASE)
+        if updated != scene:
+            creative_data["direcao_arte_emocional"] = updated
+        return creative_data
+
     def _build_art_direction(
         self, golpe_obj: dict, creative_data: dict, config: dict, campaign_ctx: dict | None = None
     ) -> str:
@@ -820,6 +1208,63 @@ class CampaignOrchestrator:
                         creative_data[field] = self._apply_gender_pt(creative_data[field], feminino=feminino)
         return creative_data
 
+    def _sanitize_mechanism_claims(self, creative_data: dict, config: dict) -> dict:
+        """Corrige consequências incompatíveis com o mecanismo do golpe."""
+        contract = config.get("_campaign_contract") or {}
+        if contract.get("mecanismo") != "transferencia_pix_autorizada":
+            return creative_data
+
+        replacements = (
+            (r"\broubou a aposentadoria inteira\b", "fez a vítima perder apenas o valor enviado"),
+            (r"\broubar sua aposentadoria\b", "fazer você perder apenas o valor enviado"),
+            (r"\bperdeu a aposentadoria\b", "perdeu apenas o valor enviado"),
+            (r"\bperder a aposentadoria\b", "perder apenas o valor enviado"),
+            (r"\ba aposentadoria inteira\b", "o valor enviado"),
+            (r"\baposentadoria inteira\b", "valor enviado"),
+            (r"\ba aposentadoria sumiu\b", "o valor enviado foi perdido"),
+            (r"\baposentadoria sumiu\b", "o valor enviado foi perdido"),
+            (r"\ba aposentadoria sumiram\b", "o valor enviado foi perdido"),
+            (r"\baposentadoria sumiram\b", "o valor enviado foi perdido"),
+            (r"\ba economia de uma vida inteira\b", "o valor enviado"),
+            (r"\beconomia de uma vida inteira\b", "valor enviado"),
+            (r"\broubar suas economias\b", "fazer você perder apenas o valor enviado"),
+            (r"\bperdeu suas economias\b", "perdeu apenas o valor enviado"),
+            (r"\bperder suas economias\b", "perder apenas o valor enviado"),
+            (r"\broubar sua economia\b", "fazer você perder apenas o valor enviado"),
+            (r"\bperdeu sua economia\b", "perdeu apenas o valor enviado"),
+            (r"\bperder sua economia\b", "perder apenas o valor enviado"),
+            (r"\blevar suas economias\b", "fazer você perder apenas o valor enviado"),
+            (r"\blevar sua economia\b", "fazer você perder apenas o valor enviado"),
+            (r"\blevar seu dinheiro\b", "fazer você perder apenas o valor enviado"),
+            (r"\broubar seu dinheiro\b", "fazer você perder apenas o valor enviado"),
+            (r"\bnão volta mais\b", "pode ser difícil de recuperar"),
+            (r"\bproteja sua aposentadoria\b", "proteja o valor antes de enviar"),
+            (r"\bproteger sua poupança\b", "confirmar o pedido antes de fazer o PIX"),
+            (r"\bproteja sua poupança\b", "confirme o pedido antes de fazer o PIX"),
+            (r"\bperder sua poupança\b", "perder apenas o valor enviado"),
+            (r"\blevar sua poupança\b", "fazer você perder apenas o valor enviado"),
+            (r"\broubar sua poupança\b", "fazer você perder apenas o valor enviado"),
+            (r"\besvaziou a conta\b", "fez a vítima perder o valor transferido"),
+            (r"\besvaziar a conta\b", "fazer a vítima perder o valor transferido"),
+            (r"\bconta zerada\b", "perdeu o valor enviado"),
+            (r"\broubou todo o saldo\b", "fez a vítima perder o valor transferido"),
+            (r"\bperder todo o saldo\b", "perder apenas o valor enviado"),
+        )
+        changed = False
+        for field in ("gancho_atencao_inicial", "desenvolvimento_copy", "chamada_para_acao_cta"):
+            text = creative_data.get(field)
+            if not isinstance(text, str):
+                continue
+            original = text
+            for pattern, replacement in replacements:
+                text = re.sub(pattern, replacement, text, flags=re.IGNORECASE)
+            if text != original:
+                creative_data[field] = text
+                changed = True
+        if changed:
+            print("📌 Consequência ajustada: PIX autorizado implica perda apenas do valor enviado.")
+        return creative_data
+
     def _merge_regras_visuais(self, creative_data: dict) -> dict:
         base = dict(self.context_data.get("DIRETRIZES_VISUAIS", {}))
         extra = creative_data.get("regras_visuais") or {}
@@ -835,13 +1280,18 @@ class CampaignOrchestrator:
         produto = self.context_data.get("PRODUTO_E_POSICIONAMENTO", {})
         campaign_ctx = config.get("_campaign_context", {})
         creative_data = self._apply_locked_identity(creative_data, config)
-        creative_data = self._harmonize_gender_copy(creative_data, campaign_ctx)
+        creative_data = self._sanitize_mechanism_claims(creative_data, config)
+        if not config.get("_protagonist_gender"):
+            creative_data = self._harmonize_gender_copy(creative_data, campaign_ctx)
         creative_data = self._apply_protagonist_gender_from_roteiro(creative_data, config)
+        creative_data = self._ensure_protagonist_gender_cue(creative_data, config)
         creative_data["tipo_midia_selecionada"] = config["midia"]
         creative_data["canal_veiculacao_selecionado"] = config["canal"]
         creative_data["direcao_arte_emocional"] = self._build_art_direction(
             golpe_obj, creative_data, config, campaign_ctx
         )
+        creative_data = self._align_visual_relationship(creative_data, campaign_ctx)
+        creative_data = self._align_parent_visual_gender(creative_data, config)
         creative_data = self._align_card_message(creative_data, config, campaign_ctx, golpe_obj)
         creative_data = self._enforce_campaign_nexo(creative_data, campaign_ctx, config)
         creative_data = self._inject_phone_message_in_scene(creative_data, campaign_ctx, golpe_obj)
@@ -876,15 +1326,28 @@ class CampaignOrchestrator:
         creative_data["golpe_nome"] = golpe_obj.get("nome", config["golpe"])
         creative_data["link_conversao"] = produto.get("url_oficial", "https://guardian-ai.app")
         creative_data["texto_botao_conversao"] = self._build_cta_button(
-            config, creative_data.get("genero_campanha", "neutro"), campaign_ctx
+            config,
+            creative_data.get("genero_campanha", "neutro"),
+            campaign_ctx,
+            creative_data,
         )
         creative_data["publico_id"] = config.get("publico_id", "massa")
         creative_data["publico_slug"] = config.get("publico_slug", creative_data["publico_id"])
         creative_data["campaign_combo"] = campaign_ctx.get("combo_key", "")
         preset = resolve_channel_preset(config.get("canal", ""), config.get("midia", ""))
         creative_data["preset_midia"] = preset
+        creative_data["channel_metadata"] = dict(config.get("_channel_metadata") or {})
+        creative_data["storyboard"] = list(config.get("_storyboard") or [])
+        brief = dict(config.get("_creative_brief") or {})
+        if creative_data.get("visual_reference"):
+            brief["visual_reference"] = dict(creative_data["visual_reference"])
+        creative_data["creative_brief"] = brief
         creative_data = self._enforce_product_truth(creative_data)
-        return self._sanitize_headline(creative_data, campaign_ctx, config)
+        creative_data = self._sanitize_headline(creative_data, campaign_ctx, config)
+        creative_data = self._sanitize_headline_semantics(
+            creative_data, campaign_ctx, config
+        )
+        return self._sanitize_mechanism_claims(creative_data, config)
 
     def _generate_creative_data(
         self, config: dict, golpe_obj: dict, instrucoes_extras: str = ""
@@ -896,6 +1359,10 @@ class CampaignOrchestrator:
         publico_slug = campaign_ctx.get("effective_publico_slug") or config.get("publico_slug", "")
         golpe_id = campaign_ctx.get("effective_golpe_id") or config.get("golpe_id", "")
         produto = self.context_data.get("PRODUTO_E_POSICIONAMENTO", {})
+        contract_data = config.get("_campaign_contract") or {}
+        consequence_rule = contract_data.get("consequencia", "")
+        mechanism = contract_data.get("mecanismo", "")
+        forbidden_claims = contract_data.get("termos_proibidos") or ()
         foco_whatsapp = produto.get(
             "foco_exclusivo",
             "Guardian AI protege EXCLUSIVAMENTE o WhatsApp — pessoal e WhatsApp Business.",
@@ -934,6 +1401,19 @@ class CampaignOrchestrator:
             golpe=golpe_id,
         )
         preset = resolve_channel_preset(config.get("canal", ""), config.get("midia", ""))
+        brief = build_creative_brief(
+            config,
+            campaign_ctx,
+            golpe_obj,
+            preset,
+            self.context_data,
+        )
+        storyboard = build_storyboard(brief.to_dict(), config, campaign_ctx)
+        config["_storyboard"] = storyboard
+        brief_data = brief.to_dict()
+        brief_data["storyboard"] = storyboard
+        config["_creative_brief"] = brief_data
+        storyboard_block = format_storyboard_prompt(storyboard)
 
         bloco_admin = ""
         if instrucoes_extras.strip():
@@ -945,13 +1425,28 @@ class CampaignOrchestrator:
 
         contexto_injetado = (
             bloco_admin
+            + brief.to_prompt_block()
+            + (f"\n\n{storyboard_block}" if storyboard_block else "")
+            + "\n\n"
             + f"DIRETRIZES DE CAMPANHA SELECIONADAS:\n"
             f"- Público-Alvo: {config['publico']}\n"
             f"- Slug ICP: {publico_slug}\n"
             f"- Ameaça/Golpe Abordado: {config['golpe']}\n"
             f"- Frase real que o golpista enviaria no WhatsApp (base para o card): {frase_golpista}\n"
+            f"- O card é uma mensagem RECEBIDA pelo protagonista. O vocativo indica o destinatário: "
+            f"'Mãe' exige protagonista mulher; 'Pai' exige protagonista homem. "
+            f"Nunca confunda o personagem que recebe a mensagem com o golpista.\n"
+            f"- Gênero do destinatário contratado: "
+            f"{contract_data.get('recipient_gender') or 'não indicado; use o casting'}\n"
             f"{format_nexo_prompt_block(frase_golpista, campaign_ctx.get('scam_variant_titulo', ''))}"
-            f"- Ganchos de referência (inspire-se, não copie literalmente): {' | '.join(ganchos_ref)}\n"
+            f"- Mecanismo e consequência obrigatórios: {mechanism or 'conforme a variante'} — "
+            f"{consequence_rule or 'não invente consequências além do pretexto'}\n"
+            + (
+                f"- NUNCA afirmar nesta campanha: {', '.join(forbidden_claims)}\n"
+                if forbidden_claims
+                else ""
+            )
+            + f"- Ganchos de referência (inspire-se, não copie literalmente): {' | '.join(ganchos_ref)}\n"
             + (
                 f"- GANCHO PRIORITÁRIO DESTA CAMPANHA (ângulo obrigatório, palavras novas): "
                 f"{gancho_prioritario}\n"
@@ -967,6 +1462,11 @@ class CampaignOrchestrator:
             f"{self.context_engine.format_for_prompt(campaign_ctx)}\n\n"
             f"{self._format_product_capabilities_for_prompt()}\n\n"
             f"{self._format_guardrails_for_prompt(publico_slug)}\n\n"
+            f"CONTRATO DE PROTAGONISTA (NÃO ALTERAR):\n"
+            f"- Nome obrigatório: {(config.get('_protagonist_persona') or {}).get('nome', 'definido pelo contrato')}\n"
+            f"- Gênero obrigatório: {config.get('_protagonist_gender', 'definido pelo contrato')}\n"
+            f"- Idade obrigatória: {(config.get('_protagonist_persona') or {}).get('idade', 'conforme guardrail')}\n"
+            f"- O roteiro deve nomear esse protagonista e a headline deve concordar com ele.\n\n"
             f"FOCO DO PRODUTO (OBRIGATÓRIO):\n"
             f"- {foco_whatsapp}\n"
             f"- Toda narrativa deve mencionar WhatsApp explicitamente.\n\n"
@@ -1006,6 +1506,12 @@ class CampaignOrchestrator:
             "- NÃO monitora grupos do WhatsApp — golpes em campanha devem ocorrer no chat do WhatsApp, não em grupos.\n"
             "- Nome da marca: sempre 'Guardian AI' (pronúncia em inglês).\n"
             "- NUNCA inclua URL, domínio ou guardian-ai.app na narração.\n\n"
+            + (
+                f"REGRA DE CONSEQUÊNCIA DO GOLPE: {consequence_rule}\n"
+                f"EXPRESSÕES PROIBIDAS NESTA VARIANTE: {', '.join(forbidden_claims)}\n\n"
+                if consequence_rule or forbidden_claims
+                else ""
+            )
             + "REGRAS OBRIGATÓRIAS DE OUTPUT (JSON estrito):\n"
             "1. gancho_atencao_inicial: MANCHETE visceral em MAIÚSCULAS, máx 10 palavras. "
             "Contraste GRUPO x PRIVADO de forma clara (ex.: 'NÃO É NO GRUPO — É NO PRIVADO DO ALUNO'). "
@@ -1025,6 +1531,9 @@ class CampaignOrchestrator:
             "7. texto_card_solucao: IGNORE este campo — será substituído automaticamente por: "
             f"'{card_solucao_text()}'\n"
             "8. publico_alvo_icp: Descrição resumida do público.\n"
+            "9. protagonista_nome: copie o nome obrigatório do contrato.\n"
+            "10. protagonista_genero: use exatamente 'feminino' ou 'masculino' conforme o contrato.\n"
+            "11. protagonista_idade: copie a idade obrigatória do contrato.\n"
             "Se houver INSTRUÇÕES DO ADMINISTRADOR no início do prompt, elas VENCEM sobre "
             "gancho prioritário, ganchos de referência e memória.\n"
             "Retorne JSON estrito."
@@ -1043,12 +1552,16 @@ class CampaignOrchestrator:
                     "texto_card_notificacao": {"type": "STRING"},
                     "frase_destaque_golpista": {"type": "STRING"},
                     "genero_personagem_visual": {"type": "STRING"},
+                    "protagonista_nome": {"type": "STRING"},
+                    "protagonista_genero": {"type": "STRING"},
+                    "protagonista_idade": {"type": "INTEGER"},
                     "texto_card_solucao": {"type": "STRING"},
                     "publico_alvo_icp": {"type": "STRING"},
                 },
                 "required": [
                     "gancho_atencao_inicial", "desenvolvimento_copy", "chamada_para_acao_cta",
                     "texto_card_notificacao", "frase_destaque_golpista", "genero_personagem_visual",
+                    "protagonista_nome", "protagonista_genero", "protagonista_idade",
                     "texto_card_solucao", "publico_alvo_icp",
                 ],
             },
@@ -1078,11 +1591,36 @@ class CampaignOrchestrator:
                 result = self._finalize_creative_data(dados, config, golpe_obj)
                 copy = (result.get("desenvolvimento_copy") or "").strip()
                 head = (result.get("gancho_atencao_inicial") or "").strip()
-                nexo_ok = not frase_golpista or is_coherent(copy, frase_golpista, head)
+                nexo_ok = not frase_golpista or is_coherent_for_campaign(
+                    copy,
+                    frase_golpista,
+                    head,
+                    (config.get("_campaign_contract") or {}).get("canonical_type_id", ""),
+                )
                 genero_ok = is_gender_coherent(result)
+                try:
+                    contract = self.contract_catalog.build(
+                        config,
+                        config.get("_campaign_context", {}),
+                        protagonista_gender=config.get("_protagonist_gender", ""),
+                    )
+                    contract_errors = validate_creative_contract(
+                        result,
+                        contract,
+                        expected_gender=config.get("_protagonist_gender", ""),
+                        expected_persona=config.get("_protagonist_persona"),
+                    )
+                except CampaignContractError as exc:
+                    contract_errors = [str(exc)]
                 _, lexical_violations = self.lexicon_guard.sanitize_creative(dict(result))
                 lexical_ok = not lexical_violations
-                if nexo_ok and genero_ok and lexical_ok:
+                contract_ok = not contract_errors
+                if nexo_ok and genero_ok and lexical_ok and contract_ok:
+                    expected_gender = config.get("_protagonist_gender", "")
+                    if expected_gender in ("feminino", "masculino"):
+                        self.visual_variety.record_gender(
+                            expected_gender, config.get("publico_slug", "geral")
+                        )
                     return result
                 if not lexical_ok and tentativa < 2:
                     print(
@@ -1097,6 +1635,18 @@ class CampaignOrchestrator:
                         "— regerando copy..."
                     )
                     continue
+                if not contract_ok and tentativa < 2:
+                    print(
+                        "[!] Contrato da campanha violado — regerando:\n"
+                        + "\n".join(f"   • {error}" for error in contract_errors[:5])
+                    )
+                    continue
+                if not contract_ok:
+                    print(
+                        "❌ Campanha bloqueada: contrato canônico não atendido.\n"
+                        + "\n".join(f"   • {error}" for error in contract_errors[:8])
+                    )
+                    return None
                 if not nexo_ok and tentativa < 2:
                     print(
                         f"[!] Nexo roteiro/card insuficiente ({nexo_score(copy, frase_golpista, head):.0%}) "
@@ -1104,10 +1654,10 @@ class CampaignOrchestrator:
                     )
                     continue
                 print(
-                    f"⚠️ Nexo ainda parcial ({nexo_score(copy, frase_golpista, head):.0%}) — "
-                    "revise na aprovação da estória se necessário."
+                    f"❌ Campanha bloqueada: nexo roteiro/card insuficiente "
+                    f"({nexo_score(copy, frase_golpista, head):.0%})."
                 )
-                return result
+                return None
             except Exception as e:
                 if "429" in str(e):
                     time.sleep(15)
@@ -1129,12 +1679,82 @@ class CampaignOrchestrator:
 
     def _resolve_publish_asset(self, assets: dict, config: dict) -> str:
         """Feed estático: publica JPEG (IMAGE) em vez de MP4 (REELS) — evita falhas na Meta."""
-        if config.get("midia") == "imagem":
+        if not is_video_media(config.get("midia", "")):
             imagem = assets.get("static_image_file", "")
             if imagem and imagem not in ("N/A", "Não solicitada", "Não solicitado"):
                 if os.path.isfile(imagem):
                     return imagem
         return self._resolve_primary_asset(assets)
+
+    def _catalog_update(
+        self,
+        campaign_id: str,
+        status: str,
+        config: dict,
+        creative_data: dict | None = None,
+        assets: dict | None = None,
+        *,
+        revision: int = 0,
+        platform: str = "",
+        returned_id: str = "",
+        error_message: str = "",
+        actor: str = "orchestrator",
+    ) -> dict:
+        creative_data = creative_data or {}
+        creative_data.setdefault("campaign_id", campaign_id)
+        if creative_data.get("gancho_atencao_inicial"):
+            config["_caption"] = self._montar_caption_instagram(creative_data)
+        config["_revision"] = revision
+        record = self.catalog.update(
+            campaign_id,
+            status,
+            config,
+            creative_data,
+            assets or {},
+            revision=revision,
+            platform=platform,
+            returned_id=returned_id,
+            error_message=error_message,
+            actor=actor,
+        )
+        if self.supabase_bridge is not None:
+            try:
+                self.supabase_bridge.sync_campaign(record)
+            except SupabaseBridgeError as exc:
+                print(f"⚠️ Falha ao sincronizar campanha no Supabase: {exc}")
+        return record
+
+    def _audit_assets_before_approval(
+        self, creative_data: dict, config: dict, assets_resultado: dict
+    ):
+        audit = audit_creative_assets(
+            creative_data,
+            config,
+            assets_resultado,
+            history=self.history,
+            visual_auditor=self.visual_quality_auditor,
+        )
+        print(f"\n{format_audit_result(audit)}")
+        if audit.ok:
+            return audit
+
+        publico = config.get("publico_slug", "")
+        golpe = config.get("golpe_id", "")
+        basename = assets_resultado.get("basename", "")
+        motivos = ", ".join(issue.code for issue in audit.blocking)
+        self.memory.registrar_rejeitado(
+            publico,
+            golpe,
+            basename,
+            f"qa_automatica:{motivos}"[:240],
+        )
+        print("❌ Criativo bloqueado pela QA automática; não será aprovado/publicado.")
+        if self.telegram:
+            self.telegram.notificar_sync(
+                "⚠️ Criativo bloqueado pela QA automática antes da aprovação: "
+                f"{motivos}. Gere uma revisão antes de publicar."
+            )
+        return audit
 
     def _montar_caption_instagram(self, creative_data: dict) -> str:
         headline = creative_data.get("gancho_atencao_inicial", "")
@@ -1221,10 +1841,18 @@ class CampaignOrchestrator:
         print("📋 APROVAÇÃO FINAL DO CRIATIVO (vídeo/imagem pronto — antes do Gestor de Tráfego)")
         print("=" * 70)
         print(f"Canal: {config.get('canal', '—')}")
+        print(f"Mídia: {config.get('midia', '—')}")
+        print(f"Preset: {(creative_data.get('preset_midia') or {}).get('preset_id', '—')}")
         print(f"Headline: {creative_data.get('gancho_atencao_inicial', '')}")
         print(f"\nRoteiro: {creative_data.get('desenvolvimento_copy', '')[:400]}")
+        print(f"\nLegenda:\n{self._montar_caption_instagram(creative_data)[:800]}")
         print(f"\nCTA botão: {creative_data.get('texto_botao_conversao', creative_data.get('chamada_para_acao_cta', ''))}")
+        print(
+            f"\nStoryboard: "
+            f"{format_storyboard_compact(creative_data.get('storyboard') or [])}"
+        )
         print(f"\n🎬 Arquivo para revisar: {asset_path}")
+        print(f"Campaign ID: {config.get('_campaign_id', '—')} | Versão: {config.get('_revision', 0)}")
         print(f"Job: {job_id}")
         print("\n[1] ✅ Aprovar e seguir para publicação")
         print("[2] ✏️ Melhorar (reescrever copy — regenera vídeo/áudio)")
@@ -1309,8 +1937,18 @@ class CampaignOrchestrator:
                     return False, None
                 instrucoes = self._accumulate_instrucoes(config, feedback, "_instrucoes_estoria")
                 self._unlock_creative_if_requested(config, feedback)
+                card_edit = extract_card_message_edit(feedback)
+                if card_edit.get("exact"):
+                    config["_card_message_override"] = card_edit["exact"]
+                    config.pop("_preserve_card_message", None)
+                elif card_edit.get("prefix"):
+                    config["_preserve_card_message"] = True
                 plan = classify_improvement(feedback)
                 self._apply_narrative_override(config, feedback, golpe_obj, plan)
+                if card_edit.get("exact"):
+                    campaign_ctx = config.get("_campaign_context")
+                    if isinstance(campaign_ctx, dict):
+                        campaign_ctx["frase_golpista"] = card_edit["exact"]
                 tagged = f"{correction_tag(plan)} {feedback}"
                 self.memory.registrar_correcao(
                     config.get("publico_slug", ""),
@@ -1355,10 +1993,14 @@ class CampaignOrchestrator:
         }
         mapa_publico_id = {"1": "idosos", "2": "pais", "3": "profissionais", "4": "escolas"}
         mapa_publico_slug = {"1": "idosos", "2": "pais", "3": "empresarios", "4": "escolas"}
-        p_escolhido = input("Digite o número da opção desejada: ").strip()
-        publico_final = opcoes_publico.get(p_escolhido, "Idosos e aposentados vulneráveis.")
-        publico_id = mapa_publico_id.get(p_escolhido, "massa")
-        publico_slug = mapa_publico_slug.get(p_escolhido, "geral")
+        while True:
+            p_escolhido = input("Digite o número da opção desejada: ").strip()
+            if p_escolhido in opcoes_publico:
+                break
+            print("❌ Opção de público inválida. Escolha 1, 2, 3 ou 4.")
+        publico_final = opcoes_publico[p_escolhido]
+        publico_id = mapa_publico_id[p_escolhido]
+        publico_slug = mapa_publico_slug[p_escolhido]
 
         # 2. SELEÇÃO DO TIPO DE GOLPE
         print("\n⚠️ ETAPA 2: Selecione o TIPO DE GOLPE a ser abordado:")
@@ -1387,23 +2029,59 @@ class CampaignOrchestrator:
             "4": "grooming", "5": "phishing", "6": "clonagem_whatsapp",
             "7": "link_malicioso", "8": "falso_emprego", "9": "falso_investimento",
         }
-        g_escolhido = input("Digite o número da opção desejada: ").strip()
-        golpe_final = opcoes_golpe.get(g_escolhido, "Fraudes gerais no WhatsApp.")
-        golpe_id = mapa_golpe_id.get(g_escolhido, "pix_fantasma")
+        opcoes_compativeis = {
+            key: label
+            for key, label in opcoes_golpe.items()
+            if self.scam_library.has_compatible_variant(
+                mapa_golpe_id[key],
+                publico_slug,
+                self.contract_catalog.variant_ids_for_golpe(mapa_golpe_id[key]),
+            )
+        }
+        print(
+            "✅ Golpes compatíveis com este público: "
+            + ", ".join(f"{key} ({mapa_golpe_id[key]})" for key in opcoes_compativeis)
+        )
+        while True:
+            g_escolhido = input("Digite o número da opção desejada: ").strip()
+            if g_escolhido in opcoes_compativeis:
+                break
+            print(
+                "❌ Esse golpe não possui variante compatível com o público selecionado. "
+                "Escolha uma das opções listadas."
+            )
+        golpe_final = opcoes_compativeis[g_escolhido]
+        golpe_id = mapa_golpe_id[g_escolhido]
 
-        # 3. SELEÇÃO DA MÍDIA
-        print("\n🖼️ ETAPA 3: Selecione o TIPO DE MÍDIA visual:")
-        print("[1] Imagem Estática Premium (Feed do Instagram / Facebook Ads)")
-        print("[2] Vídeo Comercial Animado (Reels / TikTok / YouTube Shorts)")
-        m_escolhido = input("Digite o número da opção desejada: ").strip()
-        midia_final = "Imagem Estática Square (1080x1080)" if m_escolhido == "1" else "Vídeo Vertical Animado"
+        while True:
+            # 3. SELEÇÃO DA MÍDIA
+            print("\n🖼️ ETAPA 3: Selecione o TIPO DE MÍDIA visual:")
+            print("[1] Imagem Estática Premium (Feed do Instagram / Facebook Ads)")
+            print("[2] Vídeo Comercial Animado (Reels / TikTok / YouTube Shorts)")
+            m_escolhido = input("Digite o número da opção desejada: ").strip()
+            midia_final = (
+                "Imagem Estática Square (1080x1080)"
+                if m_escolhido == "1"
+                else "Vídeo Vertical Animado"
+            )
 
-        # 4. SELEÇÃO DO CANAL (VEICULAÇÃO / PRESET DE ÁUDIO)
-        print("\n🎙️ ETAPA 4: Selecione o CANAL DE VEICULAÇÃO (Define o comportamento do Áudio):")
-        print("[1] Meta Ads (Instagram/Facebook - Áudio pausado e focado em leitura)")
-        print("[2] TikTok / YouTube Shorts (Áudio rápido, urgente e com trilha de suspense)")
-        c_escolhido = input("Digite o número da opção desejada: ").strip()
-        canal_final = "Meta Ads (Instagram/Facebook)" if c_escolhido == "1" else "TikTok / YouTube Shorts"
+            # 4. SELEÇÃO DO CANAL (VEICULAÇÃO / PRESET DE ÁUDIO)
+            print("\n🎙️ ETAPA 4: Selecione o CANAL DE VEICULAÇÃO (Define o comportamento do Áudio):")
+            print("[1] Meta Ads (Instagram/Facebook - Áudio pausado e focado em leitura)")
+            print("[2] TikTok / YouTube Shorts (Áudio rápido, urgente e com trilha de suspense)")
+            c_escolhido = input("Digite o número da opção desejada: ").strip()
+            canal_final = (
+                "Meta Ads (Instagram/Facebook)"
+                if c_escolhido == "1"
+                else "TikTok / YouTube Shorts"
+            )
+            channel_validation = validate_channel_media(canal_final, midia_final)
+            if channel_validation.valid:
+                break
+            print("\n❌ Combinação de canal e mídia inválida:")
+            for error in channel_validation.errors:
+                print(f"   • {error}")
+            print("Escolha novamente a mídia e o canal.")
 
         # 5. SELEÇÃO DO OBJETIVO CONVERSÃO
         print("\n📈 ETAPA 5: Selecione o OBJETIVO DE CONVERSÃO técnico:")
@@ -1438,6 +2116,8 @@ class CampaignOrchestrator:
             "golpe_id": golpe_id,
             "midia": midia_final,
             "canal": canal_final,
+            "preset_midia": channel_validation.preset,
+            "preset_metadata": channel_validation.metadata,
             "objetivo": objetivo_final,
             "aprovacao_telegram": fluxo["aprovacao_telegram"],
             "aprovacao_terminal": fluxo["aprovacao_terminal"],
@@ -1447,6 +2127,39 @@ class CampaignOrchestrator:
     def execute_automated_pipeline(self, config: dict | None = None, telegram_override=None):
         if config is None:
             config = self.show_interactive_menu()
+
+        catalog_errors = self.contract_catalog.validate_catalog()
+        if catalog_errors:
+            print("❌ Catálogo canônico inválido:")
+            for error in catalog_errors:
+                print(f"   • {error}")
+            return
+        if config.get("publico_slug") not in VALID_PUBLICO_SLUGS:
+            print(
+                "❌ Público inválido. A campanha precisa usar um público canônico; "
+                "'geral' não é permitido."
+            )
+            return
+
+        channel_validation = validate_channel_media(
+            config.get("canal", ""),
+            config.get("midia", ""),
+        )
+        if not channel_validation.valid:
+            print("❌ Configuração rejeitada antes das APIs:")
+            for error in channel_validation.errors:
+                print(f"   • {error}")
+            if telegram_override and hasattr(telegram_override, "_notify_error"):
+                telegram_override._notify_error(
+                    "Combinação de canal e mídia inválida: "
+                    + " ".join(channel_validation.errors)
+                )
+            return
+        config["preset_midia"] = channel_validation.preset
+        config["preset_metadata"] = channel_validation.metadata
+        config["_channel_metadata"] = channel_validation.metadata
+        campaign_id = self.catalog.create(config)
+        print(f"🗂️ Campaign ID: {campaign_id}")
 
         print(f"🚀 [MKT GUARDIAN AI - ENGINE ORQUESTRAÇÃO v{ORCHESTRATOR_VERSION}] Iniciando Esteira...")
         print(f"📁 Diretório de trabalho: {self.BASE_DIR}")
@@ -1468,7 +2181,34 @@ class CampaignOrchestrator:
             campaign_ctx,
             config.get("golpe_id", ""),
             config.get("publico_slug", ""),
+            allowed_variant_ids=self.contract_catalog.variant_ids_for_golpe(
+                config.get("golpe_id", "")
+            ),
         )
+        recipient_gender = infer_recipient_gender(
+            campaign_ctx.get("frase_golpista") or ""
+        )
+        config["_recipient_gender"] = recipient_gender
+        config["_protagonist_gender"] = (
+            recipient_gender
+            or self.visual_variety.next_alternating_gender(config["publico_slug"])
+        )
+        config["_protagonist_persona"] = self.visual_variety.pick_persona(
+            self.context_data,
+            config.get("publico_id", config["publico_slug"]),
+            config["publico_slug"],
+            genero=config["_protagonist_gender"],
+        )
+        try:
+            contract = self.contract_catalog.build(
+                config,
+                campaign_ctx,
+                protagonista_gender=config["_protagonist_gender"],
+            )
+        except CampaignContractError as exc:
+            print(f"❌ Campanha rejeitada pelo contrato canônico: {exc}")
+            return
+        config["_campaign_contract"] = asdict(contract)
         if campaign_ctx.get("scam_variant_titulo"):
             frase = (campaign_ctx.get("frase_golpista") or "")[:70]
             print(
@@ -1479,7 +2219,7 @@ class CampaignOrchestrator:
         print(self.context_engine.summary_line(campaign_ctx))
         if self._story_approval_enabled():
             print("📋 Aprovação da estória ATIVA — vídeo/áudio só após você aprovar o roteiro.")
-        preset = resolve_channel_preset(config.get("canal", ""), config.get("midia", ""))
+        preset = config["preset_midia"]
         print(f"📐 Preset de produção: {format_preset_summary(preset)}")
 
         if config.get("aprovacao_telegram"):
@@ -1492,7 +2232,14 @@ class CampaignOrchestrator:
             if "tiktok" in config.get("canal", "").lower():
                 print("📦 TikTok configurado para upload manual pelo Ubuntu.")
             else:
-                self._init_publisher()
+                if not self._init_publisher():
+                    self._catalog_update(
+                        campaign_id,
+                        "ERRO_PUBLICACAO",
+                        config,
+                        error_message="Preflight Meta não aprovado.",
+                    )
+                    return
 
         pub_slug = config.get("publico_slug", "")
         golpe_id = config.get("golpe_id", "")
@@ -1517,9 +2264,19 @@ class CampaignOrchestrator:
         recompose_next = False
         reapply_audio_next = False
         visual_only_next = False
+        video_only_next = False
         visual_feedback = ""
 
         for revisao in range(self.max_revisoes + 1):
+            if self._story_approval_enabled():
+                self._catalog_update(
+                    campaign_id,
+                    "AGUARDANDO_APROVACAO_HISTORIA",
+                    config,
+                    creative_data,
+                    assets_resultado,
+                    revision=revisao,
+                )
             if recompose_next:
                 print(f"\n🔧 Recompondo overlay (feedback de layout — revisão {revisao})...")
                 creative_data["overlay_card_font_size"] = 20
@@ -1529,6 +2286,13 @@ class CampaignOrchestrator:
                 print(f"\n🔊 Regerando narração (pronúncia do site — revisão {revisao})...")
                 assets_resultado = self.media_factory.reapply_audio_only(creative_data, assets_resultado)
                 reapply_audio_next = False
+            elif video_only_next:
+                print(f"\n🎞️ Regerando somente o vídeo (revisão {revisao})...")
+                assets_resultado = self.media_factory.regenerate_video_only(
+                    creative_data, assets_resultado, visual_feedback
+                )
+                video_only_next = False
+                visual_feedback = ""
             elif visual_only_next:
                 print(f"\n🎨 Regerando só imagem/vídeo (copy e áudio aprovados — revisão {revisao})...")
                 creative_data = self._apply_locked_identity(creative_data, config)
@@ -1544,9 +2308,74 @@ class CampaignOrchestrator:
                     config, golpe_obj, instrucoes_melhoria, revisao
                 )
                 if not ok_estoria or not creative_data:
+                    self._catalog_update(
+                        campaign_id,
+                        "REJEITADA",
+                        config,
+                        creative_data,
+                        assets_resultado,
+                        revision=revisao,
+                        error_message="Aprovação da história rejeitada ou sem conteúdo.",
+                        actor="human",
+                    )
                     return
                 assets_resultado = self.media_factory.generate_campaign_assets(creative_data)
                 self.visual_variety.print_qa_checklist(creative_data)
+                self._catalog_update(
+                    campaign_id,
+                    "PRODUZIDA",
+                    config,
+                    creative_data,
+                    assets_resultado,
+                    revision=revisao,
+                )
+
+            audit = self._audit_assets_before_approval(
+                creative_data, config, assets_resultado
+            )
+            if not audit.ok:
+                if revisao >= self.max_revisoes:
+                    print(f"❌ Limite de {self.max_revisoes} revisões de QA atingido.")
+                    self._catalog_update(
+                        campaign_id,
+                        "REJEITADA",
+                        config,
+                        creative_data,
+                        assets_resultado,
+                        revision=revisao,
+                        error_message="Limite de revisões de QA atingido.",
+                    )
+                    return
+                stage = audit.recommended_stage or "copy"
+                qa_feedback = "; ".join(
+                    issue.message for issue in audit.blocking[:3]
+                )
+                print(f"🔧 QA direciona correção para: {stage}")
+                self.memory.registrar_correcao(
+                    config.get("publico_slug", ""),
+                    config.get("golpe_id", ""),
+                    f"qa_{stage}: {qa_feedback}"[:240],
+                    assets_resultado.get("basename", ""),
+                    revisao,
+                    categoria=stage,
+                )
+                if stage == "layout":
+                    recompose_next = True
+                    creative_data["overlay_card_font_size"] = 20
+                elif stage == "audio":
+                    reapply_audio_next = True
+                elif stage in ("imagem", "video"):
+                    if stage == "video":
+                        video_only_next = True
+                    else:
+                        visual_only_next = True
+                    visual_feedback = qa_feedback
+                else:
+                    instrucoes_melhoria = (
+                        "A QA final reprovou o criativo. Corrija somente o problema "
+                        f"indicado na etapa {stage}: {qa_feedback}"
+                    )
+                continue
 
             usar_telegram_aprovacao = bool(config.get("aprovacao_telegram") and self.telegram)
             # Se o Telegram foi solicitado mas não inicializou (ex.: token ausente), cai para o
@@ -1557,29 +2386,67 @@ class CampaignOrchestrator:
             )
             if not (usar_telegram_aprovacao or usar_terminal_aprovacao):
                 asset_path = self._resolve_primary_asset(assets_resultado)
-                if asset_path:
-                    self.history.registrar_campanha(
-                        creative_data,
+                if not asset_path:
+                    self._catalog_update(
+                        campaign_id,
+                        "REJEITADA",
                         config,
-                        assets_resultado,
-                        status="gerado",
-                        revisao=revisao,
-                        asset_path=asset_path,
-                    )
-                    self.history.registrar_campanha(
                         creative_data,
-                        config,
                         assets_resultado,
-                        status="aprovado",
-                        revisao=revisao,
-                        asset_path=asset_path,
+                        revision=revisao,
+                        error_message="Nenhum asset visual gerado.",
                     )
+                    print("❌ Nenhum asset visual gerado.")
+                    return
+                self._catalog_update(
+                    campaign_id,
+                    "APROVADA",
+                    config,
+                    creative_data,
+                    assets_resultado,
+                    revision=revisao,
+                    actor="automatic",
+                )
+                self.history.registrar_campanha(
+                    creative_data,
+                    config,
+                    assets_resultado,
+                    status="gerado",
+                    revisao=revisao,
+                    asset_path=asset_path,
+                )
+                self.history.registrar_campanha(
+                    creative_data,
+                    config,
+                    assets_resultado,
+                    status="aprovado",
+                    revisao=revisao,
+                    asset_path=asset_path,
+                )
                 aprovado = True
                 break
+
+            self._catalog_update(
+                campaign_id,
+                "AGUARDANDO_APROVACAO_FINAL",
+                config,
+                creative_data,
+                assets_resultado,
+                revision=revisao,
+            )
 
             asset_path = self._resolve_primary_asset(assets_resultado)
             if not asset_path:
                 print("❌ Nenhum asset visual gerado para aprovação.")
+                self._catalog_update(
+                    campaign_id,
+                    "REJEITADA",
+                    config,
+                    creative_data,
+                    assets_resultado,
+                    revision=revisao,
+                    error_message="Nenhum asset visual gerado para aprovação.",
+                )
                 return
 
             self.history.registrar_campanha(
@@ -1592,7 +2459,7 @@ class CampaignOrchestrator:
             )
 
             video_path = assets_resultado.get("commercial_video_file", "")
-            if config.get("midia") == "imagem" and (
+            if not is_video_media(config.get("midia", "")) and (
                 not video_path
                 or not os.path.isfile(str(video_path))
                 or str(video_path) in ("Não solicitado", "Não solicitada", "FALHOU")
@@ -1619,6 +2486,11 @@ class CampaignOrchestrator:
                     job_id=job_id,
                     timeout_segundos=self.telegram_timeout,
                     audio_path=audio_para_aprovacao,
+                    metadata={
+                        "canal": config.get("canal", ""),
+                        "midia": config.get("midia", ""),
+                        "legenda": self._montar_caption_instagram(creative_data),
+                    },
                 )
                 print(f"📲 Decisão Telegram: {acao['action']}")
             else:
@@ -1628,6 +2500,15 @@ class CampaignOrchestrator:
                 print(f"🖥️ Decisão terminal: {acao['action']}")
 
             if acao["action"] == "approve":
+                self._catalog_update(
+                    campaign_id,
+                    "APROVADA",
+                    config,
+                    creative_data,
+                    assets_resultado,
+                    revision=revisao,
+                    actor="human",
+                )
                 self.memory.registrar_aprovado(
                     config.get("publico_slug", ""),
                     config.get("golpe_id", ""),
@@ -1649,6 +2530,15 @@ class CampaignOrchestrator:
             if acao["action"] == "improve":
                 if revisao >= self.max_revisoes:
                     print(f"❌ Limite de {self.max_revisoes} revisões atingido.")
+                    self._catalog_update(
+                        campaign_id,
+                        "REJEITADA",
+                        config,
+                        creative_data,
+                        assets_resultado,
+                        revision=revisao,
+                        error_message="Limite de revisões humanas atingido.",
+                    )
                     return
                 if self.telegram:
                     self.telegram.notificar_sync(
@@ -1754,6 +2644,16 @@ class CampaignOrchestrator:
                 assets_resultado.get("basename", ""),
                 motivo,
             )
+            self._catalog_update(
+                campaign_id,
+                "REJEITADA",
+                config,
+                creative_data,
+                assets_resultado,
+                revision=revisao,
+                error_message=motivo,
+                actor="human",
+            )
             print(f"❌ Campanha encerrada: {motivo}")
             return
 
@@ -1761,12 +2661,29 @@ class CampaignOrchestrator:
             return
 
         self.traffic_manager.structure_advertising_campaign(creative_data, assets_resultado)
+        self._catalog_update(
+            campaign_id,
+            "PRONTA_PARA_PUBLICAR",
+            config,
+            creative_data,
+            assets_resultado,
+            revision=revisao,
+        )
 
         if config.get("postar_instagram"):
             asset_path = self._resolve_publish_asset(assets_resultado, config)
             canal_tiktok = "tiktok" in config.get("canal", "").lower()
             if not asset_path:
                 print("⚠️ Nenhum asset disponível para publicar.")
+                self._catalog_update(
+                    campaign_id,
+                    "ERRO_PUBLICACAO",
+                    config,
+                    creative_data,
+                    assets_resultado,
+                    revision=revisao,
+                    error_message="Nenhum asset disponível para publicar.",
+                )
             elif canal_tiktok:
                 resultado = export_tiktok_package(
                     self.BASE_DIR,
@@ -1775,6 +2692,15 @@ class CampaignOrchestrator:
                     open_browser=True,
                 )
                 if resultado.get("ok"):
+                    self._catalog_update(
+                        campaign_id,
+                        "PRONTA_PARA_PUBLICAR",
+                        config,
+                        creative_data,
+                        assets_resultado,
+                        revision=revisao,
+                        platform="TikTok Studio",
+                    )
                     aviso = (
                         "📦 Pacote TikTok exportado para upload manual.\n"
                         f"📁 Pasta: {resultado['package_dir']}\n"
@@ -1786,20 +2712,81 @@ class CampaignOrchestrator:
                     if self.telegram:
                         self.telegram.notificar_sync(aviso)
                 else:
+                    self._catalog_update(
+                        campaign_id,
+                        "ERRO_PUBLICACAO",
+                        config,
+                        creative_data,
+                        assets_resultado,
+                        revision=revisao,
+                        platform="TikTok Studio",
+                        error_message=str(resultado.get("erro", "")),
+                    )
                     print(f"❌ Falha ao exportar pacote TikTok: {resultado.get('erro')}")
             elif self.publisher:
+                if not self.catalog.can_publish(campaign_id):
+                    self._catalog_update(
+                        campaign_id,
+                        "ERRO_PUBLICACAO",
+                        config,
+                        creative_data,
+                        assets_resultado,
+                        revision=revisao,
+                        platform="Instagram",
+                        error_message="Catálogo bloqueou publicação fora de estado seguro.",
+                    )
+                    print("❌ Catálogo bloqueou publicação fora de estado seguro.")
+                    return
+                self._catalog_update(
+                    campaign_id,
+                    "PUBLICANDO",
+                    config,
+                    creative_data,
+                    assets_resultado,
+                    revision=revisao,
+                    platform="Instagram",
+                )
                 caption = self._montar_caption_instagram(creative_data)
-                if config.get("midia") == "imagem" and asset_path.lower().endswith((".jpg", ".jpeg", ".png")):
+                if not is_video_media(config.get("midia", "")) and asset_path.lower().endswith((".jpg", ".jpeg", ".png")):
                     print(f"📤 [Meta] Publicando imagem estática (Feed): {os.path.basename(asset_path)}")
                 resultado = self.publisher.postar_asset(asset_path, caption)
                 if resultado.get("ok"):
+                    self._catalog_update(
+                        campaign_id,
+                        "PUBLICADA",
+                        config,
+                        creative_data,
+                        assets_resultado,
+                        revision=revisao,
+                        platform="Instagram",
+                        returned_id=str(resultado.get("post_id", "")),
+                    )
                     msg = f"✅ Publicado no Instagram!\nID: `{resultado.get('post_id')}`"
                     print(msg)
                     if self.telegram:
                         self.telegram.notificar_sync(msg)
                 else:
+                    self._catalog_update(
+                        campaign_id,
+                        "ERRO_PUBLICACAO",
+                        config,
+                        creative_data,
+                        assets_resultado,
+                        revision=revisao,
+                        platform="Instagram",
+                        error_message=str(resultado.get("erro", "")),
+                    )
                     print(f"❌ Falha ao publicar: {resultado.get('erro')}")
             else:
+                self._catalog_update(
+                    campaign_id,
+                    "ERRO_PUBLICACAO",
+                    config,
+                    creative_data,
+                    assets_resultado,
+                    revision=revisao,
+                    error_message="Publicador Meta não configurado.",
+                )
                 print("⚠️ Publicador Meta não configurado.")
 
         print("\n======================================================================")

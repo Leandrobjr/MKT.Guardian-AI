@@ -82,6 +82,55 @@ class TestCampaignHistory(unittest.TestCase):
         self.assertIn("MANCHETE TESTE XYZ", txt)
         self.assertIn("NÃO REPETIR", txt)
 
+    def test_registra_metadados_do_preset(self):
+        creative = {
+            "gancho_atencao_inicial": "HEADLINE",
+            "desenvolvimento_copy": "roteiro",
+            "direcao_arte_emocional": "escritório",
+            "texto_card_notificacao": "mensagem",
+        }
+        config = {
+            "publico_slug": "empresarios",
+            "golpe_id": "link_malicioso",
+            "preset_metadata": {
+                "preset_id": "shorts_urgente",
+                "resolucao": "1080x1920",
+                "proporcao": "9:16",
+                "duracao_copy": "12-18 segundos",
+                "ritmo": "rápido e urgente",
+                "tipo_trilha": "suspense",
+                "velocidade_narracao": 1.0,
+            },
+        }
+        record = self.hist.registrar_campanha(
+            creative,
+            config,
+            {"basename": "preset-test", "commercial_video_file": "/tmp/test.mp4"},
+        )
+
+        self.assertEqual(record["preset_id"], "shorts_urgente")
+        self.assertEqual(record["resolucao"], "1080x1920")
+        self.assertEqual(record["proporcao"], "9:16")
+        self.assertEqual(record["tipo_trilha"], "suspense")
+
+    def test_registra_referencia_visual_e_ambiente(self):
+        creative = {
+            "gancho_atencao_inicial": "ALERTA",
+            "direcao_arte_emocional": "cena",
+            "persona_id": "ana_professora_bh",
+            "ambiente_cena": "sala organizada",
+            "visual_reference_id": "ref_abc123",
+            "visual_reference": {"paleta": "neutros naturais"},
+        }
+        record = self.hist.registrar_campanha(
+            creative,
+            {"publico_slug": "pais", "golpe_id": "grooming"},
+            {"basename": "reference-test"},
+        )
+        self.assertEqual(record["visual_reference_id"], "ref_abc123")
+        self.assertEqual(record["visual_reference"]["paleta"], "neutros naturais")
+        self.assertEqual(record["ambiente"], "sala organizada")
+
 
 if __name__ == "__main__":
     unittest.main()

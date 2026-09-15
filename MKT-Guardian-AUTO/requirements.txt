@@ -16,4 +16,5 @@ aiohttp>=3.9.0
 facebook-business>=19.0.0
 python-dotenv>=1.0.1
 PyJWT>=2.8.0
+supabase>=2.0.0
 

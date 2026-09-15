@@ -23,9 +23,11 @@ class _FakeModels:
     def __init__(self, response: _FakeResponse):
         self.response = response
         self.calls = 0
+        self.last_kwargs = {}
 
     def generate_content(self, **kwargs):
         self.calls += 1
+        self.last_kwargs = kwargs
         return self.response
 
 
@@ -80,6 +82,24 @@ class TestVisualQualityAudit(unittest.TestCase):
         self.assertTrue(result.passed)
         self.assertEqual(result.recommended_stage, "")
         self.assertEqual(client.models.calls, 1)
+
+    def test_prompt_reprova_celular_duplicado_ou_mockup(self):
+        payload = {"overall_score": 9, "checks": _checks(9)}
+        client = _FakeClient(_FakeResponse(json.dumps(payload)))
+        auditor = GeminiVisualQualityAuditor(client)
+
+        auditor.audit(
+            self.creative,
+            self.config,
+            {"static_image_file": self.image},
+        )
+
+        prompt = client.models.last_kwargs["contents"][0]
+        self.assertIn("exatamente um smartphone", prompt)
+        self.assertIn("dois ou mais aparelhos", prompt)
+        self.assertIn("mockup ampliado", prompt)
+        self.assertIn("ok=false", prompt)
+        self.assertIn("score no máximo 3", prompt)
 
     def test_rosto_deformado_direciona_para_imagem(self):
         checks = _checks(9)

@@ -573,16 +573,17 @@ class CampaignOrchestrator:
             msg = (campaign_ctx.get("frase_golpista") or golpe_obj.get("frase_golpista", "")).strip()
         if not msg:
             return creative_data
-        msg_show = msg[:140] + ("…" if len(msg) > 140 else "")
         clause = (
-            "Phone screen MUST show a WhatsApp-style 1:1 chat with green message bubbles "
-            "with the entire smartphone and screen fully inside the frame, never cropped "
-            "by any edge, and with visible margin around it. Show only one modest "
-            "handheld smartphone above the lower third; do not use an oversized phone "
-            "mockup, floating notification, second screen, or device behind the cards. "
-            "Use a softly defocused interface; do not render readable words, letters, "
-            "logos, or UI labels on the screen. The exact suspicious message will be "
-            f"rendered in the verified notification card by the compositor: {msg_show!r}"
+            "STRICT DEVICE COUNT: show exactly ONE physical smartphone in the entire image, "
+            "the ordinary-sized phone held naturally by the person. No other phone-shaped "
+            "object is allowed anywhere. Keep this single smartphone and its screen fully "
+            "inside the frame, never cropped by any edge, with visible margin around it and "
+            "above the lower third. Its display must remain small in the composition and use "
+            "a softly defocused WhatsApp-style interface with no readable words, letters, "
+            "logos, or UI labels. Do not create an enlarged or oversized phone mockup, "
+            "second smartphone, duplicated device, floating screen, interface close-up, "
+            "picture-in-picture, callout, notification bubble, or device behind the cards. "
+            "The compositor will add the suspicious message after image generation."
         )
         creative_data["phone_screen_clause"] = clause
         cena = creative_data.get("direcao_arte_emocional", "")

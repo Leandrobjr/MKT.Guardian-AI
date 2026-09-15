@@ -169,12 +169,15 @@ class TestCampaignCopyOverride(unittest.TestCase):
             {},
         )
         clause = result["phone_screen_clause"].lower()
-        self.assertIn("softly defocused interface", clause)
-        self.assertIn("entire smartphone and screen fully inside the frame", clause)
+        self.assertIn("softly defocused whatsapp-style interface", clause)
+        self.assertIn("exactly one physical smartphone", clause)
+        self.assertIn("screen fully inside the frame", clause)
         self.assertIn("never cropped", clause)
-        self.assertIn("do not use an oversized phone mockup", clause)
-        self.assertIn("do not render readable words", clause)
+        self.assertIn("no readable words", clause)
+        self.assertIn("duplicated device", clause)
+        self.assertIn("picture-in-picture", clause)
         self.assertIn("compositor", clause)
+        self.assertNotIn("mãe, faça um pix urgente", clause)
 
     def test_nome_do_protagonista_recebe_marcador_de_genero(self):
         result = self.orchestrator._ensure_protagonist_gender_cue(

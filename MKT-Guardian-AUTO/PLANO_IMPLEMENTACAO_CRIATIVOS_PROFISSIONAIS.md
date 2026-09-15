@@ -573,6 +573,12 @@ eliminando o aviso de áudio baixo na QA.
 passagem utiliza as métricas reais medidas na primeira para atingir `-16 LUFS`
 com precisão e manter true peak máximo de `-1,5 dBTP`.
 
+**Correção v5.62:** o prompt visual passou a exigir exatamente um smartphone
+físico e deixou de enviar o texto do golpe ao gerador de imagens. A QA agora
+reprova como falha crítica qualquer segundo aparelho, mockup ampliado, tela
+flutuante ou inserção de interface. O criativo problemático foi corretamente
+reprovado e sua nova versão, com um único celular, obteve nota 9,6.
+
 ## 6. Segurança obrigatória
 
 - remover a exibição de tokens completos no Desktop;

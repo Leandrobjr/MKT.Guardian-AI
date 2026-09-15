@@ -222,10 +222,14 @@ class GeminiVisualQualityAuditor:
             f"golpe={brief.get('golpe', config.get('golpe', ''))}; "
             f"personagem={brief.get('personagem', '')}; cenário={brief.get('cenario', '')}; "
             f"canal={config.get('canal', '')}; mídia={config.get('midia', '')}. "
-            "Verifique também se o telefone e sua tela aparecem inteiros, sem corte "
-            "nas bordas ou elementos importantes fora do enquadramento; se os textos "
-            "pós-produzidos estão legíveis, se o CTA é claro, se o logo está presente "
-            "e se não há deformações."
+            "REGRA CRÍTICA PARA 'celular': conte os aparelhos físicos visíveis. Deve existir "
+            "exatamente um smartphone comum, segurado naturalmente pela personagem, inteiro "
+            "e sem corte nas bordas. Reprove 'celular' obrigatoriamente (ok=false e score no "
+            "máximo 3) se houver dois ou mais aparelhos, celular duplicado, mockup ampliado, "
+            "segunda tela, interface flutuante, close-up/inserção de tela ou aparelho atrás "
+            "dos cards. Os cards inferiores de alerta e solução adicionados na pós-produção "
+            "não contam como aparelhos. Verifique também se os textos pós-produzidos estão "
+            "legíveis, se o CTA é claro, se o logo está presente e se não há deformações."
         )
         try:
             response = self.client.models.generate_content(

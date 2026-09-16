@@ -83,6 +83,33 @@ def is_coherent_for_campaign(
     canonical_type_id: str = "",
 ) -> bool:
     """Aplica nexo semântico específico quando a variante tem vocabulário variável."""
+    if canonical_type_id in {
+        "boleto_falso",
+        "qr_code_pix",
+        "falsa_cobranca_empresarial",
+    }:
+        phrase = _norm(frase)
+        story = _norm(f"{roteiro} {headline}")
+        for sender in ("fornecedor", "cliente", "financeiro", "secretaria"):
+            if sender in phrase and sender not in story:
+                return False
+        pretexts = (
+            ("desconto", ("desconto", "oferta", "promocao")),
+            ("estorno", ("estorno", "reembolso")),
+            ("mensalidade", ("mensalidade", "matricula")),
+            ("nota fiscal", ("nota fiscal",)),
+            (
+                "cobranca",
+                ("cobranca", "cnpj", "negativacao", "protesto"),
+            ),
+        )
+        for phrase_marker, required_terms in pretexts:
+            if phrase_marker in phrase:
+                return any(term in story for term in required_terms)
+        return (
+            any(term in phrase for term in ("qr code", "pix", "boleto"))
+            and any(term in story for term in ("qr code", "pix", "boleto", "pagamento"))
+        )
     if is_coherent(roteiro, frase, headline):
         return True
     if canonical_type_id == "voz_clonada":

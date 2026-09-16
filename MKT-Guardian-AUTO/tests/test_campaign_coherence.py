@@ -45,6 +45,45 @@ class TestCampaignCoherence(unittest.TestCase):
             )
         )
 
+    def test_qr_com_desconto_rejeita_roteiro_de_estorno(self):
+        self.assertFalse(
+            is_coherent_for_campaign(
+                (
+                    "Um cliente pede estorno de pagamento via QR Code. "
+                    "Confirme antes de transferir."
+                ),
+                "Fornecedor: use este QR Code para pagamento com desconto — válido só hoje.",
+                "QR CODE FALSO PODE DESVIAR SEU PAGAMENTO",
+                "qr_code_pix",
+            )
+        )
+
+    def test_qr_com_desconto_aceita_mesmo_pretexto(self):
+        self.assertTrue(
+            is_coherent_for_campaign(
+                (
+                    "Um fornecedor oferece desconto para pagamento por QR Code. "
+                    "O código direciona o valor ao golpista."
+                ),
+                "Fornecedor: use este QR Code para pagamento com desconto — válido só hoje.",
+                "QR CODE FALSO PODE DESVIAR SEU PAGAMENTO",
+                "qr_code_pix",
+            )
+        )
+
+    def test_qr_de_fornecedor_rejeita_remetente_cliente(self):
+        self.assertFalse(
+            is_coherent_for_campaign(
+                (
+                    "Um cliente pede desconto e envia um QR Code para o "
+                    "comerciante pagar."
+                ),
+                "Fornecedor: use este QR Code para pagamento com desconto.",
+                "QR CODE FALSO PODE DESVIAR SEU PAGAMENTO",
+                "qr_code_pix",
+            )
+        )
+
     def test_pick_coherent_gancho_empresarios(self):
         ganchos = [
             "LINK FALSO DE FORNECEDOR NO WHATSAPP BUSINESS — LOJA CLICOU!",

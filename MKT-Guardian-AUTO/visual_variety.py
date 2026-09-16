@@ -28,8 +28,8 @@ class VisualVarietyEngine:
             "the frame, never cropped or placed against an image edge."
         ),
         (
-            "Close-up on hands holding a complete smartphone above the lower third, "
-            "with the full device visible and a worried expression on the face."
+            "Medium waist-up view with the complete smartphone held at chest height, "
+            "its bottom edge above 60 percent image height and clear of lower-third cards."
         ),
         (
             "Three-quarter candid pose, subject holding the complete phone at chest "

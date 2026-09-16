@@ -588,6 +588,15 @@ mecanismos e consequências explícitos; urgência bancária deixou de ser
 classificada como golpe de PIX. Também foi eliminada a contradição entre a
 expressão proibida `chat privado` e as instruções positivas da matriz.
 
+**Correção v5.64 / Fábrica v18.11:** o teste integrado de Empresários com QR
+Code passou a exigir o mesmo pretexto e o mesmo remetente do card no roteiro,
+impedindo misturas entre desconto de fornecedor e estorno solicitado por
+cliente. Headlines de QR Code, boleto e cobrança receberam fórmulas específicas,
+e claims amplos sobre capital de giro ou faturamento são limitados ao valor
+pago. A QA agora prioriza regeneração da imagem quando o celular estiver atrás
+dos cards; os enquadramentos reservam os 40% inferiores para o layout. Também
+foi corrigida a acentuação de `PROTEÇÃO WHATSAPP` no card da solução.
+
 ## 6. Segurança obrigatória
 
 - remover a exibição de tokens completos no Desktop;

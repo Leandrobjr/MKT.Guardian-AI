@@ -71,7 +71,7 @@ class VisualQualityResult:
         if not failed:
             return ""
         stages = [item.recommended_stage for item in failed]
-        for preferred in ("layout", "imagem", "copy", "video", "audio"):
+        for preferred in ("copy", "imagem", "video", "layout", "audio"):
             if preferred in stages:
                 return preferred
         return stages[0]

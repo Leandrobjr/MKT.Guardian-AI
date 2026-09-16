@@ -608,7 +608,7 @@ class MediaFactory:
         )
         self._draw_brand_card(
             draw, solucao_box,
-            "GUARDIAN AI — PROTECAO WHATSAPP",
+            "GUARDIAN AI — PROTEÇÃO WHATSAPP",
             solucao,
             self._template_color("cta", self.BRAND_GREEN),
             self._template_color("headline", self.BRAND_TEXT),
@@ -653,7 +653,7 @@ class MediaFactory:
         )
         self._draw_brand_card(
             draw, solucao_box,
-            "GUARDIAN AI — PROTECAO WHATSAPP",
+            "GUARDIAN AI — PROTEÇÃO WHATSAPP",
             solucao,
             self._template_color("cta", self.BRAND_GREEN),
             self._template_color("headline", self.BRAND_TEXT),

@@ -112,6 +112,30 @@ class TestCampaignCopyOverride(unittest.TestCase):
             "PEDIDO DE PIX NO WHATSAPP PODE SER GOLPE",
         )
 
+    def test_headline_de_qr_code_preserva_pretexto_financeiro(self):
+        result = self.orchestrator._sanitize_headline_semantics(
+            {
+                "gancho_atencao_inicial": (
+                    "'FINANCEIRO' PEDIU PIX DE VOLTA — ERA FRAUDE."
+                )
+            },
+            {
+                "frase_golpista": (
+                    "Fornecedor: use este QR Code para pagamento com desconto — válido só hoje."
+                )
+            },
+            {
+                "_campaign_contract": {
+                    "mecanismo": "transferencia_pix_autorizada",
+                    "canonical_type_id": "qr_code_pix",
+                }
+            },
+        )
+        self.assertEqual(
+            result["gancho_atencao_inicial"],
+            "QR CODE FALSO PODE DESVIAR SEU PAGAMENTO",
+        )
+
     def test_pix_autorizado_nao_e_descrita_como_roubo_da_conta(self):
         result = self.orchestrator._sanitize_mechanism_claims(
             {
@@ -141,6 +165,30 @@ class TestCampaignCopyOverride(unittest.TestCase):
             {"_campaign_contract": {"mecanismo": "link_ou_credencial"}},
         )
         self.assertEqual(result, original)
+
+    def test_qr_falso_nao_drena_capital_de_giro_ou_faturamento(self):
+        result = self.orchestrator._sanitize_mechanism_claims(
+            {
+                "desenvolvimento_copy": (
+                    "O golpista drena seu capital de giro. "
+                    "Não deixe seu faturamento cair em mãos erradas. "
+                    "Verifique antes de qualquer clique."
+                )
+            },
+            {
+                "_campaign_contract": {
+                    "mecanismo": "transferencia_pix_autorizada",
+                }
+            },
+        )
+        self.assertEqual(
+            result["desenvolvimento_copy"],
+            (
+                "O golpista faz você perder o valor pago. "
+                "Não envie valores sem confirmar o destinatário. "
+                "Verifique antes de qualquer pagamento."
+            ),
+        )
 
     def test_cena_visual_respeita_amigo_do_card(self):
         result = self.orchestrator._align_visual_relationship(
@@ -173,6 +221,8 @@ class TestCampaignCopyOverride(unittest.TestCase):
         self.assertIn("exactly one physical smartphone", clause)
         self.assertIn("screen fully inside the frame", clause)
         self.assertIn("never cropped", clause)
+        self.assertIn("upper 60 percent", clause)
+        self.assertIn("above all lower-third graphics", clause)
         self.assertIn("no readable words", clause)
         self.assertIn("duplicated device", clause)
         self.assertIn("picture-in-picture", clause)

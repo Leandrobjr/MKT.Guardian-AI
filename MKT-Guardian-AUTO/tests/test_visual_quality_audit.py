@@ -118,6 +118,31 @@ class TestVisualQualityAudit(unittest.TestCase):
         self.assertEqual(result.recommended_stage, "imagem")
         self.assertIn("Rosto deformado", result.findings[0].reason)
 
+    def test_celular_encoberto_tem_prioridade_sobre_layout(self):
+        checks = _checks(9)
+        checks["celular"] = {
+            "score": 2,
+            "ok": False,
+            "reason": "Celular encoberto pelos cards.",
+        }
+        checks["texto"] = {
+            "score": 5,
+            "ok": False,
+            "reason": "Headline com erro.",
+        }
+        payload = {"overall_score": 6, "checks": checks}
+        client = _FakeClient(_FakeResponse(json.dumps(payload)))
+        auditor = GeminiVisualQualityAuditor(client)
+
+        result = auditor.audit(
+            self.creative,
+            self.config,
+            {"static_image_file": self.image},
+        )
+
+        self.assertFalse(result.passed)
+        self.assertEqual(result.recommended_stage, "imagem")
+
     def test_qa_desativada_nao_chama_api(self):
         client = _FakeClient(_FakeResponse("{}"))
         auditor = GeminiVisualQualityAuditor(client, enabled=False)

@@ -444,6 +444,7 @@ class CampaignOrchestrator:
         phrase = (campaign_ctx.get("frase_golpista") or "").casefold()
 
         if contract.get("mecanismo") == "transferencia_pix_autorizada":
+            canonical_type_id = contract.get("canonical_type_id")
             corrected_headline = re.sub(
                 r"\bdifícil\s+recuperar\b",
                 "difícil de recuperar",
@@ -471,17 +472,36 @@ class CampaignOrchestrator:
                 safe = "PIX PEDIDO POR FAMILIAR NO WHATSAPP PODE SER GOLPE"
             else:
                 safe = "PEDIDO DE PIX NO WHATSAPP PODE SER GOLPE"
-            if contract.get("canonical_type_id") == "voz_clonada":
+            force_specialized_headline = False
+            if canonical_type_id == "qr_code_pix":
+                safe = "QR CODE FALSO PODE DESVIAR SEU PAGAMENTO"
+                valid_patterns = ("qr code",)
+                force_specialized_headline = True
+            elif canonical_type_id == "boleto_falso":
+                safe = "BOLETO FALSO PODE DESVIAR SEU PAGAMENTO"
+                valid_patterns = ("boleto", "qr code")
+                force_specialized_headline = True
+            elif canonical_type_id == "falsa_cobranca_empresarial":
+                safe = "COBRANÇA FALSA PODE DESVIAR SEU PAGAMENTO"
+                valid_patterns = ("cobrança", "cobranca")
+                force_specialized_headline = True
+            else:
+                valid_patterns = (
+                    "pix pedido por",
+                    "pix enviado ao golpista",
+                    "valor transferido",
+                    "difícil de recuperar",
+                )
+            if canonical_type_id == "voz_clonada":
                 if (config or {}).get("publico_slug") == "pais":
                     safe = "VOZ CLONADA PODE PEDIR PIX EM NOME DE SEU FILHO!"
                 else:
                     safe = "VOZ CLONADA PODE PEDIR PIX EM NOME DE UM FAMILIAR!"
-            valid_patterns = (
-                "pix pedido por",
-                "pix enviado ao golpista",
-                "valor transferido",
-                "difícil de recuperar",
-            )
+            if force_specialized_headline and headline != safe:
+                creative_data["gancho_atencao_inicial"] = safe
+                creative_data["headline_escolhida"] = safe
+                print(f"📌 Headline financeira ajustada para: {safe}")
+                return creative_data
             invalid_patterns = (
                 r"\bpix que você (receber|fizer|enviar)\b",
                 r"\bpix\b.*\bpode fazer você perder\b",
@@ -578,7 +598,8 @@ class CampaignOrchestrator:
             "the ordinary-sized phone held naturally by the person. No other phone-shaped "
             "object is allowed anywhere. Keep this single smartphone and its screen fully "
             "inside the frame, never cropped by any edge, with visible margin around it and "
-            "above the lower third. Its display must remain small in the composition and use "
+            "entirely within the upper 60 percent of the image; its bottom edge must stay above "
+            "all lower-third graphics and cards. Its display must remain small in the composition and use "
             "a softly defocused WhatsApp-style interface with no readable words, letters, "
             "logos, or UI labels. Do not create an enlarged or oversized phone mockup, "
             "second smartphone, duplicated device, floating screen, interface close-up, "
@@ -1250,6 +1271,18 @@ class CampaignOrchestrator:
             (r"\bconta zerada\b", "perdeu o valor enviado"),
             (r"\broubou todo o saldo\b", "fez a vítima perder o valor transferido"),
             (r"\bperder todo o saldo\b", "perder apenas o valor enviado"),
+            (
+                r"\bdrena(?:r)? (?:seu|o) capital de giro\b",
+                "faz você perder o valor pago",
+            ),
+            (
+                r"\bnão deixe seu faturamento cair em mãos erradas\b",
+                "Não envie valores sem confirmar o destinatário",
+            ),
+            (
+                r"\bantes de (?:qualquer )?clique\b",
+                "antes de qualquer pagamento",
+            ),
         )
         changed = False
         for field in ("gancho_atencao_inicial", "desenvolvimento_copy", "chamada_para_acao_cta"):

@@ -31,26 +31,26 @@
     },
     "falso_parente": {
       "ganchos": [
-        "O 'NETO' QUE PEDIU PIX NÃO ERA O NETO DELA.",
-        "'VÓ, TROQUEI DE NÚMERO.' FOI ASSIM QUE PERDERAM A APOSENTADORIA.",
-        "ELA ACHOU QUE AJUDAVA O FILHO. ERA UM GOLPISTA.",
+        "O PEDIDO DE PIX DO 'NETO' ERA GOLPE.",
+        "'TROQUEI DE NÚMERO.' ASSIM COMEÇA O FALSO PARENTE.",
+        "A AJUDA AO 'FILHO' QUASE VIROU PREJUÍZO.",
         "UM ÁUDIO NO PRIVADO PARECIA DO NETO. A VOZ ERA DE OUTRA PESSOA.",
         "R$ 12 MIL FORAM PEDIDOS EM UM PIX 'URGENTE'.",
-        "O GOLPISTA SABIA O NOME DO NETO — MAS NÃO ERA ELE.",
+        "O GOLPISTA SABIA O NOME DO NETO — ERA FALSO PARENTE.",
         "'NÃO CONTA PRO MEU PAI.' CLÁSSICO DO FALSO PARENTESCO.",
-        "ELA SALVOU O NOVO NÚMERO. QUASE ENVIOU UM PIX."
+        "NOVO NÚMERO SALVO. O PIX URGENTE ERA GOLPE."
       ],
       "frase_golpista": "Oi vó, troquei de número, salva aí. Preciso de um PIX urgente, depois te explico pessoalmente."
     },
     "link_malicioso": {
       "ganchos": [
-        "ELA CLICOU NO LINK. PERDEU A APOSENTADORIA INTEIRA.",
+        "UM CLIQUE NO LINK FALSO PODE ROUBAR CREDENCIAIS.",
         "ENCOMENDA 'RETIDA' NO WHATSAPP ERA GOLPE — LINK FALSO.",
-        "O APK DE 'SEGURANÇA' INSTALOU SPYWARE NO CELULAR DELA.",
+        "O APK DE 'SEGURANÇA' INSTALOU SPYWARE NO CELULAR.",
         "PROMOÇÃO FALSA NO PRIVADO ROUBOU DADOS BANCÁRIOS.",
         "LINK DE 'ATUALIZAÇÃO' ERA MALWARE DISFARÇADO.",
         "GOLPISTA MANDOU BRINDE FALSO — UM CLIQUE BASTOU.",
-        "TAXA DE ENCOMENDA FALSA NO PRIVADO — IDOSO PERDEU R$ 800.",
+        "TAXA DE ENCOMENDA FALSA CAUSOU PREJUÍZO DE R$ 800.",
         "SORTEIO FALSO NO WHATSAPP PEDIU CADASTRO COMPLETO."
       ]
     },
@@ -58,11 +58,11 @@
       "ganchos": [
         "VAGA HOME OFFICE FALSA COBROU TAXA ANTES DO SALÁRIO.",
         "PROMETERAM RENDA EXTRA — PEDIU PIX DE 'TREINAMENTO'.",
-        "FALSO RH NO WHATSAPP ROUBOU DOCUMENTOS DO APOSENTADO.",
+        "FALSO RH NO WHATSAPP ROUBOU DOCUMENTOS PESSOAIS.",
         "EMPREGO FALSO NO PRIVADO — PREJUÍZO DE R$ 500.",
         "GOLPISTA PEDIU TAXA DE ADMISSÃO VIA PIX.",
         "VAGA 'MULTINACIONAL' ERA ARMADILHA NO WHATSAPP.",
-        "TRABALHO PELO CELULAR VIRou GOLPE FINANCEIRO.",
+        "TRABALHO PELO CELULAR VIROU GOLPE FINANCEIRO.",
         "CADASTRO FALSO PEDIU CPF E CONTA BANCÁRIA."
       ]
     },
@@ -70,7 +70,7 @@
       "ganchos": [
         "15% AO DIA NO WHATSAPP — APOSENTADORIA PERDIDA.",
         "GRUPO VIP DE 'INVESTIMENTO' ERA GOLPE NO PRIVADO.",
-        "ROBÔ DE CRIPTO FALSO ESVAZIOU A POUPANÇA DELA.",
+        "ROBÔ DE CRIPTO FALSO ESVAZIOU UMA POUPANÇA.",
         "LUCRO GARANTIDO NO CHAT — PREJUÍZO REAL.",
         "GOLPISTA PEDIU APORTE URGENTE VIA PIX.",
         "PRINTS FALSOS DE LUCRO NO WHATSAPP 1:1.",
@@ -86,7 +86,7 @@
       "narrativa_parental": true,
       "obrigacoes_narrativa": [
         "Espectador é pai ou mãe preocupado(a)",
-        "Golpe ou grooming em chat PRIVADO (1:1) com o filho ou com o pai",
+        "Golpe ou grooming em conversa direta 1:1 com o filho ou com o pai",
         "Guardian AI alerta o pai/mãe sobre mensagem suspeita no privado"
       ],
       "proibicoes_narrativa": [
@@ -95,12 +95,12 @@
     },
     "grooming": {
       "ganchos": [
-        "ELE DISSE QUE TINHA 12 ANOS. TINHA 43.",
+        "DISSE QUE TINHA 12 ANOS. NA VERDADE, TINHA 43.",
         "ENQUANTO VOCÊ LÊ ISTO, UM ESTRANHO PODE ESTAR FALANDO COM SEU FILHO NO PRIVADO",
         "'NÃO CONTA PRA SUA MÃE.' A FRASE QUE ANTECEDE UMA TRAGÉDIA",
         "PREDADOR PEDIU FOTO NO PRIVADO — NÃO NO GRUPO DA ESCOLA.",
         "SEU FILHO RECEBEU 'OI SUMIDO' DE NÚMERO DESCONHECIDO.",
-        "LINK SUSPEITO NO CHAT PRIVADO — ANTES QUE CLIQUE.",
+        "LINK SUSPEITO NA CONVERSA DIRETA — ANTES QUE CLIQUE.",
         "ADULTO SE PASSOU POR COLEGA NO WHATSAPP 1:1.",
         "MENSAGEM 'APAGA DEPOIS DE LER' NO PRIVADO DO ADOLESCENTE."
       ],
@@ -111,14 +111,14 @@
     },
     "falso_parente": {
       "ganchos": [
-        "'MÃE, TROQUEI DE NÚMERO.' FOI ASSIM QUE ROUBARAM R$ 8 MIL DELA.",
-        "O 'FILHO' QUE PEDIU DINHEIRO NÃO ERA O FILHO DELA",
+        "'TROQUEI DE NÚMERO.' O PIX URGENTE CUSTOU R$ 8 MIL.",
+        "O 'FILHO' QUE PEDIU DINHEIRO ERA UM GOLPISTA.",
         "ÁUDIO FALSO NO PRIVADO — VOZ PARECIDA, GOLPE REAL.",
         "PIX 'URGENTE' DO 'FILHO' ERA GOLPISTA.",
-        "ELA TRANSFERIU ANTES DE LIGAR PRO FILHO DE VERDADE.",
+        "A TRANSFERÊNCIA VEIO ANTES DA LIGAÇÃO DE CONFIRMAÇÃO.",
         "GOLPISTA SABIA APELIDO DA FAMÍLIA — NÃO ERA PARENTESCO.",
         "NOVO NÚMERO SALVO. CONFIRME ANTES DE FAZER O PIX.",
-        "'MÃE, ESTOU COM VERGONHA.' MANIPULAÇÃO EMOCIONAL NO PRIVADO."
+        "'ESTOU COM VERGONHA.' MANIPULAÇÃO EMOCIONAL NO PRIVADO."
       ]
     },
     "link_malicioso": {
@@ -127,7 +127,7 @@
         "LINK SUSPEITO NO WHATSAPP 1:1 — ANTES QUE CLIQUE.",
         "FALSA ENCOMENDA NO PRIVADO PEDIU TAXA URGENTE.",
         "APK FALSO DE 'SEGURANÇA' INSTALADO PELO FILHO.",
-        "PROMOÇÃO FALSA NO CHAT PRIVADO DO ADOLESCENTE.",
+        "PROMOÇÃO FALSA NA CONVERSA DIRETA DO ADOLESCENTE.",
         "GOLPISTA MANDOU LINK DE 'SORTEIO' NO 1:1.",
         "UM CLIQUE NO PRIVADO — DADOS DA FAMÍLIA ROUBADOS.",
         "LINK 'ATUALIZAR CADASTRO' ERA PHISHING NO WHATSAPP."
@@ -141,7 +141,7 @@
         "EMPREGO 'GARANTIDO' NO CHAT — ERA FRAUDE.",
         "TAXA DE TREINAMENTO FALSA VIA WHATSAPP 1:1.",
         "DOCUMENTOS DO FILHO ROUBADOS POR FALSO RECRUTADOR.",
-        "RENDA EXTRA NO PRIVADO VIRou PREJUÍZO.",
+        "RENDA EXTRA NO PRIVADO VIROU PREJUÍZO.",
         "CADASTRO FALSO PEDIU DADOS BANCÁRIOS URGENTE."
       ]
     },
@@ -151,7 +151,7 @@
         "INVESTIMENTO 'GARANTIDO' NO PRIVADO — GOLPE.",
         "CRIPTO FALSA NO CHAT 1:1 ROUBOU ECONOMIA DA FAMÍLIA.",
         "ROBÔ DE INVESTIMENTO NO WHATSAPP — PREJUÍZO TOTAL.",
-        "GOLPISTA PEDIU APORTO VIA PIX NO PRIVADO.",
+        "GOLPISTA PEDIU APORTE VIA PIX NO PRIVADO.",
         "LUCRO IMPOSSÍVEL PROMETIDO NO WHATSAPP DIRETO.",
         "GRUPO SECRETO DE 'INVESTIMENTO' ERA ARMADILHA.",
         "PRINT FALSO DE LUCRO CONVENCEU A TRANSFERIR."
@@ -192,7 +192,7 @@
     "clonagem_whatsapp": {
       "ganchos": [
         "CLONARAM O WHATSAPP BUSINESS E PEDIRAM PIX AOS CLIENTES.",
-        "EM MINUTOS, O NÚMERO DA LOJA VIRou ARMA DE GOLPE.",
+        "EM MINUTOS, O NÚMERO DA LOJA VIROU ARMA DE GOLPE.",
         "CÓDIGO SMS NO PRIVADO — CLONAGEM EM ANDAMENTO.",
         "CLIENTES RECEBERAM COBRANÇA DO NÚMERO 'OFICIAL' CLONADO.",
         "GOLPISTA PEDIU CÓDIGO DE VERIFICAÇÃO NO CHAT.",
@@ -231,8 +231,8 @@
         "INVESTIMENTO 'GARANTIDO' NO PRIVADO DO NEGÓCIO.",
         "CRIPTO FALSA NO 1:1 ESVAZIOU CAIXA DA LOJA.",
         "ROBÔ DE INVESTIMENTO NO WHATSAPP BUSINESS — GOLPE.",
-        "GOLPISTA PEDIU APORTO URGENTE VIA PIX COMERCIAL.",
-        "LUCRO IMPOSSÍVEL PROMETIDO NO CHAT PRIVADO.",
+        "GOLPISTA PEDIU APORTE URGENTE VIA PIX COMERCIAL.",
+        "LUCRO IMPOSSÍVEL PROMETIDO NA CONVERSA DIRETA.",
         "PRINT FALSO DE LUCRO CONVENCEU O EMPRESÁRIO.",
         "OPORTUNIDADE 'EXCLUSIVA' NO PRIVADO — FRAUDE."
       ]
@@ -267,14 +267,14 @@
         "ESTRANHO MANDOU 'OI SUMIDO' NO PRIVADO DO ALUNO — NÃO NO GRUPO.",
         "DIRETOR ALERTA: LINK SUSPEITO CHEGA NO 1:1, NÃO NA TURMA.",
         "PAIS PRECISAM MONITORAR O PRIVADO — ESCOLA NÃO VÊ GRUPOS.",
-        "ALUNO QUASE CLICOU EM LINK NO CHAT PRIVADO.",
+        "ALUNO QUASE CLICOU EM LINK NA CONVERSA DIRETA.",
         "PREDADOR PEDIU FOTO NO PRIVADO — ESCOLA ORIENTOU AS FAMÍLIAS."
       ],
       "gancho_modelo": "Escola alerta: grooming atinge alunos no WhatsApp privado",
       "frase_golpista": "oi, vi seu perfil... vc é muito bonita 😊 não conta pra ninguém da escola, manda uma foto sua?",
       "direcao_arte_emocional": "Documentary photorealistic photo of a Brazilian school director (40-55) in administrative office, holding a smartphone at chest height with both hands clearly visible, reviewing a suspicious PRIVATE 1:1 WhatsApp message (not a group chat) about to be shown to concerned parents, school diplomas on wall, professional educational setting, worried attentive expression",
       "obrigacoes_narrativa": [
-        "História: escola educa famílias sobre perigo do chat PRIVADO com alunos",
+        "História: escola educa famílias sobre perigo da conversa direta 1:1 com alunos",
         "Guardian AI é solução para PAIS instalarem no celular da família",
         "Mencione planos Guardian AI para grupos de alunos da escola",
         "Card golpista deve ser mensagem PRIVADA (1:1), nunca mensagem de grupo"

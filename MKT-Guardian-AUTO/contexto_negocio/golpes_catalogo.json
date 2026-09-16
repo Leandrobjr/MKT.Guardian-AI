@@ -56,6 +56,8 @@
       "id": "falso_suporte_bancario",
       "nome": "Falso suporte ou central bancária",
       "familia": "engenharia_social",
+      "mecanismo": "link_ou_senha",
+      "consequencia": "O fornecimento de senha, código, dados bancários ou a instalação de aplicativo falso pode permitir acesso indevido; a ameaça de bloqueio é apenas o pretexto do golpista.",
       "variantes": ["falso_suporte_bancario", "central_seguranca_invasao"],
       "publicos": ["massa", "idosos", "empresarios"]
     },
@@ -63,8 +65,10 @@
       "id": "engenharia_social_urgencia",
       "nome": "Engenharia social por urgência",
       "familia": "engenharia_social",
+      "mecanismo": "link_ou_senha",
+      "consequencia": "A urgência falsa tenta induzir a vítima a revelar dados ou seguir instruções que podem permitir acesso indevido; a mensagem, isoladamente, não retira dinheiro da conta.",
       "variantes": ["engenharia_social_urgencia"],
-      "publicos": ["massa", "idosos", "pais"]
+      "publicos": ["massa", "idosos"]
     },
     {
       "id": "link_malicioso",
@@ -84,6 +88,8 @@
       "id": "falso_investimento",
       "nome": "Falso investimento",
       "familia": "fraude_financeira",
+      "mecanismo": "investimento_fraudulento",
+      "consequencia": "A vítima pode perder os valores enviados em um ou vários aportes ao falso investimento; isso não implica acesso automático à conta bancária.",
       "variantes": ["lucro_garantido_cripto"],
       "publicos": ["massa", "idosos", "pais", "empresarios"]
     },
@@ -91,6 +97,9 @@
       "id": "boleto_falso",
       "nome": "Boleto falso",
       "familia": "fraude_financeira",
+      "mecanismo": "transferencia_pix_autorizada",
+      "consequencia": "A vítima paga um boleto ou QR Code adulterado e perde somente o valor transferido; o pagamento não dá acesso automático ao restante da conta.",
+      "termos_proibidos": ["esvaziou a conta", "conta zerada", "perdeu todo o saldo", "perder todo o saldo", "aposentadoria inteira", "economia de uma vida inteira"],
       "variantes": ["boleto_falso_qr"],
       "publicos": ["empresarios", "escolas"]
     },
@@ -98,6 +107,9 @@
       "id": "qr_code_pix",
       "nome": "QR Code ou PIX adulterado",
       "familia": "fraude_financeira",
+      "mecanismo": "transferencia_pix_autorizada",
+      "consequencia": "A vítima autoriza um pagamento para o destinatário fraudulento e perde somente o valor enviado; o QR Code não dá acesso automático ao saldo da conta.",
+      "termos_proibidos": ["esvaziou a conta", "conta zerada", "perdeu todo o saldo", "perder todo o saldo", "aposentadoria inteira", "economia de uma vida inteira"],
       "variantes": ["qr_code_pix_adulterado"],
       "publicos": ["massa", "empresarios"]
     },
@@ -161,6 +173,9 @@
       "id": "falsa_cobranca_empresarial",
       "nome": "Falsa cobrança empresarial",
       "familia": "fraude_financeira",
+      "mecanismo": "transferencia_pix_autorizada",
+      "consequencia": "A empresa ou família perde somente o valor pago ao destinatário fraudulento; a cobrança falsa não dá acesso automático ao restante da conta.",
+      "termos_proibidos": ["esvaziou a conta", "conta zerada", "perdeu todo o saldo", "perder todo o saldo", "esvaziou o caixa", "zerou o caixa"],
       "variantes": ["falsa_cobranca_empresarial"],
       "publicos": ["empresarios", "escolas"]
     },

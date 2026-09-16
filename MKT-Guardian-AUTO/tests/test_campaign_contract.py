@@ -10,6 +10,7 @@ from campaign_contract import (
     CampaignContractCatalog,
     CampaignContractError,
     CampaignContract,
+    LEGACY_GOLPE_GROUPS,
     validate_creative_contract,
 )
 
@@ -23,6 +24,28 @@ class TestCampaignContract(unittest.TestCase):
         self.assertEqual(self.catalog.validate_catalog(), [])
         self.assertEqual(len(self.catalog._types), 20)
         self.assertEqual(len(self.catalog._variant_to_type), 26)
+
+    def test_tipos_financeiros_declaram_mecanismo_e_consequencia(self):
+        required_ids = {
+            item["id"]
+            for item in self.catalog._types.values()
+            if item.get("familia") == "fraude_financeira"
+        } | {"falso_suporte_bancario", "engenharia_social_urgencia"}
+
+        for canonical_id in required_ids:
+            canonical = self.catalog._types[canonical_id]
+            self.assertTrue(canonical.get("mecanismo"), canonical_id)
+            self.assertTrue(canonical.get("consequencia"), canonical_id)
+
+    def test_urgencia_bancaria_pertence_a_falsa_central(self):
+        self.assertNotIn(
+            "engenharia_social_urgencia",
+            LEGACY_GOLPE_GROUPS["pix_fantasma"],
+        )
+        self.assertIn(
+            "engenharia_social_urgencia",
+            LEGACY_GOLPE_GROUPS["falsa_central"],
+        )
 
     def test_constroi_contrato_para_variante_compativel(self):
         contract = self.catalog.build(

@@ -28,14 +28,13 @@ PUBLICO_ID_BY_SLUG = {
 LEGACY_GOLPE_GROUPS = {
     "pix_fantasma": {
         "falso_pix_familiar",
-        "engenharia_social_urgencia",
         "boleto_falso",
         "qr_code_pix",
         "falsa_cobranca_empresarial",
     },
     "falso_parente": {"falso_pix_familiar", "voz_clonada"},
     "clonagem_whatsapp": {"clonagem_whatsapp", "confirmacao_codigo"},
-    "falsa_central": {"falso_suporte_bancario"},
+    "falsa_central": {"falso_suporte_bancario", "engenharia_social_urgencia"},
     "grooming": {"grooming"},
     "phishing": {"link_malicioso", "catalogo_falso_produto", "falso_sorteio"},
     "link_malicioso": {"link_malicioso", "malware_apk", "falsa_encomenda"},
@@ -114,12 +113,26 @@ class CampaignContractCatalog:
             return ["Catálogo canônico sem tipos de golpe."]
         variant_types: dict[str, list[str]] = {}
         for canonical_type in self._types.values():
+            canonical_id = canonical_type.get("id", "")
+            requires_mechanism = (
+                canonical_type.get("familia") == "fraude_financeira"
+                or canonical_id
+                in {"falso_suporte_bancario", "engenharia_social_urgencia"}
+            )
+            if requires_mechanism and not canonical_type.get("mecanismo"):
+                errors.append(
+                    f"Tipo canônico financeiro {canonical_id!r} sem mecanismo."
+                )
+            if requires_mechanism and not canonical_type.get("consequencia"):
+                errors.append(
+                    f"Tipo canônico financeiro {canonical_id!r} sem consequência."
+                )
             for variant_id in canonical_type.get("variantes", []):
                 variant_types.setdefault(variant_id, []).append(
-                    canonical_type.get("id", "")
+                    canonical_id
                 )
                 mapped_type = self._variant_to_type.get(variant_id, {})
-                current_type = canonical_type.get("id", "")
+                current_type = canonical_id
                 if mapped_type and mapped_type.get("id") != current_type:
                     errors.append(
                         f"Variante {variant_id!r} mapeada para dois tipos: "

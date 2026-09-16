@@ -579,6 +579,15 @@ reprova como falha crítica qualquer segundo aparelho, mockup ampliado, tela
 flutuante ou inserção de interface. O criativo problemático foi corretamente
 reprovado e sua nova versão, com um único celular, obteve nota 9,6.
 
+**Correção v5.63:** a auditoria permanente passou a cobrir as 27 combinações
+válidas de público e golpe, incluindo variantes, vocativos, gênero, idade,
+persona, cena e consequência. Headlines fixas foram neutralizadas para não
+conflitar com a alternância de gênero. Falsa central, urgência bancária,
+boleto, QR Code, cobrança empresarial e falso investimento receberam
+mecanismos e consequências explícitos; urgência bancária deixou de ser
+classificada como golpe de PIX. Também foi eliminada a contradição entre a
+expressão proibida `chat privado` e as instruções positivas da matriz.
+
 ## 6. Segurança obrigatória
 
 - remover a exibição de tokens completos no Desktop;

@@ -41,14 +41,14 @@
     },
     {
       "variant_id": "engenharia_social_urgencia",
-      "golpe_id": "pix_fantasma",
+      "golpe_id": "falsa_central",
       "ordem_md": 4,
       "titulo": "Engenharia Social Emocional",
       "publicos": ["massa", "idosos"],
       "frases_golpista": [
         "Sua conta será bloqueada. Aja agora ou perderá todo o saldo.",
         "Último aviso: transferência suspeita detectada. Responda AGORA para evitar prejuízo.",
-        "Seu CPF foi usado em fraude. Confirme identidade com PIX de verificação imediato."
+        "Seu CPF foi usado em fraude. Confirme agora sua identidade e seus dados bancários nesta conversa."
       ]
     },
     {

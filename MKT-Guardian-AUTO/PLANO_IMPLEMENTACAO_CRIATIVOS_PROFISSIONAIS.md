@@ -596,6 +596,8 @@ e claims amplos sobre capital de giro ou faturamento são limitados ao valor
 pago. A QA agora prioriza regeneração da imagem quando o celular estiver atrás
 dos cards; os enquadramentos reservam os 40% inferiores para o layout. Também
 foi corrigida a acentuação de `PROTEÇÃO WHATSAPP` no card da solução.
+O saneador textual também corrige o artefato `alerta seu acesso` para
+`obtém acesso indevido`.
 
 ## 6. Segurança obrigatória
 

@@ -332,6 +332,12 @@ class CampaignOrchestrator:
         text = re.sub(r"\bdos sua\b", "da sua", text)
         text = re.sub(r"\bdos Sua\b", "da Sua", text)
         text = re.sub(
+            r"\balerta (?:o )?seu acesso\b",
+            "obtém acesso indevido",
+            text,
+            flags=re.IGNORECASE,
+        )
+        text = re.sub(
             r"(Guardian AI[^.!?]*[.!?]\s*)Ela\s+(detecta|alerta|monitora|envia|avisa)",
             r"\1Ele \2",
             text,

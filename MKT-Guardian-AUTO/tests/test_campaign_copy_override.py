@@ -262,6 +262,17 @@ class TestCampaignCopyOverride(unittest.TestCase):
             "PROTEJA O WhatsApp do SEU FILHO, AGORA!",
         )
 
+    def test_corrige_artefato_alerta_seu_acesso(self):
+        self.assertEqual(
+            self.orchestrator._fix_pt_artifacts(
+                "O aplicativo falso assume sua conta, alerta seu acesso e limpa seu caixa."
+            ),
+            (
+                "O aplicativo falso assume sua conta, obtém acesso indevido "
+                "e limpa seu caixa."
+            ),
+        )
+
     def test_cta_de_pais_mantem_caixa_alta(self):
         cta = self.orchestrator._build_cta_button(
             {"publico_slug": "pais"},

@@ -599,6 +599,14 @@ foi corrigida a acentuação de `PROTEÇÃO WHATSAPP` no card da solução.
 O saneador textual também corrige o artefato `alerta seu acesso` para
 `obtém acesso indevido`.
 
+**Fábrica v18.12:** a narração passou a usar roteamento híbrido. No modo
+`auto`, Feed e Meta priorizam Google Chirp 3 HD, enquanto TikTok e YouTube
+Shorts priorizam ElevenLabs; falhas de configuração, autenticação, rede ou
+saldo acionam o segundo provedor sem interromper a geração. O modo pode ser
+fixado em `chirp` ou `elevenlabs`, e chamadas acima do limite configurado são
+bloqueadas preventivamente. As chaves não aparecem em URLs nem mensagens de
+erro.
+
 ## 6. Segurança obrigatória
 
 - remover a exibição de tokens completos no Desktop;

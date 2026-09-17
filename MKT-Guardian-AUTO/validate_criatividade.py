@@ -24,6 +24,7 @@ from manual_export import export_tiktok_package
 from supabase_campaign_bridge import SupabaseCampaignBridge
 from campaign_command_worker import CampaignCommandWorker
 from desktop_campaign_client import DesktopCampaignClient
+from hybrid_tts import HybridTTSRouter
 
 
 def check(name: str, ok: bool, detail: str = "") -> bool:
@@ -137,6 +138,12 @@ def main() -> int:
         "Critérios de QA multimodal",
         len(QUALITY_DIMENSIONS) >= 10,
         f"{len(QUALITY_DIMENSIONS)} critérios",
+    )
+    ok_all &= check(
+        "Narração híbrida",
+        hasattr(HybridTTSRouter, "provider_order")
+        and hasattr(HybridTTSRouter, "synthesize"),
+        "Chirp para Meta + ElevenLabs para Shorts + fallback",
     )
     required_statuses = {
         "GERANDO",

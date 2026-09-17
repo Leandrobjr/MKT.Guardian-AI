@@ -19,6 +19,7 @@ from video_motion import build_natural_frame_sequence, motion_prompt_suffix, sti
 from video_compositor import compile_kling_pipeline, compose_still_with_overlay
 from composition_templates import get_composition_template
 from tts_narration import build_narration_script, card_solucao_text, resolve_overlay_cta, NARRATION_CLOSING
+from hybrid_tts import HybridTTSRouter
 from storyboard import format_storyboard_prompt
 from kling_client import (
     KLING_BASE_URL,
@@ -61,21 +62,11 @@ class MediaFactory:
     def __init__(self):
         load_dotenv(os.path.join(self.BASE_DIR, ".env"))
         self.gemini_key = os.getenv("GEMINI_API_KEY")
-        # Aceita os dois nomes de variavel (novo e legado) para compatibilidade com .env existente
-        self.elevenlabs_key = (
-            os.getenv("ELEVENLABS_API_KEY")
-            or os.getenv("ELEVEN_LABS_API_KEY")
-            or os.getenv("ELEVENLABS_KEY")
-        )
         self.kling_key = os.getenv("KLING_API_KEY")
 
         self.client = genai.Client(api_key=self.gemini_key)
         self.model_imagem = os.getenv("GEMINI_MODEL_IMAGEM", "gemini-3.1-flash-image")
-        self.voice_id = (
-            os.getenv("ELEVENLABS_VOICE_ID")
-            or os.getenv("ELEVEN_LABS_VOICE_ID")
-            or "21m00Tcm4TlvDq8ikWAM"
-        )
+        self.tts_router = HybridTTSRouter.from_env()
 
         self.kling_base_url = KLING_BASE_URL
 
@@ -1197,8 +1188,8 @@ class MediaFactory:
         voz_pura_path = self._generate_audio(texto_audio_tts, names["voice_raw"], self.preset_midia)
         if not self._audio_ok(voz_pura_path):
             print(
-                "❌ CRÍTICO: Narração não gerada — rode: python3 elevenlabs_check.py "
-                "(não é sempre falta de créditos; pode ser voice_id ou parâmetro speed)."
+                "❌ CRÍTICO: Narração não gerada por Chirp nem ElevenLabs. "
+                "Verifique as credenciais e o modo AUDIO_TTS_MODE."
             )
         voz_pura_path = self._fit_narration_to_preset(voz_pura_path, names["voice_raw"])
         audio_final_path = self._mix_background_track(
@@ -1299,6 +1290,7 @@ class MediaFactory:
                 ),
                 "kling_raw_file": video_bruto_path if video_bruto_path and os.path.exists(video_bruto_path) else "",
                 "base_image_file": base_image_path if os.path.exists(base_image_path) else "",
+                "tts_provider": getattr(self, "last_tts_provider", ""),
             }
 
         print("🖼️ Fluxo de imagem estática...")
@@ -1337,6 +1329,7 @@ class MediaFactory:
             "commercial_video_file": video_output_path if video_ok else "Não solicitado",
             "kling_raw_file": "",
             "base_image_file": base_image_path if os.path.exists(base_image_path) else "",
+            "tts_provider": getattr(self, "last_tts_provider", ""),
         }
 
     def _generate_kling_video(
@@ -1632,51 +1625,6 @@ class MediaFactory:
         print(f"⚠️ Ajuste de velocidade falhou — usando narração original: {result.stderr[-120:]}")
         return audio_path
 
-    def _parse_elevenlabs_error(self, response: requests.Response) -> str:
-        try:
-            body = response.json()
-            detail = body.get("detail") or body
-            if isinstance(detail, dict):
-                msg = detail.get("message") or detail.get("status") or str(detail)
-            elif isinstance(detail, list) and detail:
-                msg = detail[0].get("msg", str(detail[0]))
-            else:
-                msg = str(detail)
-        except Exception:
-            msg = response.text[:300]
-        hint = ""
-        low = msg.lower()
-        if response.status_code in (401, 403):
-            hint = " — verifique ELEVENLABS_API_KEY no .env"
-        elif "quota" in low or "credit" in low or "character" in low:
-            hint = " — créditos/caracteres esgotados no plano ElevenLabs"
-        elif "voice" in low and "not found" in low:
-            hint = f" — voice_id inválido ({self.voice_id})"
-        elif "speed" in low or "voice_settings" in low:
-            hint = " — parâmetro de voz rejeitado (tentando fallback sem speed)"
-        return f"HTTP {response.status_code}: {msg}{hint}"
-
-    def _elevenlabs_request(self, text: str, speed: float, stability: float, style: float) -> requests.Response:
-        url = f"https://api.elevenlabs.io/v1/text-to-speech/{self.voice_id}"
-        headers = {
-            "Accept": "audio/mpeg",
-            "Content-Type": "application/json",
-            "xi-api-key": self.elevenlabs_key,
-        }
-        voice_settings = {
-            "stability": stability,
-            "similarity_boost": 0.9,
-            "style": style,
-        }
-        if speed and abs(speed - 1.0) > 0.01:
-            voice_settings["speed"] = speed
-        data = {
-            "text": text,
-            "model_id": "eleven_multilingual_v2",
-            "voice_settings": voice_settings,
-        }
-        return requests.post(url, json=data, headers=headers, timeout=120)
-
     def _generate_audio(self, text: str, output_path: str | None = None, preset: dict | None = None) -> str:
         path = output_path or os.path.join(self.work_dir, "voz_pura.mp3")
         os.makedirs(os.path.dirname(path), exist_ok=True)
@@ -1685,32 +1633,19 @@ class MediaFactory:
                 os.remove(path)
             except OSError:
                 pass
-        if not self.elevenlabs_key:
-            print("❌ Chave ElevenLabs ausente no .env. Use ELEVENLABS_API_KEY (ou ELEVEN_LABS_API_KEY).")
-            return path
         preset = preset or self.preset_midia or {}
-        speed = float(preset.get("eleven_speed", 1.0))
-        stability = float(preset.get("eleven_stability", 0.4))
-        style = float(preset.get("eleven_style", 0.45))
-        print(f"🎙️ Gerando narração ({len(text)} chars, velocidade {speed}x)...")
-        try:
-            response = self._elevenlabs_request(text, speed, stability, style)
-            if response.status_code != 200 or len(response.content) <= 1000:
-                err = self._parse_elevenlabs_error(response)
-                if "speed" in err.lower() and abs(speed - 1.0) > 0.01:
-                    print(f"⚠️ ElevenLabs rejeitou speed={speed} — retry sem speed...")
-                    response = self._elevenlabs_request(text, 1.0, stability, style)
-                    if response.status_code != 200 or len(response.content) <= 1000:
-                        print(f"❌ ElevenLabs {self._parse_elevenlabs_error(response)}")
-                        return path
-                else:
-                    print(f"❌ ElevenLabs {err}")
-                    return path
-            with open(path, "wb") as f:
-                f.write(response.content)
-            print(f"✅ Narração: {len(response.content) // 1024} KB, ~{self._get_audio_duration(path):.0f}s")
-        except Exception as e:
-            print(f"❌ ElevenLabs erro de rede: {e}")
+        router = getattr(self, "tts_router", None) or HybridTTSRouter.from_env()
+        order = " → ".join(router.provider_order(preset))
+        print(f"🎙️ Gerando narração híbrida ({len(text)} chars | {order})...")
+        outcome = router.synthesize(text, path, preset)
+        self.last_tts_provider = outcome.provider
+        for error in outcome.errors:
+            print(f"⚠️ TTS: {error}")
+        if outcome.provider and self._audio_ok(path):
+            print(
+                f"✅ Narração {outcome.provider}: {os.path.getsize(path) // 1024} KB, "
+                f"~{self._get_audio_duration(path):.0f}s"
+            )
         return path
 
     def _mix_background_track(

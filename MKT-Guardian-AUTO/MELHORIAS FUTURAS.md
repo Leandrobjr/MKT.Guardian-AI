@@ -51,7 +51,7 @@ Nesse caso, o `meta_publisher.postar_imagem()` exige hospedar a imagem em URL p√
 
 1. Criar conta em [https://api.imgbb.com/](https://api.imgbb.com/)
 2. Copiar a **API Key**
-3. Adicionar no `.env` da F√°brica (`MKT-Guardian-AUTO/.env` ou raiz do clone):
+3. Adicionar no arquivo oficial `.env` na raiz do clone (`MKT_Guardian-AI/.env`):
 
 ```env
 IMGBB_API_KEY=sua_chave_aqui

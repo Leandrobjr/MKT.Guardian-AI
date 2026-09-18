@@ -7,7 +7,7 @@ import uuid
 from dataclasses import asdict
 from google import genai
 from google.genai import types
-from dotenv import load_dotenv
+from env_loader import load_project_env
 
 from mkt_agent_01 import MediaFactory
 from traffic_manager import TrafficManager
@@ -86,7 +86,7 @@ class CampaignOrchestrator:
 
     def __init__(self):
         os.chdir(self.BASE_DIR)
-        load_dotenv(os.path.join(self.BASE_DIR, ".env"))
+        load_project_env()
         self.api_key = os.getenv("GEMINI_API_KEY")
         self.client = genai.Client(api_key=self.api_key)
         self.model_name = os.getenv("GEMINI_MODEL_TEXTO", "gemini-3.1-flash-lite")

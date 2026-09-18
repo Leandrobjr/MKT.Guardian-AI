@@ -4,16 +4,15 @@
 import os
 import sys
 
-from dotenv import load_dotenv
-
 from kling_client import fetch_resource_packages, format_balance_report, resolve_kling_auth
+from env_loader import load_project_env
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 
 def main() -> int:
     os.chdir(BASE_DIR)
-    load_dotenv(os.path.join(BASE_DIR, ".env"))
+    load_project_env()
 
     token, mode = resolve_kling_auth()
     print("=" * 60)

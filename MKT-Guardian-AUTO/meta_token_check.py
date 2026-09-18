@@ -52,49 +52,25 @@ def _read_meta_from_env(path: Path) -> dict[str, str]:
 
 
 def _audit_env_files() -> tuple[Path | None, dict[str, str]]:
-    """Mostra fingerprint por arquivo e retorna (arquivo_vencedor, vars_efetivas)."""
-    print("\n📁 Auditoria por arquivo .env:")
-    per_file: list[tuple[Path, dict[str, str]]] = []
-    for label, path in (("raiz", ENV_ROOT), ("AUTO", ENV_AUTO)):
-        if not path.is_file():
-            print(f"   • {path}")
-            print("     (não existe)")
-            continue
-        mtime = datetime.fromtimestamp(path.stat().st_mtime).strftime(
-            "%Y-%m-%d %H:%M:%S"
-        )
-        vals = _read_meta_from_env(path)
-        tok = vals.get("META_ACCESS_TOKEN", "")
-        print(f"   • {path}")
-        print(f"     modificado: {mtime}")
-        print(f"     META_ACCESS_TOKEN: {_token_fingerprint(tok)}")
-        if vals.get("META_IG_USER_ID"):
-            print(f"     META_IG_USER_ID: {vals['META_IG_USER_ID']}")
-        per_file.append((path, vals))
+    """Audita a fonte canônica e informa se há um arquivo interno ignorado."""
+    print("\n📁 Auditoria do arquivo .env oficial:")
+    if not ENV_ROOT.is_file():
+        print(f"   ❌ Ausente: {ENV_ROOT}")
+        return None, {}
 
-    winner: Path | None = None
-    effective: dict[str, str] = {}
+    effective = _read_meta_from_env(ENV_ROOT)
+    mtime = datetime.fromtimestamp(ENV_ROOT.stat().st_mtime).strftime(
+        "%Y-%m-%d %H:%M:%S"
+    )
+    print(f"   • {ENV_ROOT}")
+    print(f"     modificado: {mtime}")
+    print(f"     META_ACCESS_TOKEN: {_token_fingerprint(effective.get('META_ACCESS_TOKEN', ''))}")
+    if effective.get("META_IG_USER_ID"):
+        print(f"     META_IG_USER_ID: {effective['META_IG_USER_ID']}")
     if ENV_AUTO.is_file():
-        winner = ENV_AUTO
-        effective = _read_meta_from_env(ENV_AUTO)
-        if ENV_ROOT.is_file():
-            root_tok = _read_meta_from_env(ENV_ROOT).get("META_ACCESS_TOKEN", "")
-            auto_tok = effective.get("META_ACCESS_TOKEN", "")
-            print("\n⚠️  DOIS .env detectados — AUTO/.env SOBRESCREVE ../.env")
-            if root_tok and auto_tok and root_tok != auto_tok:
-                print("   → Tokens DIFERENTES: o da raiz está sendo IGNORADO.")
-            elif root_tok and auto_tok and root_tok == auto_tok:
-                print("   → Mesmo token nos dois arquivos (redundante).")
-            print(f"\n   🎯 Token EFETIVO vem de: {ENV_AUTO}")
-            print("   Para usar só a raiz: rm MKT-Guardian-AUTO/.env")
-    elif ENV_ROOT.is_file():
-        winner = ENV_ROOT
-        effective = _read_meta_from_env(ENV_ROOT)
-        print(f"\n   🎯 Token EFETIVO vem de: {ENV_ROOT}")
-    else:
-        print("\n❌ Nenhum .env com META_ACCESS_TOKEN encontrado.")
-
-    return winner, effective
+        print(f"\n⚠️ Arquivo ignorado durante a transição: {ENV_AUTO}")
+    print(f"\n   🎯 Token EFETIVO vem de: {ENV_ROOT}")
+    return ENV_ROOT, effective
 
 
 def _shell_vs_file_warning(from_files: dict[str, str]) -> None:
@@ -116,7 +92,11 @@ def main() -> int:
     winner_path, from_files = _audit_env_files()
     _shell_vs_file_warning(from_files)
 
-    load_project_env()
+    try:
+        load_project_env()
+    except FileNotFoundError as exc:
+        print(f"\n❌ {exc}")
+        return 1
     token = os.getenv("META_ACCESS_TOKEN", "").strip()
     ig_user = os.getenv("META_IG_USER_ID", "").strip()
     app_id = os.getenv("META_APP_ID", "").strip()
@@ -134,12 +114,6 @@ def main() -> int:
         print(
             "\n⚠️  Shell com export antigo? "
             "Feche o terminal ou rode: unset META_ACCESS_TOKEN"
-        )
-
-    if file_tok and token == file_tok and token.endswith("4QZDZD"):
-        print(
-            "\n⚠️  Token no .env termina em …4QZDZD (expirou 30/07). "
-            "Cole o token novo (…6vtN06d) e salve o arquivo."
         )
 
     if not token:
@@ -165,8 +139,8 @@ def main() -> int:
         err = body["error"]
         print(f"\n❌ debug_token: {err.get('message')} (code={err.get('code')})")
         print("\n💡 A Meta rejeitou ESTE token literal. Próximos passos:")
-        print("   1) Confirme qual dos arquivos .env deve ser a fonte oficial")
-        print("   2) Graph API Explorer → token NOVO (não o EAAoJmoNlc…)")
+        print("   1) Confirme o arquivo oficial MKT_Guardian-AI/.env")
+        print("   2) Gere ou selecione um token válido no Graph API Explorer")
         print("   3) Troque por long-lived (curl fb_exchange_token)")
         print("   4) Cole só em MKT_Guardian-AI/.env")
         print("   5) python3 meta_token_check.py")
@@ -196,15 +170,6 @@ def main() -> int:
             print(f"   ❌ Restam apenas ~{dias:.0f} dias — provavelmente NÃO é long-lived")
         else:
             print(f"   ✓ Restam ~{dias:.0f} dias (long-lived OK)")
-
-    # Comparar raiz vs AUTO quando ambos existem
-    root_tok = _read_meta_from_env(ENV_ROOT).get("META_ACCESS_TOKEN", "")
-    auto_tok = _read_meta_from_env(ENV_AUTO).get("META_ACCESS_TOKEN", "")
-    if root_tok and auto_tok and root_tok != auto_tok:
-        print("\n🚨 DICOTOMIA: dois tokens diferentes nos .env")
-        print(f"   Raiz (../.env):  {_token_fingerprint(root_tok)}")
-        print(f"   AUTO (./.env):   {_token_fingerprint(auto_tok)}  ← ESTE está em uso")
-        print("   Alinhe os dois arquivos .env; não mantenha tokens diferentes.")
 
     needed = {"instagram_basic", "instagram_content_publish"}
     missing = needed - set(scopes)
@@ -244,15 +209,10 @@ def main() -> int:
     if expires_at:
         dias_restantes = (expires_at - datetime.now(tz=timezone.utc).timestamp()) / 86400
 
-    if root_tok and auto_tok and root_tok != auto_tok:
-        print("RESULTADO: ERRADO — AUTO/.env sobrescreve o long-lived da raiz.")
-        print("   Alinhe a fonte oficial dos arquivos .env e rode novamente o diagnóstico.")
-        return 1
-
     if dias_restantes is not None and dias_restantes < 30:
         print("RESULTADO: ERRADO — token abaixo do mínimo de 30 dias; renove para long-lived (60 dias).")
         print("   Cole o access_token do curl (expires_in: 5183999) em ../.env")
-        print("   Confira se termina com …GpMkx (ou sufixo do SEU curl), não …PaL4SU")
+        print("   Confirme a validade e a data de expiração retornadas pelo seu curl.")
         return 1
 
     print("RESULTADO: token OK para publicar (long-lived confirmado).")

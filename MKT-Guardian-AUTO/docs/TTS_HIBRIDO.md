@@ -36,7 +36,7 @@ ainda permite usar o outro em caso de falha. Para proibir essa troca, configure
 7. Crie uma chave de API exclusiva para o TTS.
 8. Restrinja a chave à **Cloud Text-to-Speech API**.
 9. Quando possível, restrinja também por IP do servidor.
-10. Adicione ao `.env` usado pela pasta `MKT-Guardian-AUTO`:
+10. Adicione ao arquivo oficial `.env` na raiz de `MKT_Guardian-AI`:
 
 ```dotenv
 GOOGLE_CLOUD_TTS_API_KEY=cole_a_chave_aqui
@@ -52,7 +52,7 @@ arquivo `.env`.
 2. Revogue a chave que está retornando HTTP 401.
 3. Crie uma chave exclusiva para o Guardian AI.
 4. Limite a permissão ao Text-to-Speech, se o painel oferecer essa opção.
-5. Adicione ao `.env`:
+5. Adicione ao arquivo oficial `.env` na raiz de `MKT_Guardian-AI`:
 
 ```dotenv
 ELEVENLABS_API_KEY=cole_a_nova_chave_aqui

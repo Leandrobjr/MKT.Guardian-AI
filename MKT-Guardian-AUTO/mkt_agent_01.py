@@ -10,7 +10,7 @@ import requests
 from PIL import Image, ImageDraw, ImageFont
 from google import genai
 from google.genai import types
-from dotenv import load_dotenv
+from env_loader import load_project_env
 
 from visual_variety import VisualVarietyEngine
 from channel_presets import resolve_channel_preset, format_preset_summary
@@ -60,7 +60,7 @@ class MediaFactory:
     ]
 
     def __init__(self):
-        load_dotenv(os.path.join(self.BASE_DIR, ".env"))
+        load_project_env()
         self.gemini_key = os.getenv("GEMINI_API_KEY")
         self.kling_key = os.getenv("KLING_API_KEY")
 

@@ -25,11 +25,11 @@ from typing import Any
 
 import aiohttp
 import requests
-from dotenv import load_dotenv
+from env_loader import load_project_env
 from build_info import MEDIA_FACTORY_VERSION, ORCHESTRATOR_VERSION
 from story_approval import format_story_telegram, story_keyboard
 
-load_dotenv()
+load_project_env()
 
 TELEGRAM_API = "https://api.telegram.org/bot"
 

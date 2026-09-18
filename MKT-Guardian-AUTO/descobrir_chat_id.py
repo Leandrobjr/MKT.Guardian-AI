@@ -13,10 +13,9 @@ import os
 import sys
 
 import requests
-from dotenv import load_dotenv
+from env_loader import load_project_env
 
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-load_dotenv(os.path.join(BASE_DIR, ".env"))
+load_project_env()
 
 TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "").strip()
 

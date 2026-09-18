@@ -3,11 +3,11 @@ import json
 import time
 from google import genai
 from google.genai import types
-from dotenv import load_dotenv
+from env_loader import load_project_env
 
 class TrafficManager:
     def __init__(self):
-        load_dotenv()
+        load_project_env()
         
         api_key = os.getenv("GEMINI_API_KEY")
         if not api_key:

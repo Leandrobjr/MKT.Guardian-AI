@@ -1,8 +1,10 @@
-# Plano de Melhoria da Criatividade — MKT Guardian AUTO
+# Plano Histórico de Melhoria da Criatividade — MKT Guardian AUTO
 
 **Objetivo:** elevar qualidade, diversidade e coerência dos posts — memória real de campanhas, headlines variadas, casting visual aspiracional (sem elitismo), golpes reais do dia a dia, e feedback que respeite a intenção do operador.
 
-**Status:** Fases 0–5 concluídas. **Fase 5 (Feedback narrativo) concluída** — v5.4.
+**Status:** documento histórico. As Fases 0–5 foram incorporadas ao sistema.
+O planejamento vigente está em
+`PLANO_IMPLEMENTACAO_CRIATIVOS_PROFISSIONAIS.md`, atualizado em 2026-09-19.
 
 **Referências:** `agent_memory.py`, `visual_variety.py`, `campaign_context_engine.py`, `campaign_orchestrator.py`, `feedback_router.py`, `contexto_negocio/GOLPES WHATSAPP.md`, `campanha_context_matrix.json`, `guardian_base.json`.
 
@@ -292,19 +294,19 @@ APPEARANCE STANDARD (mandatory):
 
 ---
 
-## 5. Priorização recomendada
+## 5. Priorização histórica
 
 ```
 Fase 0 ──► Fase 1 ──► Fase 2 ──► Fase 3 ──► Fase 4 ──► Fase 5 ──► Fase 6
   ⚡           🔥         🔥         🎨         📚         💬         📊
 ```
 
-**MVP criativo (2 semanas):** Fases 0 + 1 + 2 + 3  
-**Completude narrativa/golpes:** + Fase 4 + 5
+**MVP criativo histórico (2 semanas):** Fases 0 + 1 + 2 + 3
+**Completude narrativa/golpes histórica:** + Fase 4 + 5
 
 ---
 
-## 6. Riscos e mitigações
+## 6. Riscos e mitigações históricas
 
 | Risco | Mitigação |
 |---|---|

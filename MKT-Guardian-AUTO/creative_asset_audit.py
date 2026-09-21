@@ -399,6 +399,15 @@ def audit_creative_assets(
     _audit_visual_variation(audit, creative_data, config_for_variation, history)
     if visual_auditor is not None:
         _audit_visual_quality(audit, creative_data, config, assets, visual_auditor)
+    visual_quality = audit.metrics.get("visual_quality")
+    audit.metrics["qa_multimodal_passed"] = bool(
+        isinstance(visual_quality, dict)
+        and visual_quality.get("enabled")
+        and not visual_quality.get("skipped")
+        and visual_quality.get("passed")
+    )
+    if isinstance(visual_quality, dict):
+        audit.metrics["qa_multimodal_score"] = visual_quality.get("overall_score")
     audit.metrics["media_type"] = "video" if _is_video_media(config, creative_data) else "image"
     audit.recommended_stage = _recommended_stage_from_blocking(
         audit,

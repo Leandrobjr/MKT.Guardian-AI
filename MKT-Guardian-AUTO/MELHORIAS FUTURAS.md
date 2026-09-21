@@ -122,17 +122,16 @@ Token com `instagram_content_publish` e `instagram_basic`.
 
 ## 2. Melhoria da criatividade e memória de campanhas (macro)
 
-**Status:** Planejado — ver documento completo
+**Status:** Backlog complementar — a ordem de execução está no documento
+canônico `PLANO_IMPLEMENTACAO_CRIATIVOS_PROFISSIONAIS.md`.
 
 **Arquivo:** [`PLANO MELHORIA CRIATIVIDADE.md`](PLANO%20MELHORIA%20CRIATIVIDADE.md)
 
 **Resumo:** memória anti-repetição, rotação de headlines, casting visual (aparência bem apresentada), biblioteca de golpes reais (`GOLPES WHATSAPP.md`), feedback que respeita tipo de estória. Implementação em 6 fases (0–6); MVP em ~2 semanas (Fases 0–3).
 
-**Fase 0:** ✅ concluída (Orquestrador v4.7) — ver plano para detalhes.
-
-**Fase 1:** ✅ concluída (Orquestrador v5.0) — `campaign_history.py`, anti-repetição no prompt.
-
-**Próxima:** Fase 3 — Casting visual (24 personas, ambientes rotativos).
+As fases históricas 0–5 já foram incorporadas ao sistema. Permanecem como
+backlog complementar a publicação explícita de JPG no Feed e a separação entre
+Feed/JPG e Reel/MP4. A próxima etapa oficial não é definida neste arquivo.
 
 ---
 

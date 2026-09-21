@@ -6,6 +6,7 @@ import random
 import shutil
 import subprocess
 from datetime import datetime
+from typing import Any
 import requests
 from PIL import Image, ImageDraw, ImageFont
 from google import genai
@@ -1010,8 +1011,121 @@ class MediaFactory:
             "audio_regenerated": True,
         }
 
+    @staticmethod
+    def _visual_risk_profile(
+        creative_data: dict,
+        extra_text: str = "",
+    ) -> tuple[list[str], bool]:
+        source = (
+            " ".join(
+                str(creative_data.get(field) or "")
+                for field in (
+                    "direcao_arte_emocional",
+                    "texto_card_notificacao",
+                    "creative_brief",
+                    "storyboard",
+                    "tipo_midia_selecionada",
+                )
+            )
+            + f" {extra_text}"
+        ).lower()
+        flags: list[str] = []
+        if any(term in source for term in ("smartphone", "celular", "phone screen")):
+            flags.append("smartphone")
+        if "whatsapp" in source or "mensagem" in source:
+            flags.append("interface_mensagem")
+        if any(term in source for term in ("lower third", "terço inferior", "card")):
+            flags.append("overlays")
+        if any(term in source for term in ("texto legível", "texto na tela", "mockup")):
+            flags.append("texto_ou_mockup")
+        high_risk = len(flags) >= 3 and "smartphone" in flags
+        return flags, high_risk
+
+    def _generate_visual_candidates(
+        self,
+        prompt: str,
+        base_image_path: str,
+        creative_data: dict,
+        basename: str,
+        *,
+        visual_auditor: Any = None,
+        audit_config: dict | None = None,
+    ) -> dict:
+        flags, high_risk = self._visual_risk_profile(creative_data, prompt)
+        self._generate_gemini_image(
+            prompt,
+            base_image_path,
+            creative_data=creative_data,
+            basename=basename,
+        )
+        selection = {
+            "visual_candidate_count": 1,
+            "visual_candidate_selected": "primary",
+            "visual_risk_flags": flags,
+        }
+        if not high_risk or not os.path.isfile(base_image_path):
+            return selection
+
+        candidate_path = os.path.join(
+            self.work_dir,
+            f"{basename}_candidate2.jpg",
+        )
+        candidate_prompt = (
+            f"{prompt} "
+            "VISUAL CANDIDATE 2: create a clearly different composition while preserving "
+            "the exact protagonist gender, public, scam context, one physical smartphone, "
+            "safe margins and all post-production text restrictions."
+        )
+        self._generate_gemini_image(
+            candidate_prompt,
+            candidate_path,
+            creative_data=creative_data,
+            basename=f"{basename}_candidate2",
+        )
+        if not os.path.isfile(candidate_path):
+            return selection
+
+        selection["visual_candidate_count"] = 2
+        scored: list[tuple[float, str]] = []
+        if visual_auditor is not None:
+            for label, path in (("primary", base_image_path), ("candidate2", candidate_path)):
+                try:
+                    result = visual_auditor.audit(
+                        creative_data,
+                        audit_config or {},
+                        {"static_image_file": path},
+                    )
+                except Exception:
+                    continue
+                if getattr(result, "skipped", False):
+                    continue
+                score = float(getattr(result, "overall_score", 0) or 0)
+                if not getattr(result, "passed", False):
+                    score -= 2.0
+                scored.append((score, label))
+
+        selected = max(scored)[1] if scored else "primary"
+        if selected == "candidate2":
+            shutil.copyfile(candidate_path, base_image_path)
+        selection["visual_candidate_selected"] = selected
+        try:
+            os.remove(candidate_path)
+        except OSError:
+            pass
+        print(
+            f"🎯 Seleção visual: {selection['visual_candidate_count']} candidata(s), "
+            f"escolhida={selected}, risco={','.join(flags)}"
+        )
+        return selection
+
     def regenerate_visual_only(
-        self, creative_data: dict, prior_assets: dict, feedback: str = ""
+        self,
+        creative_data: dict,
+        prior_assets: dict,
+        feedback: str = "",
+        *,
+        visual_auditor: Any = None,
+        audit_config: dict | None = None,
     ) -> dict:
         """Nova imagem/vídeo estático — mantém copy, áudio e identidade aprovados."""
         print(f"\n🎨 [Fábrica v{MEDIA_FACTORY_VERSION}] Regerando visual (sem regerar copy/áudio)...")
@@ -1059,9 +1173,13 @@ class MediaFactory:
                     pass
 
         publicidade_prompt = self._build_visual_prompt(creative_data)
-        self._generate_gemini_image(
-            publicidade_prompt, base_image_path,
-            creative_data=creative_data, basename=basename,
+        visual_selection = self._generate_visual_candidates(
+            publicidade_prompt,
+            base_image_path,
+            creative_data,
+            basename,
+            visual_auditor=visual_auditor,
+            audit_config=audit_config,
         )
         if not os.path.isfile(base_image_path):
             print("❌ Falha ao regerar imagem Gemini.")
@@ -1095,6 +1213,7 @@ class MediaFactory:
             "base_image_file": base_image_path,
             "commercial_video_file": video_output_path if video_ok else prior_assets.get("commercial_video_file"),
             "visual_regenerated": True,
+            **visual_selection,
         }
 
     def regenerate_video_only(
@@ -1156,7 +1275,13 @@ class MediaFactory:
             "video_regenerated": True,
         }
 
-    def generate_campaign_assets(self, creative_data: dict) -> dict:
+    def generate_campaign_assets(
+        self,
+        creative_data: dict,
+        *,
+        visual_auditor: Any = None,
+        audit_config: dict | None = None,
+    ) -> dict:
         self.card_body_font_size = int(creative_data.get("overlay_card_font_size", 22))
         self.preset_midia = creative_data.get("preset_midia") or resolve_channel_preset(
             creative_data.get("canal_veiculacao_selecionado", ""),
@@ -1222,6 +1347,11 @@ class MediaFactory:
             overlay_png,
             headline, alerta_texto, solucao_texto, cta_texto, url_conversao, frases_destaque,
         )
+        visual_selection = {
+            "visual_candidate_count": 1,
+            "visual_candidate_selected": "not_applicable",
+            "visual_risk_flags": self._visual_risk_profile(creative_data)[0],
+        }
 
         if "Vídeo" in formato_midia:
             print("🎬 Solicitando clipe Kling AI...")
@@ -1259,9 +1389,13 @@ class MediaFactory:
                         print("❌ Vídeo NÃO gerado — overlay ou áudio inválido.")
             else:
                 print("⚠️ Fallback: Kling indisponível — gerando vídeo com imagem estática + overlay Guardian...")
-                self._generate_gemini_image(
-                    publicidade_prompt, base_image_path,
-                    creative_data=creative_data, basename=names["basename"],
+                visual_selection = self._generate_visual_candidates(
+                    publicidade_prompt,
+                    base_image_path,
+                    creative_data,
+                    names["basename"],
+                    visual_auditor=visual_auditor,
+                    audit_config=audit_config,
                 )
                 if self._audio_ok(audio_final_path):
                     duration = self._get_audio_duration(audio_final_path)
@@ -1291,12 +1425,17 @@ class MediaFactory:
                 "kling_raw_file": video_bruto_path if video_bruto_path and os.path.exists(video_bruto_path) else "",
                 "base_image_file": base_image_path if os.path.exists(base_image_path) else "",
                 "tts_provider": getattr(self, "last_tts_provider", ""),
+                **visual_selection,
             }
 
         print("🖼️ Fluxo de imagem estática...")
-        self._generate_gemini_image(
-            publicidade_prompt, base_image_path,
-            creative_data=creative_data, basename=names["basename"],
+        visual_selection = self._generate_visual_candidates(
+            publicidade_prompt,
+            base_image_path,
+            creative_data,
+            names["basename"],
+            visual_auditor=visual_auditor,
+            audit_config=audit_config,
         )
         self._apply_pillow_layout(
             base_image_path, final_design_path,
@@ -1330,6 +1469,7 @@ class MediaFactory:
             "kling_raw_file": "",
             "base_image_file": base_image_path if os.path.exists(base_image_path) else "",
             "tts_provider": getattr(self, "last_tts_provider", ""),
+            **visual_selection,
         }
 
     def _generate_kling_video(

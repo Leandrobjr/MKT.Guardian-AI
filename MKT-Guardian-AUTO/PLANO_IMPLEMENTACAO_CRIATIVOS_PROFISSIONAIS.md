@@ -51,6 +51,28 @@ O projeto ainda precisa melhorar:
 - aprovação pelo Desktop;
 - publicação e registro dos resultados.
 
+
+
+### Status revisado em 2026-09-19
+
+Este documento é a fonte canônica do planejamento. A implementação estrutural
+das Fases 1–4, 6, 9 e 11 já existe no código e possui testes automatizados.
+As Fases 0, 5, 7, 8 e 10 ainda exigem validação operacional ou complementos:
+
+- Fase 0: baseline registrado em 2026-09-19, com média 3,38/5 em 10 criativos;
+- Fase 5: seleção de duas candidatas foi implementada para risco visual elevado;
+- Fase 7: a QA multimodal passou a ser requisito obrigatório para publicação;
+  `GEMINI_QA_REQUIRED` continua controlando o bloqueio antecipado antes da
+  aprovação editorial, mas nenhum publicador aceita campanha sem evidência QA;
+- Fase 8: o Desktop ainda não possui o fluxo editorial completo de aprovar,
+rejeitar e solicitar ajuste;
+- Fase 10: falta concluir o teste controlado de publicação no Instagram e
+separar explicitamente Feed/JPG de Reel/MP4.
+
+A ponte Supabase, o catálogo local, o worker Linux e a interface Desktop estão
+implementados, mas ainda precisam de um ensaio integrado sem publicação e de
+um teste real controlado antes de serem considerados produção.
+
 ## 3. Decisão sobre o stack
 
 Não substituir todo o stack imediatamente.
@@ -107,7 +129,11 @@ Publicar na rede selecionada
 Registrar resultado e métricas
 ```
 
+
+
 ## 5. Fases de implementação
+
+
 
 ### Fase 0 — Diagnóstico e medição
 
@@ -179,6 +205,8 @@ Também deverá salvar no registro:
 - tipo de trilha;
 - velocidade da narração.
 
+
+
 ### Fase 3 — Storyboard profissional
 
 Para vídeos, gerar de 3 a 5 cenas.
@@ -201,6 +229,8 @@ Cada cena deverá conter:
 - texto permitido;
 - transição;
 - objetivo narrativo.
+
+
 
 ### Fase 4 — Casting e referências visuais
 
@@ -226,6 +256,8 @@ O sistema deverá evitar:
 - mãos erradas;
 - ambientes incoerentes;
 - personagem incompatível com o roteiro.
+
+
 
 ### Fase 5 — Geração em múltiplas etapas
 
@@ -314,6 +346,8 @@ Implementar a segunda aprovação também no Desktop, com:
 - rejeição;
 - histórico de versões.
 
+
+
 ### Fase 9 — Catálogo de campanhas
 
 Criar um registro oficial para cada campanha.
@@ -352,7 +386,11 @@ ERRO_PUBLICACAO
 REJEITADA
 ```
 
+
+
 ### Fase 10 — Publicação
+
+
 
 #### Meta
 
@@ -546,8 +584,7 @@ texto exato fica sob responsabilidade do compositor determinístico, evitando
 artefatos de caracteres gerados por IA.
 
 **Correção v5.55:** para o público Pais, a headline de voz clonada identifica
-explicitamente o alvo familiar: `VOZ CLONADA PODE PEDIR PIX EM NOME DE SEU
-FILHO!`. Outros públicos mantêm formulação familiar genérica.
+explicitamente o alvo familiar: `VOZ CLONADA PODE PEDIR PIX EM NOME DE SEU FILHO!`. Outros públicos mantêm formulação familiar genérica.
 
 **Correção v5.56:** a direção visual e a QA passaram a exigir que o telefone e
 sua tela fiquem totalmente dentro do enquadramento, com margem visível e sem
@@ -623,6 +660,8 @@ erro.
 - usar HTTPS;
 - manter aprovações de comandos do Cursor ativadas.
 
+
+
 ## 7. Critérios de sucesso
 
 Uma campanha só será considerada pronta quando:
@@ -647,24 +686,22 @@ Metas iniciais:
 - redução progressiva de campanhas rejeitadas por incoerência;
 - registro de 100% das campanhas e publicações.
 
+
+
 ## 8. Ordem prática de execução
 
-1. Confirmar o ambiente remoto no Cursor.
-2. Fazer backup e verificar o Git.
-3. Executar a auditoria de 10 criativos.
-4. Implementar validação de canal e mídia.
-5. Implementar o brief estruturado.
-6. Implementar storyboard.
-7. Melhorar referências visuais e casting.
-8. Criar templates.
-9. Criar auditoria automática.
-10. Implementar catálogo de campanhas.
-11. Implementar aprovação no Desktop.
-12. Testar publicação Meta.
-13. Implementar publicação manual TikTok.
-14. Criar fila Desktop ↔ Linux.
-15. Avaliar fornecedores alternativos.
-16. Só então decidir se algum modelo será substituído.
+1. Consolidar a documentação e manter este arquivo como fonte canônica.
+2. Gerar o baseline mensurado de 10 criativos reais.
+3. Calibrar e tornar obrigatória a QA multimodal para publicação.
+4. Implementar a seleção da melhor imagem entre duas opções controladas.
+5. Completar aprovação, rejeição e solicitação de ajuste no Desktop.
+6. Executar o fluxo Supabase completo em `dry-run`.
+7. Testar publicação real controlada no Instagram.
+8. Separar publicação de Feed/JPG e Reel/MP4; manter TikTok manual.
+9. Implementar coleta de métricas pós-publicação.
+10. Avaliar fornecedores alternativos somente após medir o baseline.
+
+
 
 ## 9. Primeiro trabalho no Cursor remoto
 

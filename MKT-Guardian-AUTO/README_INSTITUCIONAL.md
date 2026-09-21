@@ -1,6 +1,6 @@
 # MKT Guardian AI — Fábrica Automatizada de Campanhas Digitais
 
-**Versão do sistema:** Orquestrador v4.5 · Fábrica de Mídia v18.4  
+**Versão do sistema:** Orquestrador v5.64 · Fábrica de Mídia v18.12
 **Produto promovido:** [Guardian AI](https://guardian-ai.app) — proteção inteligente contra golpes no WhatsApp  
 **Repositório:** MKT-Guardian-AUTO (dentro do projeto MKT.Guardian-AI)
 
@@ -33,10 +33,11 @@ O MKT Guardian AI automatiza a produção mantendo **contexto por público × ti
 | **Geração de copy persuasiva** | Roteiros em framework PAS (Problema → Agitação → Solução), manchetes de impacto, CTAs e mensagens simuladas de golpistas no WhatsApp |
 | **Contexto inteligente por campanha** | Narrativa, ganchos, cena visual e CTA adaptados à combinação público-alvo + tipo de golpe (ex.: escolas + grooming ≠ pais + PIX) |
 | **Produção de imagem estática** | Fotos publicitárias geradas por IA (formato feed 1:1) com overlay de marca: headline, card de alerta, card Guardian AI e botão de conversão |
-| **Produção de vídeo comercial** | Vídeos verticais 9:16 com narração ElevenLabs, trilha sonora, movimento (Kling AI ou fallback estático) e identidade visual Guardian |
+| **Produção de vídeo comercial** | Vídeos verticais 9:16 com narração híbrida, trilha sonora, movimento (Kling AI ou fallback estático) e identidade visual Guardian |
 | **Presets por canal** | Meta Reels (tom pausado, ~32s), TikTok/Shorts (urgente, ~18s) ou feed quadrado — cada um com voz, trilha e layout calibrados |
 | **Aprovação da estória (pré-produção)** | Valida roteiro e contexto **antes** de gerar vídeo/áudio, economizando APIs |
-| **Aprovação do criativo final** | Via terminal ou bot Telegram: aprovar, melhorar ou rejeitar |
+| **Aprovação do criativo final** | Via terminal, Desktop ou bot Telegram quando configurado |
+| **Narração híbrida** | Google Chirp 3 HD e ElevenLabs com prioridade por canal e fallback automático |
 | **Memória de aprendizado** | Registra correções, aprovações e rejeições para refinar campanhas futuras |
 | **Publicação Instagram** | Integração opcional com Meta Graph API (Reels e imagens) após aprovação |
 | **Estrutura de tráfego Meta** | Mapeamento técnico de segmentação (idade, interesses) para campanhas pagas |
@@ -90,7 +91,7 @@ O operador configura a campanha escolhendo:
 4. **Aprovação da estória** — Quando ativada (`STORY_APPROVAL=1`), o operador revisa headline, roteiro, card golpista e cena **sem consumir APIs de vídeo/voz**. Pode aprovar, melhorar (reescrever) ou rejeitar.
 
 5. **Produção de mídia** — A Fábrica de Mídia executa:
-   - Narração via **ElevenLabs** (voz neural multilíngue)
+   - Narração via roteador híbrido (**Google Chirp 3 HD** ou **ElevenLabs**)
    - Mixagem com trilha (suspense ou corporativa)
    - Imagem base via **Gemini Image**
    - Vídeo via **Kling AI 3.0 Turbo** (com fallback para vídeo estático + zoom Ken Burns)
@@ -194,7 +195,7 @@ Cada combinação **público + golpe** possui narrativa, frases-modelo e direç�
 
 | Canal | Tecnologia |
 |-------|------------|
-| Aprovação remota | Telegram Bot API |
+| Aprovação remota | Telegram Bot API e Desktop via Supabase |
 | Instagram | Meta Graph API v21.0 + ImgBB (hospedagem temporária de imagem) |
 | Meta Ads (estrutura) | facebook-business SDK |
 | TikTok | Preset de produção ativo; API de postagem em configuração |
@@ -264,12 +265,14 @@ Wizard completo das 6 etapas, aprovação da estória, aprovação do criativo e
 
 | Integração | Status |
 |------------|--------|
-| Geração copy + mídia | ✅ Produção |
-| Aprovação estória + criativo | ✅ Produção |
-| Bot Telegram | ✅ Produção |
-| Publicação Instagram | ✅ Opcional (requer tokens Meta) |
+| Geração copy + mídia | ✅ Implementado |
+| Aprovação estória + criativo | ⚠️ Terminal implementado; Desktop e Telegram aguardam validação operacional |
+| Bot Telegram | ⚠️ Código implementado; `TELEGRAM_CHAT_ID` ainda pendente |
+| Publicação Instagram | ⚠️ Código e preflight implementados; teste controlado pendente |
 | Estrutura Meta Ads | ✅ Dry-run / JSON de segmentação |
-| Publicação TikTok (Content Posting API) | 🔜 Em configuração (domínio + tokens) |
+| Ponte Linux ↔ Desktop/Supabase | ⚠️ Implementada; ensaio integrado pendente |
+| Publicação TikTok (Content Posting API) | ⚠️ Pacote manual implementado; API direta depende de aprovação |
+| Feed/JPG separado de Reel/MP4 | 📋 Pendente |
 | YouTube Shorts API | 📋 Planejado |
 
 ---

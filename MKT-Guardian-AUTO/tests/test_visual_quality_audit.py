@@ -157,6 +157,36 @@ class TestVisualQualityAudit(unittest.TestCase):
         self.assertTrue(result.passed)
         self.assertEqual(client.models.calls, 0)
 
+    def test_qa_obrigatoria_reprova_quando_gemini_indisponivel(self):
+        client = _FakeClient(_FakeResponse("{}"))
+        auditor = GeminiVisualQualityAuditor(client, enabled=False, required=True)
+
+        result = auditor.audit(
+            self.creative,
+            self.config,
+            {"static_image_file": self.image},
+        )
+
+        self.assertTrue(result.skipped)
+        self.assertFalse(result.passed)
+        self.assertEqual(client.models.calls, 0)
+
+    def test_prompt_reprova_texto_inventado_na_cena_base(self):
+        payload = {"overall_score": 9, "checks": _checks(9)}
+        client = _FakeClient(_FakeResponse(json.dumps(payload)))
+        auditor = GeminiVisualQualityAuditor(client)
+
+        auditor.audit(
+            self.creative,
+            self.config,
+            {"static_image_file": self.image},
+        )
+
+        prompt = client.models.last_kwargs["contents"][0]
+        self.assertIn("texto", prompt)
+        self.assertIn("inventado pela IA", prompt)
+        self.assertIn("bolha de conversa", prompt)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -43,7 +43,8 @@ class FakeBridge:
 
 
 class FakePublisher:
-    def postar_asset(self, _asset_path, _caption):
+    def postar_asset(self, _asset_path, _caption, *, qa_evidence=None):
+        assert qa_evidence and qa_evidence.get("multimodal_passed") is True
         return {"ok": True, "post_id": "media-123"}
 
 
@@ -73,13 +74,29 @@ class TestCampaignCommandWorker(unittest.TestCase):
             "APROVADA",
             config,
             creative,
-            {"commercial_video_file": self.asset},
+            {
+                "commercial_video_file": self.asset,
+                "qa_evidence": {
+                    "multimodal_available": True,
+                    "multimodal_passed": True,
+                    "overall_score": 9,
+                    "model": "fake",
+                },
+            },
         )
         self.remote = {
             "campaign_id": "camp_worker",
             "status": "APROVADA",
             "canal": "Meta Instagram",
             "legenda": "Alerta.",
+            "metadata": {
+                "qa": {
+                    "multimodal_available": True,
+                    "multimodal_passed": True,
+                    "overall_score": 9,
+                    "model": "fake",
+                }
+            },
         }
         self.bridge = FakeBridge(self.tmp, self.remote)
         self.bridge.commands = [
@@ -152,6 +169,21 @@ class TestCampaignCommandWorker(unittest.TestCase):
 
         self.assertFalse(result[0]["ok"])
         self.assertIn("manual", result[0]["error"])
+
+    def test_bloqueia_publicacao_sem_qa_multimodal(self):
+        self.bridge.campaign = {**self.remote, "metadata": {}}
+        worker = CampaignCommandWorker(
+            self.tmp,
+            bridge=self.bridge,
+            catalog=self.catalog,
+            publisher_factory=FakePublisher,
+        )
+
+        result = worker.run_once(dry_run=False)
+
+        self.assertFalse(result[0]["ok"])
+        self.assertIn("QA multimodal", result[0]["error"])
+        self.assertEqual(self.bridge.claimed, 1)
 
 
 if __name__ == "__main__":

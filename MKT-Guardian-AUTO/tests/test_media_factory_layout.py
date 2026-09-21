@@ -35,6 +35,28 @@ class TestMediaFactoryLayout(unittest.TestCase):
 
         self.assertEqual(factory._scaled_font_size(19, min_size=13), 19)
 
+    def test_risco_visual_alto_exige_duas_candidatas(self):
+        flags, high_risk = MediaFactory._visual_risk_profile(
+            {
+                "direcao_arte_emocional": (
+                    "one physical smartphone, WhatsApp interface, lower third cards"
+                ),
+                "texto_card_notificacao": "Mensagem urgente",
+            }
+        )
+
+        self.assertTrue(high_risk)
+        self.assertIn("smartphone", flags)
+        self.assertIn("interface_mensagem", flags)
+        self.assertIn("overlays", flags)
+
+    def test_cena_sem_celular_nao_exige_duas_candidatas(self):
+        _flags, high_risk = MediaFactory._visual_risk_profile(
+            {"direcao_arte_emocional": "empresário em reunião presencial"}
+        )
+
+        self.assertFalse(high_risk)
+
     def test_extrai_metricas_loudnorm_para_segunda_passagem(self):
         stats = MediaFactory._parse_loudnorm_stats(
             """

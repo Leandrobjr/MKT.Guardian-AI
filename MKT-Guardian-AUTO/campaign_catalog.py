@@ -109,6 +109,7 @@ class CampaignCatalog:
             else max(int(previous.get("version", 0)), revision)
         )
         preset = config.get("preset_midia") or creative_data.get("preset_midia") or {}
+        qa_evidence = assets.get("qa_evidence") or {}
         caption = (
             creative_data.get("caption")
             or config.get("_caption")
@@ -146,6 +147,12 @@ class CampaignCatalog:
             "headline": _safe_text(creative_data.get("gancho_atencao_inicial"), 500),
             "revisao": int(revision if revision is not None else config.get("_revision", 0)),
             "ator": _safe_text(actor, 120),
+            "qa": {
+                "multimodal_available": bool(qa_evidence.get("multimodal_available")),
+                "multimodal_passed": bool(qa_evidence.get("multimodal_passed")),
+                "overall_score": qa_evidence.get("overall_score"),
+                "model": _safe_text(qa_evidence.get("model"), 120),
+            },
             "atualizado_em": now,
         }
 

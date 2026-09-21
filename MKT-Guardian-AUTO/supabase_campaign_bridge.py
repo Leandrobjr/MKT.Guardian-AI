@@ -175,6 +175,7 @@ class SupabaseCampaignBridge:
                 "revisao": int(record.get("revisao", 0)),
                 "ator": _clean(record.get("ator"), 120),
                 "asset_available": bool(asset_path),
+                "qa": record.get("qa") or {},
             },
             "plataforma": _clean(record.get("plataforma"), 80),
             "id_retornado": _clean(record.get("id_retornado"), 300),

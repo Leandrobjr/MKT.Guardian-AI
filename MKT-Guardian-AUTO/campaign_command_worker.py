@@ -97,6 +97,16 @@ class CampaignCommandWorker:
                 error=f"Status remoto não permite publicação: {remote_status}.",
             )
 
+        qa = (campaign.get("metadata") or {}).get("qa") or {}
+        if qa.get("multimodal_passed") is not True:
+            return self._finish(
+                command_id,
+                False,
+                dry_run,
+                campaign_id=campaign_id,
+                error="QA multimodal obrigatória não aprovada para publicação.",
+            )
+
         channel = str(campaign.get("canal") or "").lower()
         if "tiktok" in channel:
             return self._finish(
@@ -161,7 +171,11 @@ class CampaignCommandWorker:
                 "PUBLICANDO",
                 asset_path=asset_path,
             )
-            result = self.publisher_factory().postar_asset(asset_path, caption)
+            result = self.publisher_factory().postar_asset(
+                asset_path,
+                caption,
+                qa_evidence=qa,
+            )
             if result.get("ok"):
                 returned_id = str(result.get("post_id") or "")
                 self.bridge.update_campaign_publication(

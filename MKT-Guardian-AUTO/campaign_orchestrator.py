@@ -1774,6 +1774,17 @@ class CampaignOrchestrator:
             history=self.history,
             visual_auditor=self.visual_quality_auditor,
         )
+        visual_quality = audit.metrics.get("visual_quality") or {}
+        assets_resultado["qa_evidence"] = {
+            "multimodal_available": bool(
+                visual_quality.get("enabled") and not visual_quality.get("skipped")
+            ),
+            "multimodal_passed": bool(
+                audit.metrics.get("qa_multimodal_passed")
+            ),
+            "overall_score": visual_quality.get("overall_score"),
+            "model": visual_quality.get("model", ""),
+        }
         print(f"\n{format_audit_result(audit)}")
         if audit.ok:
             return audit
@@ -2337,7 +2348,11 @@ class CampaignOrchestrator:
                 print(f"\n🎨 Regerando só imagem/vídeo (copy e áudio aprovados — revisão {revisao})...")
                 creative_data = self._apply_locked_identity(creative_data, config)
                 assets_resultado = self.media_factory.regenerate_visual_only(
-                    creative_data, assets_resultado, visual_feedback
+                    creative_data,
+                    assets_resultado,
+                    visual_feedback,
+                    visual_auditor=self.visual_quality_auditor,
+                    audit_config=config,
                 )
                 visual_only_next = False
                 visual_feedback = ""
@@ -2359,7 +2374,11 @@ class CampaignOrchestrator:
                         actor="human",
                     )
                     return
-                assets_resultado = self.media_factory.generate_campaign_assets(creative_data)
+                assets_resultado = self.media_factory.generate_campaign_assets(
+                    creative_data,
+                    visual_auditor=self.visual_quality_auditor,
+                    audit_config=config,
+                )
                 self.visual_variety.print_qa_checklist(creative_data)
                 self._catalog_update(
                     campaign_id,
@@ -2764,6 +2783,20 @@ class CampaignOrchestrator:
                     )
                     print(f"❌ Falha ao exportar pacote TikTok: {resultado.get('erro')}")
             elif self.publisher:
+                qa_evidence = assets_resultado.get("qa_evidence") or {}
+                if not qa_evidence.get("multimodal_passed"):
+                    self._catalog_update(
+                        campaign_id,
+                        "ERRO_PUBLICACAO",
+                        config,
+                        creative_data,
+                        assets_resultado,
+                        revision=revisao,
+                        platform="Instagram",
+                        error_message="QA multimodal obrigatória não aprovada.",
+                    )
+                    print("❌ Publicação bloqueada: QA multimodal obrigatória não aprovada.")
+                    return
                 if not self.catalog.can_publish(campaign_id):
                     self._catalog_update(
                         campaign_id,
@@ -2789,7 +2822,11 @@ class CampaignOrchestrator:
                 caption = self._montar_caption_instagram(creative_data)
                 if not is_video_media(config.get("midia", "")) and asset_path.lower().endswith((".jpg", ".jpeg", ".png")):
                     print(f"📤 [Meta] Publicando imagem estática (Feed): {os.path.basename(asset_path)}")
-                resultado = self.publisher.postar_asset(asset_path, caption)
+                resultado = self.publisher.postar_asset(
+                    asset_path,
+                    caption,
+                    qa_evidence=qa_evidence,
+                )
                 if resultado.get("ok"):
                     self._catalog_update(
                         campaign_id,

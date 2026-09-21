@@ -168,6 +168,11 @@ def main() -> int:
         "token + permissões + conta profissional",
     )
     ok_all &= check(
+        "Gate QA multimodal para publicação",
+        hasattr(MetaPublisher, "_validate_qa_evidence"),
+        "publicação sem evidência QA é bloqueada",
+    )
+    ok_all &= check(
         "Exportação manual TikTok",
         callable(export_tiktok_package),
         "sem publicação automática",

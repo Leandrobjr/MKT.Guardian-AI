@@ -23,6 +23,7 @@ from env_loader import load_project_env
 BASE = Path(__file__).resolve().parent
 OUTPUT = BASE / "output_campanha"
 APROVADOS = BASE / "contexto_negocio" / "memoria" / "aprovados.jsonl"
+CATALOGO = BASE / "contexto_negocio" / "memoria" / "catalogo_campanhas.jsonl"
 HASHTAGS = "#guardianai #segurancadigital #golpewhatsapp #whatsapp #pix #golpe"
 URL = "https://guardian-ai.app"
 
@@ -106,6 +107,33 @@ def _montar_caption(headline: str, copy: str = "") -> str:
     return f"{h}\n\n{body[:800]}\n\nBaixe grátis — {URL}\n\n{HASHTAGS}"
 
 
+def _load_qa_evidence(asset_path: str, basename: str) -> dict:
+    """Obtém QA e estado do catálogo antes de permitir publicação manual."""
+    if not CATALOGO.is_file():
+        return {}
+    target = os.path.realpath(asset_path)
+    latest: dict = {}
+    with open(CATALOGO, encoding="utf-8") as file:
+        for line in file:
+            try:
+                row = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            row_path = str(row.get("asset_path") or "")
+            if (
+                row.get("campaign_id")
+                and (
+                    os.path.realpath(row_path) == target
+                    or row_path.endswith(f"/{basename}")
+                    or row.get("basename") == basename
+                )
+            ):
+                latest = row
+    if latest.get("status") not in {"APROVADA", "PRONTA_PARA_PUBLICAR", "ERRO_PUBLICACAO"}:
+        return {}
+    return latest.get("qa") or {}
+
+
 def _listar_candidatos() -> None:
     print("📂 output_campanha/ (mp4 mais recentes):")
     mp4s = sorted(OUTPUT.glob("*.mp4"), key=lambda p: p.stat().st_mtime, reverse=True)
@@ -174,6 +202,15 @@ def main() -> int:
     print(f"📝 Headline: {headline or '(padrão)'}")
     print(f"📄 Legenda (início): {caption[:120]}…\n")
 
+    qa_evidence = _load_qa_evidence(asset_path, basename)
+    if qa_evidence.get("multimodal_passed") is not True:
+        print("❌ Publicação bloqueada: o asset não possui QA multimodal aprovada no catálogo.")
+        return 1
+    print(
+        f"✅ QA multimodal aprovada"
+        f" ({qa_evidence.get('overall_score', 'nota não informada')}/10).\n"
+    )
+
     if args.dry_run:
         print("(--dry-run: nada foi publicado)")
         return 0
@@ -190,7 +227,11 @@ def main() -> int:
         print(f"❌ {token_err['erro']}")
         return 1
 
-    resultado = publisher.postar_asset(asset_path, caption)
+    resultado = publisher.postar_asset(
+        asset_path,
+        caption,
+        qa_evidence=qa_evidence,
+    )
     if resultado.get("ok"):
         print(f"\n✅ Reel publicado! ID: {resultado.get('post_id')}")
         return 0

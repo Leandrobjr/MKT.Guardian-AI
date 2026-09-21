@@ -35,6 +35,8 @@ python3 campaign_command_worker.py
 ```
 
 O comando acima faz apenas `dry-run`. A execução real exige `--execute`.
+Mesmo com confirmação humana, o worker bloqueia campanhas sem QA multimodal
+aprovada registrada no metadata.
 
 Em produção, hospede a interface em HTTPS e fixe a versão do cliente
 `supabase-js` no processo de build.

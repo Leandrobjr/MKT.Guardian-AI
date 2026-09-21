@@ -1,4 +1,4 @@
-"""QA multimodal opcional para imagem e vídeo finais."""
+"""QA multimodal de imagem e vídeo finais."""
 
 from __future__ import annotations
 
@@ -229,7 +229,10 @@ class GeminiVisualQualityAuditor:
             "segunda tela, interface flutuante, close-up/inserção de tela ou aparelho atrás "
             "dos cards. Os cards inferiores de alerta e solução adicionados na pós-produção "
             "não contam como aparelhos. Verifique também se os textos pós-produzidos estão "
-            "legíveis, se o CTA é claro, se o logo está presente e se não há deformações."
+            "legíveis, se o CTA é claro, se o logo está presente e se não há deformações. "
+            "Reprove qualquer texto, bolha de conversa, logo ou rótulo legível "
+            "inventado pela IA dentro da cena-base; textos permitidos devem aparecer "
+            "somente nos overlays da pós-produção."
         )
         try:
             response = self.client.models.generate_content(

@@ -289,10 +289,25 @@ class MetaPublisher:
                 last_err = str(e)
         return {"ok": False, "erro": last_err}
 
-    def postar_reel(self, caminho_video: str, caption: str) -> dict:
+    @staticmethod
+    def _validate_qa_evidence(qa_evidence: dict | None) -> str:
+        if not isinstance(qa_evidence, dict) or qa_evidence.get("multimodal_passed") is not True:
+            return "QA multimodal obrigatória não aprovada para publicação."
+        return ""
+
+    def postar_reel(
+        self,
+        caminho_video: str,
+        caption: str,
+        *,
+        qa_evidence: dict | None = None,
+    ) -> dict:
         asset_error = self._validate_asset_path(caminho_video)
         if asset_error or not caminho_video.lower().endswith(".mp4"):
             return {"ok": False, "erro": asset_error or "Asset de vídeo inválido."}
+        qa_error = self._validate_qa_evidence(qa_evidence)
+        if qa_error:
+            return {"ok": False, "erro": qa_error}
         preflight = self.preflight()
         if not preflight.get("ok"):
             print(f"❌ [Meta] {preflight.get('erro', 'Preflight falhou.')}")
@@ -311,10 +326,19 @@ class MetaPublisher:
             print(f"✅ [Meta] Reel publicado! ID: {resultado.get('post_id')}")
         return resultado
 
-    def postar_imagem(self, caminho_imagem: str, caption: str) -> dict:
+    def postar_imagem(
+        self,
+        caminho_imagem: str,
+        caption: str,
+        *,
+        qa_evidence: dict | None = None,
+    ) -> dict:
         asset_error = self._validate_asset_path(caminho_imagem)
         if asset_error or caminho_imagem.lower().endswith(".mp4"):
             return {"ok": False, "erro": asset_error or "Asset de imagem inválido."}
+        qa_error = self._validate_qa_evidence(qa_evidence)
+        if qa_error:
+            return {"ok": False, "erro": qa_error}
         preflight = self.preflight()
         if not preflight.get("ok"):
             print(f"❌ [Meta] {preflight.get('erro', 'Preflight falhou.')}")
@@ -343,10 +367,16 @@ class MetaPublisher:
         except Exception as e:
             return {"ok": False, "erro": str(e)}
 
-    def postar_asset(self, asset_path: str, caption: str) -> dict:
+    def postar_asset(
+        self,
+        asset_path: str,
+        caption: str,
+        *,
+        qa_evidence: dict | None = None,
+    ) -> dict:
         asset_error = self._validate_asset_path(asset_path)
         if asset_error:
             return {"ok": False, "erro": asset_error}
         if asset_path.lower().endswith(".mp4"):
-            return self.postar_reel(asset_path, caption)
-        return self.postar_imagem(asset_path, caption)
+            return self.postar_reel(asset_path, caption, qa_evidence=qa_evidence)
+        return self.postar_imagem(asset_path, caption, qa_evidence=qa_evidence)

@@ -62,6 +62,15 @@ class TestMetaPublisher(unittest.TestCase):
         self.assertIn("Extensão", result["erro"])
         publisher.preflight.assert_not_called()
 
+    def test_publicacao_valida_exige_qa_multimodal(self):
+        publisher = self._publisher()
+        publisher.preflight = Mock(return_value={"ok": True})
+        with tempfile.NamedTemporaryFile(suffix=".mp4") as file:
+            result = publisher.postar_asset(file.name, "legenda")
+        self.assertFalse(result["ok"])
+        self.assertIn("QA multimodal", result["erro"])
+        publisher.preflight.assert_not_called()
+
 
 if __name__ == "__main__":
     unittest.main()

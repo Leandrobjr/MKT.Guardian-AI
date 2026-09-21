@@ -17,6 +17,9 @@ python3 campaign_command_worker.py
 
 Esse comando executa `dry-run` por padrão. A opção `--execute` é necessária
 para uma publicação real e exige que a aprovação humana já esteja registrada.
+Além da aprovação humana, o worker exige `metadata.qa.multimodal_passed=true`.
+Campanhas sem QA multimodal aprovada são bloqueadas, mesmo que estejam em
+`APROVADA` ou `PRONTA_PARA_PUBLICAR`.
 O worker automatiza Meta/Instagram; TikTok continua exigindo o pacote manual.
 
 ## Configuração do Linux

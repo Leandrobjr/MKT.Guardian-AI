@@ -129,7 +129,7 @@ def _load_qa_evidence(asset_path: str, basename: str) -> dict:
                 )
             ):
                 latest = row
-    if latest.get("status") not in {"APROVADA", "PRONTA_PARA_PUBLICAR", "ERRO_PUBLICACAO"}:
+    if latest.get("status") != "APROVADA":
         return {}
     return latest.get("qa") or {}
 

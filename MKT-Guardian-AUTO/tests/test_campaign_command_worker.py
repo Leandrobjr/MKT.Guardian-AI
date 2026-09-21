@@ -121,10 +121,12 @@ class TestCampaignCommandWorker(unittest.TestCase):
                     "model": "fake",
                 },
             },
+            actor="human",
         )
         self.remote = {
             "campaign_id": "camp_worker",
             "status": "APROVADA",
+            "aprovado_por": "11111111-1111-1111-1111-111111111111",
             "canal": "Meta Instagram",
             "legenda": "Alerta.",
             "metadata": {
@@ -224,6 +226,23 @@ class TestCampaignCommandWorker(unittest.TestCase):
         self.assertFalse(result[0]["ok"])
         self.assertIn("QA multimodal", result[0]["error"])
         self.assertEqual(self.bridge.claimed, 1)
+
+    def test_bloqueia_publicacao_sem_aprovacao_humana(self):
+        self.bridge.campaign = {
+            **self.remote,
+            "status": "PRONTA_PARA_PUBLICAR",
+        }
+        worker = CampaignCommandWorker(
+            self.tmp,
+            bridge=self.bridge,
+            catalog=self.catalog,
+            publisher_factory=FakePublisher,
+        )
+
+        result = worker.run_once(dry_run=False)
+
+        self.assertFalse(result[0]["ok"])
+        self.assertIn("Status remoto", result[0]["error"])
 
     def test_processa_aprovacao_editorial(self):
         self.bridge.campaign = {

@@ -62,6 +62,7 @@ class FakeClient:
                     {
                         "campaign_id": "camp_desktop",
                         "status": "APROVADA",
+                        "aprovado_por": "11111111-1111-1111-1111-111111111111",
                         "canal": "Meta Instagram",
                         "storage_bucket": "mkt-campaign-assets",
                         "storage_path": "camp_desktop/v1/video.mp4",
@@ -83,6 +84,14 @@ class TestDesktopCampaignClient(unittest.TestCase):
     def test_exige_confirmacao_explicita(self):
         with self.assertRaises(DesktopCampaignClientError):
             self.desktop.request_publication("camp_desktop")
+
+    def test_bloqueia_publicacao_sem_aprovacao_humana(self):
+        self.client.tables["mkt_campaigns"].data[0]["status"] = (
+            "PRONTA_PARA_PUBLICAR"
+        )
+
+        with self.assertRaisesRegex(DesktopCampaignClientError, "não está pronta"):
+            self.desktop.request_publication("camp_desktop", confirmed=True)
 
     def test_cria_comando_com_usuario_da_sessao(self):
         result = self.desktop.request_publication(

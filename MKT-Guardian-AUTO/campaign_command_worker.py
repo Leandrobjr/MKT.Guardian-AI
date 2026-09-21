@@ -19,7 +19,7 @@ from campaign_revision_service import CampaignRevisionService
 from env_loader import load_project_env
 from supabase_campaign_bridge import SupabaseBridgeError, SupabaseCampaignBridge
 
-PUBLISHABLE_STATUSES = {"APROVADA", "PRONTA_PARA_PUBLICAR", "ERRO_PUBLICACAO"}
+PUBLISHABLE_STATUSES = {"APROVADA"}
 EDITORIAL_ACTIONS = {"APPROVE", "REJECT", "REQUEST_REVISION"}
 SUPPORTED_ACTIONS = {"PUBLISH", "RETRY", *EDITORIAL_ACTIONS}
 DEFAULT_POLL_SECONDS = 15
@@ -158,6 +158,14 @@ class CampaignCommandWorker:
                 dry_run,
                 campaign_id=campaign_id,
                 error=f"Status remoto não permite publicação: {remote_status}.",
+            )
+        if not campaign.get("aprovado_por"):
+            return self._finish(
+                command_id,
+                False,
+                dry_run,
+                campaign_id=campaign_id,
+                error="Publicação bloqueada: aprovação humana não registrada.",
             )
 
         qa = (campaign.get("metadata") or {}).get("qa") or {}
@@ -361,6 +369,7 @@ class CampaignCommandWorker:
                 target_status,
                 asset_path=str(local_record.get("asset_path") or ""),
                 error_message=feedback,
+                approved_by=requested_by if action == "APPROVE" else "",
             )
             return self._finish(
                 command_id,
@@ -400,6 +409,7 @@ class CampaignCommandWorker:
         platform: str = "",
         returned_id: str = "",
         error_message: str = "",
+        approved_by: str = "",
     ) -> None:
         asset_path = asset_path or str(current.get("asset_path") or "")
         config = {
@@ -410,6 +420,7 @@ class CampaignCommandWorker:
             "midia": current.get("midia", ""),
             "preset_midia": current.get("preset") or {},
             "_revision": current.get("revisao", 0),
+            "_approved_by": approved_by or current.get("aprovado_por", ""),
         }
         creative = {
             "campaign_id": current.get("campaign_id"),

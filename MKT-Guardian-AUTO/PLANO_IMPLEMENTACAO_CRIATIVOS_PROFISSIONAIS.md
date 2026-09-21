@@ -674,6 +674,11 @@ para qualquer publicação.
 lock contra duplicidade, recuperação de comandos `CLAIMED` abandonados após
 timeout e polling automático da fila Desktop.
 
+**Orquestrador v5.69:** a publicação passou a exigir simultaneamente status
+`APROVADA` e registro de aprovação humana (`aprovado_por`). Estados
+`PRONTA_PARA_PUBLICAR` e `ERRO_PUBLICACAO` não liberam mais publicação; as
+campanhas legadas sem aprovação foram devolvidas para revisão no Desktop.
+
 ## 6. Segurança obrigatória
 
 - remover a exibição de tokens completos no Desktop;

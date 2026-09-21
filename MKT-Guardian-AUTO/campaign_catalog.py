@@ -23,7 +23,7 @@ CAMPAIGN_STATUSES = (
     "REJEITADA",
 )
 _PUBLISHING_STATUSES = {"PUBLICANDO", "PUBLICADA"}
-_ALLOWED_PUBLISH_SOURCES = {"APROVADA", "PRONTA_PARA_PUBLICAR", "ERRO_PUBLICACAO"}
+_ALLOWED_PUBLISH_SOURCES = {"APROVADA"}
 
 
 def _now() -> str:
@@ -100,6 +100,18 @@ class CampaignCatalog:
         created_at = previous.get("data_criacao") or now
         approved_at = previous.get("data_aprovacao", "")
         published_at = previous.get("data_publicacao", "")
+        approved_by = _safe_text(
+            config.get("_approved_by") or previous.get("aprovado_por")
+        )
+        if status in {
+            "GERANDO",
+            "AGUARDANDO_APROVACAO_HISTORIA",
+            "AGUARDANDO_APROVACAO_FINAL",
+            "AJUSTE_SOLICITADO",
+            "REJEITADA",
+        }:
+            approved_at = ""
+            approved_by = ""
         if status == "APROVADA":
             approved_at = now
         if status == "PUBLICADA":
@@ -141,6 +153,7 @@ class CampaignCatalog:
             },
             "data_criacao": created_at,
             "data_aprovacao": approved_at,
+            "aprovado_por": approved_by,
             "data_publicacao": published_at,
             "plataforma": _safe_text(platform or previous.get("plataforma")),
             "id_retornado": _safe_text(returned_id or previous.get("id_retornado")),
@@ -231,5 +244,9 @@ class CampaignCatalog:
         current = self.get(campaign_id)
         return bool(
             current
-            and current.get("status") in {"APROVADA", "PRONTA_PARA_PUBLICAR", "ERRO_PUBLICACAO"}
+            and current.get("status") == "APROVADA"
+            and (
+                bool(current.get("aprovado_por"))
+                or current.get("ator") == "human"
+            )
         )

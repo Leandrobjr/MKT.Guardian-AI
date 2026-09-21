@@ -51,7 +51,13 @@ class TestCampaignCatalog(unittest.TestCase):
 
     def test_bloqueia_publicacao_duplicada(self):
         campaign_id = self.catalog.create(self.config)
-        self.catalog.update(campaign_id, "APROVADA", self.config, self.creative)
+        self.catalog.update(
+            campaign_id,
+            "APROVADA",
+            self.config,
+            self.creative,
+            actor="human",
+        )
         self.catalog.update(campaign_id, "PUBLICANDO", self.config, self.creative)
         self.catalog.update(
             campaign_id,
@@ -67,6 +73,17 @@ class TestCampaignCatalog(unittest.TestCase):
 
         self.assertFalse(self.catalog.can_publish(campaign_id))
         self.assertEqual(self.catalog.get(campaign_id)["id_retornado"], "media-123")
+
+    def test_pronta_para_publicar_exige_aprovacao_humana(self):
+        campaign_id = self.catalog.create(self.config)
+        self.catalog.update(
+            campaign_id,
+            "PRONTA_PARA_PUBLICAR",
+            self.config,
+            self.creative,
+        )
+
+        self.assertFalse(self.catalog.can_publish(campaign_id))
 
     def test_status_invalido_e_rejeitado(self):
         campaign_id = self.catalog.create(self.config)

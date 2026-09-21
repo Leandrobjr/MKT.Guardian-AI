@@ -2774,7 +2774,7 @@ class CampaignOrchestrator:
         self.traffic_manager.structure_advertising_campaign(creative_data, assets_resultado)
         self._catalog_update(
             campaign_id,
-            "PRONTA_PARA_PUBLICAR",
+            "APROVADA",
             config,
             creative_data,
             assets_resultado,

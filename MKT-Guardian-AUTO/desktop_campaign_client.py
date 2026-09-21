@@ -14,7 +14,7 @@ from typing import Any
 from env_loader import load_project_env
 
 CAMPAIGN_ID_PATTERN = re.compile(r"^[A-Za-z0-9_-]{1,100}$")
-PUBLISHABLE_STATUSES = {"APROVADA", "PRONTA_PARA_PUBLICAR", "ERRO_PUBLICACAO"}
+PUBLISHABLE_STATUSES = {"APROVADA"}
 EDITORIAL_ACTIONS = {
     "approve": "APPROVE",
     "reject": "REJECT",
@@ -98,7 +98,8 @@ class DesktopCampaignClient:
                     "campaign_id,version,status,publico,golpe,canal,midia,"
                     "basename,storage_bucket,storage_path,legenda,roteiro,preset,"
                     "metadata,plataforma,id_retornado,mensagem_erro,"
-                    "data_criacao,data_aprovacao,data_publicacao,atualizado_em"
+                    "aprovado_por,data_criacao,data_aprovacao,data_publicacao,"
+                    "atualizado_em"
                 )
             )
             if status:
@@ -214,6 +215,10 @@ class DesktopCampaignClient:
         if "tiktok" in str(campaign.get("canal") or "").lower():
             raise DesktopCampaignClientError(
                 "TikTok exige o fluxo de upload manual; não crie comando automático."
+            )
+        if not campaign.get("aprovado_por"):
+            raise DesktopCampaignClientError(
+                "Campanha ainda não foi aprovada por um humano."
             )
 
         user_id = self.current_user_id()

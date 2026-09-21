@@ -21,8 +21,6 @@ const statusFilter = document.querySelector("#status-filter");
 
 const PUBLISHABLE_STATUSES = new Set([
   "APROVADA",
-  "PRONTA_PARA_PUBLICAR",
-  "ERRO_PUBLICACAO",
 ]);
 const EDITORIAL_STATUS = "AGUARDANDO_APROVACAO_FINAL";
 
@@ -246,6 +244,7 @@ function addMetaItem(container, label, value) {
 function canRequestPublication(campaign) {
   return (
     PUBLISHABLE_STATUSES.has(campaign.status) &&
+    Boolean(campaign.aprovado_por) &&
     !String(campaign.canal || "").toLowerCase().includes("tiktok")
   );
 }

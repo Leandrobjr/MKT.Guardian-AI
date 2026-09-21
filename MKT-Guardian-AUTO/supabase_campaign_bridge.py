@@ -180,6 +180,7 @@ class SupabaseCampaignBridge:
             "plataforma": _clean(record.get("plataforma"), 80),
             "id_retornado": _clean(record.get("id_retornado"), 300),
             "mensagem_erro": _clean(record.get("mensagem_erro"), 1000),
+            "aprovado_por": _clean(record.get("aprovado_por"), 120) or None,
             "data_criacao": record.get("data_criacao") or _now(),
             "data_aprovacao": record.get("data_aprovacao") or None,
             "data_publicacao": record.get("data_publicacao") or None,

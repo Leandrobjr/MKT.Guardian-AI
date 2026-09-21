@@ -189,6 +189,12 @@ select:focus {
   color: #06261b;
 }
 
+.button-danger {
+  background: transparent;
+  border-color: color-mix(in srgb, var(--danger) 55%, var(--line));
+  color: var(--danger);
+}
+
 .button-quiet {
   background: transparent;
   border-color: var(--line);
@@ -266,6 +272,31 @@ select:focus {
   min-height: 42px;
 }
 
+.campaign-script-label {
+  color: var(--accent);
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  margin-top: 14px;
+  text-transform: uppercase;
+}
+
+.campaign-script {
+  color: var(--text);
+  font-size: 0.84rem;
+  line-height: 1.5;
+  margin: 6px 0 14px;
+  max-height: 150px;
+  overflow: auto;
+  white-space: pre-wrap;
+}
+
+.campaign-qa {
+  color: var(--muted);
+  font-size: 0.75rem;
+  margin: 0;
+}
+
 .campaign-meta {
   border-top: 1px solid var(--line);
   display: grid;
@@ -287,9 +318,19 @@ select:focus {
 
 .campaign-actions {
   border-top: 1px solid var(--line);
+  flex-wrap: wrap;
+  gap: 8px;
   justify-content: flex-end;
   margin-top: 16px;
   padding-top: 14px;
+}
+
+.editorial-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+  width: 100%;
 }
 
 .status-pill {

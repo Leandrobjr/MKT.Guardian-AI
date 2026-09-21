@@ -91,6 +91,8 @@
             <label class="filter-label" for="status-filter">Status</label>
             <select id="status-filter">
               <option value="">Todas</option>
+              <option value="AGUARDANDO_APROVACAO_FINAL">Aguardando aprovação</option>
+              <option value="AJUSTE_SOLICITADO">Ajuste solicitado</option>
               <option value="APROVADA">Aprovadas</option>
               <option value="PRONTA_PARA_PUBLICAR">Prontas</option>
               <option value="PUBLICANDO">Publicando</option>
@@ -133,10 +135,24 @@
             <span class="status-pill"></span>
           </div>
           <p class="campaign-copy"></p>
+          <p class="campaign-script-label">Roteiro</p>
+          <p class="campaign-script"></p>
+          <p class="campaign-qa"></p>
           <dl class="campaign-meta"></dl>
           <div class="campaign-actions">
+            <div class="editorial-actions hidden">
+              <button class="button button-primary approve-button" type="button">
+                Aprovar
+              </button>
+              <button class="button button-quiet revision-button" type="button">
+                Solicitar ajuste
+              </button>
+              <button class="button button-danger reject-button" type="button">
+                Rejeitar
+              </button>
+            </div>
             <button class="button button-primary publish-button" type="button">
-              Aprovar e publicar
+              Solicitar publicação
             </button>
           </div>
         </div>

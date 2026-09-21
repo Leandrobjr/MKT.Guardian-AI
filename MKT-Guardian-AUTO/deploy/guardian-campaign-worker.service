@@ -1,0 +1,16 @@
+[Unit]
+Description=Guardian AI - worker contínuo da fila Desktop
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=%h/Documentos/Guardian-AI/MKT_Guardian-AI/MKT-Guardian-AUTO
+ExecStart=%h/Documentos/Guardian-AI/MKT_Guardian-AI/MKT-Guardian-AUTO/venv/bin/python %h/Documentos/Guardian-AI/MKT_Guardian-AI/MKT-Guardian-AUTO/campaign_command_worker.py --execute --continuous --limit 10 --poll-seconds 15 --claim-timeout-seconds 1800
+Restart=on-failure
+RestartSec=10
+Environment=PYTHONUNBUFFERED=1
+NoNewPrivileges=true
+
+[Install]
+WantedBy=default.target

@@ -22,6 +22,8 @@ O objetivo não é apenas gerar imagens bonitas. Cada campanha deverá ter:
 - chamada para ação;
 - aprovação humana antes da publicação.
 
+
+
 ## 2. Situação atual
 
 O projeto já possui:
@@ -56,22 +58,24 @@ O projeto ainda precisa melhorar:
 ### Status revisado em 2026-09-19
 
 Este documento é a fonte canônica do planejamento. A implementação estrutural
-das Fases 1–4, 6, 9 e 11 já existe no código e possui testes automatizados.
-As Fases 0, 5, 7, 8 e 10 ainda exigem validação operacional ou complementos:
+das Fases 1–4, 6, 8, 9 e 11 já existe no código e possui testes automatizados.
+As Fases 0, 5, 7 e 10 ainda exigem validação operacional ou complementos:
 
 - Fase 0: baseline registrado em 2026-09-19, com média 3,38/5 em 10 criativos;
 - Fase 5: seleção de duas candidatas foi implementada para risco visual elevado;
 - Fase 7: a QA multimodal passou a ser requisito obrigatório para publicação;
-  `GEMINI_QA_REQUIRED` continua controlando o bloqueio antecipado antes da
-  aprovação editorial, mas nenhum publicador aceita campanha sem evidência QA;
-- Fase 8: o Desktop ainda não possui o fluxo editorial completo de aprovar,
-rejeitar e solicitar ajuste;
+`GEMINI_QA_REQUIRED` continua controlando o bloqueio antecipado antes da
+aprovação editorial, mas nenhum publicador aceita campanha sem evidência QA;
+- Fase 8: fluxo editorial Desktop implementado com aprovar, rejeitar e
+solicitar ajuste; a regeneração visual orientada pelo feedback e a QA
+multimodal de retorno também foram validadas em ensaio integrado sem publicação;
 - Fase 10: falta concluir o teste controlado de publicação no Instagram e
 separar explicitamente Feed/JPG de Reel/MP4.
 
 A ponte Supabase, o catálogo local, o worker Linux e a interface Desktop estão
-implementados, mas ainda precisam de um ensaio integrado sem publicação e de
-um teste real controlado antes de serem considerados produção.
+implementados, incluindo o fluxo editorial por comandos, regeneração de
+revisão, QA de retorno e o status `AJUSTE_SOLICITADO`. A publicação real
+continua separada e exige teste controlado posterior.
 
 ## 3. Decisão sobre o stack
 
@@ -644,6 +648,32 @@ fixado em `chirp` ou `elevenlabs`, e chamadas acima do limite configurado são
 bloqueadas preventivamente. As chaves não aparecem em URLs nem mensagens de
 erro.
 
+**Orquestrador v5.65:** o fluxo editorial do Desktop foi concluído. A opção
+`Aprovação editorial pelo Desktop` deixa a campanha em
+`AGUARDANDO_APROVACAO_FINAL`; a interface exibe preview, headline, roteiro e
+QA e enfileira `APPROVE`, `REJECT` ou `REQUEST_REVISION`. O worker Linux aplica
+a decisão, registra usuário, versão e motivo e só permite `PUBLISH` após
+aprovação humana, QA multimodal aprovada e asset local válido. A migração
+`20260921110000_desktop_editorial_approval.sql` adiciona os estados e índices
+de proteção contra decisões duplicadas.
+
+**Orquestrador v5.66:** o raciocínio e a QA multimodal passaram a usar
+roteamento híbrido: DeepSeek V4 Flash Vision Exp via OpenCode como primário,
+com Gemini 3.6 como fallback automático. A geração de imagens foi direcionada
+para Gemini 2.5 Flash Image. O fallback só é acionado quando o provedor
+primário falha ou retorna resposta vazia; as validações determinísticas e o
+bloqueio de publicação permanecem obrigatórios.
+
+**Orquestrador v5.67:** `REQUEST_REVISION` passou a executar a regeneração
+visual com o feedback editorial, repetir a tentativa quando a QA reprovar a
+imagem, registrar os achados e sincronizar a nova versão em
+`AGUARDANDO_APROVACAO_FINAL`. A evidência QA normalizada continua obrigatória
+para qualquer publicação.
+
+**Orquestrador v5.68:** o worker Linux ganhou modo contínuo via systemd,
+lock contra duplicidade, recuperação de comandos `CLAIMED` abandonados após
+timeout e polling automático da fila Desktop.
+
 ## 6. Segurança obrigatória
 
 - remover a exibição de tokens completos no Desktop;
@@ -700,6 +730,11 @@ Metas iniciais:
 8. Separar publicação de Feed/JPG e Reel/MP4; manter TikTok manual.
 9. Implementar coleta de métricas pós-publicação.
 10. Avaliar fornecedores alternativos somente após medir o baseline.
+11. Tornar o worker Linux um serviço contínuo, com retry seguro e
+  processamento automático da fila Desktop.
+12. Como último item da implementação, criar anúncios Meta com CTA clicável e
+  destino `https://guardian-ai.app` via Meta Ads API; o texto no card
+    continuará sendo apenas reforço visual.
 
 
 

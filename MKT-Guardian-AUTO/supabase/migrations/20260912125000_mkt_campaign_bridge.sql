@@ -26,6 +26,7 @@ create table if not exists public.mkt_campaigns (
         'AGUARDANDO_APROVACAO_HISTORIA',
         'PRODUZIDA',
         'AGUARDANDO_APROVACAO_FINAL',
+        'AJUSTE_SOLICITADO',
         'APROVADA',
         'PRONTA_PARA_PUBLICAR',
         'PUBLICANDO',
@@ -60,7 +61,9 @@ create index if not exists mkt_campaigns_status_idx
 create table if not exists public.mkt_campaign_commands (
     id uuid primary key default gen_random_uuid(),
     campaign_id text not null references public.mkt_campaigns(campaign_id) on delete cascade,
-    action text not null check (action in ('PUBLISH', 'RETRY', 'REJECT')),
+    action text not null check (
+        action in ('PUBLISH', 'RETRY', 'APPROVE', 'REJECT', 'REQUEST_REVISION')
+    ),
     status text not null default 'PENDING' check (
         status in ('PENDING', 'CLAIMED', 'SUCCEEDED', 'FAILED', 'CANCELLED')
     ),

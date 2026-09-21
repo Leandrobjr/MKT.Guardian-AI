@@ -5,9 +5,12 @@
 1. O Linux gera a campanha e sincroniza `mkt_campaigns`.
 2. O asset é enviado para o bucket privado `mkt-campaign-assets`.
 3. O Desktop autenticado consulta campanhas com status e metadata.
-4. Após a confirmação humana, o Desktop insere um comando `PUBLISH`.
-5. O processo Linux reivindica comandos com `claim_pending_commands()`.
-6. O Linux publica e registra o resultado com `complete_command()`.
+4. Após a decisão humana, o Desktop insere `APPROVE`, `REJECT`,
+   `REQUEST_REVISION` ou `PUBLISH`.
+5. O worker Linux contínuo reivindica comandos com
+   `claim_pending_commands()`.
+6. O worker aplica a decisão, recupera comandos `CLAIMED` abandonados após
+   timeout e registra o resultado com `complete_command()`.
 
 Para conferir a fila sem alterar nada:
 
@@ -21,6 +24,19 @@ Além da aprovação humana, o worker exige `metadata.qa.multimodal_passed=true`
 Campanhas sem QA multimodal aprovada são bloqueadas, mesmo que estejam em
 `APROVADA` ou `PRONTA_PARA_PUBLICAR`.
 O worker automatiza Meta/Instagram; TikTok continua exigindo o pacote manual.
+
+Para instalar o worker contínuo:
+
+```bash
+mkdir -p ~/.config/systemd/user
+cp deploy/guardian-campaign-worker.service ~/.config/systemd/user/
+systemctl --user daemon-reload
+systemctl --user enable --now guardian-campaign-worker.service
+```
+
+O lock local impede dois workers do mesmo projeto. O modo contínuo não cria
+publicações por conta própria: `PUBLISH` continua exigindo comando confirmado
+no Desktop.
 
 ## Configuração do Linux
 

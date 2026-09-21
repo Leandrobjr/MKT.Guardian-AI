@@ -66,7 +66,7 @@ class MediaFactory:
         self.kling_key = os.getenv("KLING_API_KEY")
 
         self.client = genai.Client(api_key=self.gemini_key)
-        self.model_imagem = os.getenv("GEMINI_MODEL_IMAGEM", "gemini-3.1-flash-image")
+        self.model_imagem = os.getenv("GEMINI_MODEL_IMAGEM", "gemini-2.5-flash-image")
         self.tts_router = HybridTTSRouter.from_env()
 
         self.kling_base_url = KLING_BASE_URL
@@ -529,12 +529,21 @@ class MediaFactory:
             width=2,
         )
         box_h = box[3] - box[1]
-        template_cta_size = int(self._composition_template().get("cta_font_size", 24))
+        template_cta_size = int(
+            getattr(
+                self,
+                "cta_font_size_override",
+                self._composition_template().get("cta_font_size", 24),
+            )
+        )
         font_main_size = self._scaled_font_size(
             min(template_cta_size, 20 if box_h < 110 else template_cta_size),
             min_size=14,
         )
-        font_url_size = self._scaled_font_size(14 if box_h < 110 else 18, min_size=11)
+        url_size = int(
+            getattr(self, "url_font_size_override", 14 if box_h < 110 else 18)
+        )
+        font_url_size = self._scaled_font_size(url_size, min_size=11)
         font_main = self._load_font(font_main_size, bold=True)
         font_url = self._load_font(font_url_size, bold=True)
         cta_line_h = font_main_size + 4
@@ -554,7 +563,14 @@ class MediaFactory:
                 fill=self._template_color("cta_text", self.BRAND_CTA_TEXT),
             )
             y += cta_line_h
-        url_y = box[3] - font_url_size - max(6, int(10 * self.canvas_height / 1920))
+        url_bottom_padding = int(
+            getattr(
+                self,
+                "url_bottom_padding_override",
+                max(6, int(10 * self.canvas_height / 1920)),
+            )
+        )
+        url_y = box[3] - font_url_size - url_bottom_padding
         xu = (box[0] + box[2]) // 2 - self._text_width(draw, url_clean, font_url) // 2
         draw.text(
             (xu, url_y),
@@ -863,6 +879,11 @@ class MediaFactory:
         print(f"\n🔄 [Fábrica v{MEDIA_FACTORY_VERSION}] Recompondo overlay (layout — sem regerar copy/áudio/Kling)...")
 
         self.card_body_font_size = int(creative_data.get("overlay_card_font_size", 20))
+        self.cta_font_size_override = creative_data.get("overlay_cta_font_size")
+        self.url_font_size_override = creative_data.get("overlay_url_font_size")
+        self.url_bottom_padding_override = creative_data.get(
+            "overlay_url_bottom_padding"
+        )
         self.preset_midia = creative_data.get("preset_midia") or resolve_channel_preset(
             creative_data.get("canal_veiculacao_selecionado", ""),
             creative_data.get("tipo_midia_selecionada", ""),

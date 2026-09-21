@@ -9,7 +9,7 @@ from __future__ import annotations
 import mimetypes
 import os
 import re
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
@@ -228,6 +228,62 @@ class SupabaseCampaignBridge:
                 claimed.append({**command, "status": "CLAIMED"})
         return claimed
 
+    def recover_stale_commands(
+        self,
+        *,
+        stale_after_seconds: int = 1800,
+        limit: int = 20,
+    ) -> list[str]:
+        """Devolve à fila comandos CLAIMED abandonados por um worker interrompido."""
+        bounded_limit = max(1, min(int(limit), 50))
+        cutoff = (
+            datetime.now(timezone.utc)
+            - timedelta(seconds=max(60, int(stale_after_seconds)))
+        ).isoformat()
+        try:
+            response = (
+                self.client.table("mkt_campaign_commands")
+                .select("id")
+                .eq("status", "CLAIMED")
+                .lt("claimed_at", cutoff)
+                .order("claimed_at")
+                .limit(bounded_limit)
+                .execute()
+            )
+        except Exception as exc:
+            raise SupabaseBridgeError(
+                f"Falha ao localizar comandos abandonados: {exc}"
+            ) from exc
+
+        recovered: list[str] = []
+        for row in response.data or []:
+            command_id = row.get("id")
+            if not command_id:
+                continue
+            try:
+                result = (
+                    self.client.table("mkt_campaign_commands")
+                    .update(
+                        {
+                            "status": "PENDING",
+                            "claimed_at": None,
+                            "completed_at": None,
+                            "result": {},
+                        }
+                    )
+                    .eq("id", command_id)
+                    .eq("status", "CLAIMED")
+                    .lt("claimed_at", cutoff)
+                    .execute()
+                )
+            except Exception as exc:
+                raise SupabaseBridgeError(
+                    f"Falha ao recuperar comando abandonado {command_id}: {exc}"
+                ) from exc
+            if result.data:
+                recovered.append(str(command_id))
+        return recovered
+
     def list_pending_commands(self, limit: int = 10) -> list[dict[str, Any]]:
         """Lista comandos sem alterar estados; usado exclusivamente no dry-run."""
         bounded_limit = max(1, min(int(limit), 50))
@@ -302,6 +358,35 @@ class SupabaseCampaignBridge:
                 f"Falha ao atualizar publicação {campaign_id}: {exc}"
             ) from exc
 
+    def update_campaign_editorial(
+        self,
+        campaign_id: str,
+        status: str,
+        *,
+        approved_by: str = "",
+        feedback: str = "",
+    ) -> None:
+        """Registra decisão editorial executada pelo worker Linux."""
+        if status not in {"APROVADA", "REJEITADA", "AJUSTE_SOLICITADO"}:
+            raise SupabaseBridgeError("Status editorial inválido.")
+        campaign_id = self._validate_campaign_id(campaign_id)
+        payload: dict[str, Any] = {
+            "status": status,
+            "mensagem_erro": _clean(feedback, 1000),
+            "atualizado_em": _now(),
+        }
+        if status == "APROVADA":
+            payload["aprovado_por"] = approved_by or None
+            payload["data_aprovacao"] = _now()
+        try:
+            self.client.table("mkt_campaigns").update(payload).eq(
+                "campaign_id", campaign_id
+            ).execute()
+        except Exception as exc:
+            raise SupabaseBridgeError(
+                f"Falha ao registrar decisão editorial {campaign_id}: {exc}"
+            ) from exc
+
     def complete_command(
         self,
         command_id: str,
@@ -320,6 +405,9 @@ class SupabaseCampaignBridge:
                 "returned_id",
                 "campaign_id",
                 "executor",
+                "version",
+                "provider",
+                "qa_score",
             }
         }
         if error:

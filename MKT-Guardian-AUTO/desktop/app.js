@@ -24,6 +24,7 @@ const PUBLISHABLE_STATUSES = new Set([
   "PRONTA_PARA_PUBLICAR",
   "ERRO_PUBLICACAO",
 ]);
+const EDITORIAL_STATUS = "AGUARDANDO_APROVACAO_FINAL";
 
 function showMessage(text, kind = "") {
   message.textContent = text;
@@ -249,6 +250,63 @@ function canRequestPublication(campaign) {
   );
 }
 
+function canReviewCampaign(campaign) {
+  return campaign.status === EDITORIAL_STATUS;
+}
+
+async function requestEditorialDecision(campaign, action, button) {
+  if (!canReviewCampaign(campaign)) {
+    showMessage("Esta campanha não aguarda decisão editorial.", "error");
+    return;
+  }
+  let feedback = "";
+  if (action === "REQUEST_REVISION" || action === "REJECT") {
+    const promptLabel = action === "REJECT"
+      ? "Informe o motivo da rejeição:"
+      : "Descreva o ajuste necessário:";
+    feedback = window.prompt(promptLabel, "")?.trim() || "";
+    if (!feedback) {
+      showMessage("Informe o motivo da decisão.", "error");
+      return;
+    }
+  }
+  const labels = {
+    APPROVE: "aprovar",
+    REJECT: "rejeitar",
+    REQUEST_REVISION: "solicitar ajuste para",
+  };
+  if (!window.confirm(`Confirma ${labels[action]} a campanha ${campaign.campaign_id}?`)) {
+    return;
+  }
+  button.disabled = true;
+  try {
+    const { data: userData, error: userError } = await state.supabase.auth.getUser();
+    if (userError || !userData?.user?.id) {
+      throw userError || new Error("Sessão autenticada não encontrada.");
+    }
+    const { error } = await state.supabase.from("mkt_campaign_commands").insert({
+      campaign_id: campaign.campaign_id,
+      action,
+      requested_by: userData.user.id,
+      payload: {
+        confirmed: true,
+        confirmed_at: new Date().toISOString(),
+        version: campaign.version,
+        feedback,
+      },
+    });
+    if (error) {
+      throw new Error("Já existe uma decisão pendente ou a campanha não está acessível.");
+    }
+    showMessage("Decisão registrada. O worker Linux atualizará o status.", "success");
+    await refreshData();
+  } catch (error) {
+    showMessage(errorText(error, "Não foi possível registrar a decisão."), "error");
+  } finally {
+    button.disabled = false;
+  }
+}
+
 async function requestPublication(campaign, button) {
   if (!canRequestPublication(campaign)) {
     showMessage("Esta campanha não pode ser publicada automaticamente.", "error");
@@ -300,6 +358,29 @@ async function renderCampaigns(campaigns) {
     addMetaItem(meta, "Canal", campaign.canal);
     addMetaItem(meta, "Mídia", campaign.midia);
     addMetaItem(meta, "Atualizada", formatDate(campaign.atualizado_em));
+    card.querySelector(".campaign-script").textContent =
+      campaign.roteiro || "Roteiro não registrado.";
+    const qa = campaign.metadata?.qa || {};
+    const qaText = qa.multimodal_passed === true
+      ? `QA multimodal aprovada${qa.overall_score ? ` · nota ${qa.overall_score}/10` : ""}`
+      : "QA multimodal pendente ou não aprovada";
+    card.querySelector(".campaign-qa").textContent = qaText;
+
+    const editorialActions = card.querySelector(".editorial-actions");
+    editorialActions.classList.toggle("hidden", !canReviewCampaign(campaign));
+    const approveButton = card.querySelector(".approve-button");
+    const revisionButton = card.querySelector(".revision-button");
+    const rejectButton = card.querySelector(".reject-button");
+    approveButton.addEventListener("click", () =>
+      void requestEditorialDecision(campaign, "APPROVE", approveButton)
+    );
+    revisionButton.addEventListener("click", () =>
+      void requestEditorialDecision(campaign, "REQUEST_REVISION", revisionButton)
+    );
+    rejectButton.addEventListener("click", () =>
+      void requestEditorialDecision(campaign, "REJECT", rejectButton)
+    );
+
     const button = card.querySelector(".publish-button");
     button.addEventListener("click", () => void requestPublication(campaign, button));
     button.disabled = !canRequestPublication(campaign);

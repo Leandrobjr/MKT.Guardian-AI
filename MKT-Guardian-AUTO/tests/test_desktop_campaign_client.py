@@ -98,6 +98,32 @@ class TestDesktopCampaignClient(unittest.TestCase):
         self.assertEqual(result["action"], "PUBLISH")
         self.assertTrue(result["payload"]["confirmed"])
 
+    def test_cria_decisao_editorial_de_aprovacao(self):
+        self.client.tables["mkt_campaigns"].data[0]["status"] = (
+            "AGUARDANDO_APROVACAO_FINAL"
+        )
+
+        result = self.desktop.request_editorial_decision(
+            "camp_desktop",
+            "approve",
+            confirmed=True,
+        )
+
+        self.assertEqual(result["action"], "APPROVE")
+        self.assertEqual(result["payload"]["version"], 0)
+
+    def test_exige_motivo_para_solicitar_ajuste(self):
+        self.client.tables["mkt_campaigns"].data[0]["status"] = (
+            "AGUARDANDO_APROVACAO_FINAL"
+        )
+
+        with self.assertRaisesRegex(DesktopCampaignClientError, "motivo"):
+            self.desktop.request_editorial_decision(
+                "camp_desktop",
+                "request_revision",
+                confirmed=True,
+            )
+
     def test_gera_url_temporaria_do_asset(self):
         url = self.desktop.create_asset_url("camp_desktop")
 

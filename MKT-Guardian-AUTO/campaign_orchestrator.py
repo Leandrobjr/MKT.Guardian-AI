@@ -23,6 +23,7 @@ from feedback_router import (
     format_menu_conflict,
 )
 from visual_quality_audit import GeminiVisualQualityAuditor
+from opencode_client import HybridAIClient
 from visual_variety import VisualVarietyEngine
 from channel_presets import (
     format_preset_summary,
@@ -89,7 +90,12 @@ class CampaignOrchestrator:
         load_project_env()
         self.api_key = os.getenv("GEMINI_API_KEY")
         self.client = genai.Client(api_key=self.api_key)
-        self.model_name = os.getenv("GEMINI_MODEL_TEXTO", "gemini-3.1-flash-lite")
+        self.model_name = os.getenv("GEMINI_MODEL_TEXTO", "gemini-3.6-flash")
+        self.ai_router = HybridAIClient(
+            self.client,
+            gemini_text_model=self.model_name,
+            gemini_vision_model=os.getenv("GEMINI_MODEL_QA", "gemini-3.6-flash"),
+        )
         qa_enabled = os.getenv("GEMINI_QA_ENABLED", "true").lower() in (
             "1", "true", "yes"
         )
@@ -102,6 +108,7 @@ class CampaignOrchestrator:
             enabled=qa_enabled and bool(self.api_key),
             required=qa_required,
             minimum_score=float(os.getenv("GEMINI_QA_MIN_SCORE", "7.0")),
+            vision_router=self.ai_router,
         )
 
         self.context_path = os.path.join(self.BASE_DIR, "contexto_negocio", "guardian_base.json")
@@ -1622,12 +1629,24 @@ class CampaignOrchestrator:
                         "DEVE ser idosa/mulher; se nomeia SEU Carlos/pai/dele → idoso/homem. "
                         "NUNCA misture protagonista feminino no texto com personagem masculino no campo 6.\n"
                     )
-                response = self.client.models.generate_content(
-                    model=self.model_name,
-                    contents=payload,
-                    config=config_creative,
+                response = self.ai_router.generate_text(
+                    payload,
+                    system_instruction=system_instruction,
+                    fallback_config=config_creative,
                 )
-                dados = json.loads(response.text)
+                try:
+                    dados = json.loads(response.text)
+                except json.JSONDecodeError:
+                    if response.provider != "opencode":
+                        raise
+                    print("⚠️ DeepSeek retornou JSON inválido — usando Gemini 3.6.")
+                    response = self.ai_router.generate_text(
+                        payload,
+                        system_instruction=system_instruction,
+                        fallback_config=config_creative,
+                        force_gemini=True,
+                    )
+                    dados = json.loads(response.text)
                 result = self._finalize_creative_data(dados, config, golpe_obj)
                 copy = (result.get("desenvolvimento_copy") or "").strip()
                 head = (result.get("gancho_atencao_inicial") or "").strip()
@@ -2150,12 +2169,17 @@ class CampaignOrchestrator:
         else:
             print("[3] Salvar + Telegram + Postar automaticamente após APROVAR")
             print("[4] Aprovar aqui mesmo (terminal) + Postar automaticamente após APROVAR")
+        if self.supabase_bridge:
+            print("[5] Salvar + Aprovação editorial pelo Desktop (sem publicar automaticamente)")
+        else:
+            print("[5] Aprovação editorial pelo Desktop (indisponível: Supabase não configurado)")
         f_escolhido = input("Digite o número da opção desejada: ").strip()
         fluxo_map = {
             "1": {"aprovacao_telegram": False, "aprovacao_terminal": False, "postar_instagram": False},
             "2": {"aprovacao_telegram": True, "aprovacao_terminal": False, "postar_instagram": False},
             "3": {"aprovacao_telegram": True, "aprovacao_terminal": False, "postar_instagram": True},
             "4": {"aprovacao_telegram": False, "aprovacao_terminal": True, "postar_instagram": True},
+            "5": {"aprovacao_desktop": True, "aprovacao_telegram": False, "aprovacao_terminal": False, "postar_instagram": False},
         }
         fluxo = fluxo_map.get(f_escolhido, fluxo_map["2"])
 
@@ -2172,6 +2196,7 @@ class CampaignOrchestrator:
             "objetivo": objetivo_final,
             "aprovacao_telegram": fluxo["aprovacao_telegram"],
             "aprovacao_terminal": fluxo["aprovacao_terminal"],
+            "aprovacao_desktop": fluxo.get("aprovacao_desktop", False),
             "postar_instagram": fluxo["postar_instagram"],
         }
 
@@ -2443,7 +2468,11 @@ class CampaignOrchestrator:
                 config.get("aprovacao_terminal")
                 or (config.get("aprovacao_telegram") and not self.telegram)
             )
-            if not (usar_telegram_aprovacao or usar_terminal_aprovacao):
+            if not (
+                usar_telegram_aprovacao
+                or usar_terminal_aprovacao
+                or config.get("aprovacao_desktop")
+            ):
                 asset_path = self._resolve_primary_asset(assets_resultado)
                 if not asset_path:
                     self._catalog_update(
@@ -2516,6 +2545,29 @@ class CampaignOrchestrator:
                 revisao=revisao,
                 asset_path=asset_path,
             )
+
+            if config.get("aprovacao_desktop"):
+                if not self.supabase_bridge:
+                    mensagem = (
+                        "Aprovação Desktop indisponível: configure a ponte Supabase "
+                        "antes de usar esta opção."
+                    )
+                    self._catalog_update(
+                        campaign_id,
+                        "REJEITADA",
+                        config,
+                        creative_data,
+                        assets_resultado,
+                        revision=revisao,
+                        error_message=mensagem,
+                    )
+                    print(f"❌ {mensagem}")
+                    return
+                print(
+                    "🖥️ Campanha aguardando decisão editorial no Desktop. "
+                    "Nenhuma publicação será iniciada automaticamente."
+                )
+                return
 
             video_path = assets_resultado.get("commercial_video_file", "")
             if not is_video_media(config.get("midia", "")) and (

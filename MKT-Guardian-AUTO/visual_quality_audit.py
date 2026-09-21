@@ -123,24 +123,26 @@ def _extract_video_frames(path: str, directory: str) -> list[str]:
     ]
 
 
-def _read_media_parts(path: str) -> list[Any]:
+def _read_media_files(path: str) -> list[tuple[bytes, str]]:
     media_paths: list[str] = [path]
     with tempfile.TemporaryDirectory(prefix="guardian_qa_") as directory:
         if _is_video(path):
             media_paths = _extract_video_frames(path, directory)
-        parts = []
+        media_files: list[tuple[bytes, str]] = []
         for media_path in media_paths[:3]:
             try:
                 with open(media_path, "rb") as media_file:
-                    parts.append(
-                        types.Part.from_bytes(
-                            data=media_file.read(),
-                            mime_type="image/jpeg",
-                        )
-                    )
+                    media_files.append((media_file.read(), "image/jpeg"))
             except OSError:
                 continue
-        return parts
+        return media_files
+
+
+def _read_media_parts(path: str) -> list[Any]:
+    return [
+        types.Part.from_bytes(data=data, mime_type=mime_type)
+        for data, mime_type in _read_media_files(path)
+    ]
 
 
 def _parse_json(text: str) -> dict[str, Any]:
@@ -162,12 +164,14 @@ class GeminiVisualQualityAuditor:
         enabled: bool = True,
         required: bool = False,
         minimum_score: float = 7.0,
+        vision_router: Any = None,
     ):
         self.client = client
         self.model = model
         self.enabled = enabled
         self.required = required
         self.minimum_score = minimum_score
+        self.vision_router = vision_router
 
     def _skipped(self, reason: str) -> VisualQualityResult:
         return VisualQualityResult(
@@ -205,9 +209,13 @@ class GeminiVisualQualityAuditor:
         )
         if not asset_path:
             return self._skipped("Asset final ausente para análise multimodal.")
-        parts = _read_media_parts(asset_path)
-        if not parts:
+        media_files = _read_media_files(asset_path)
+        if not media_files:
             return self._skipped("Não foi possível preparar frames para análise.")
+        parts = [
+            types.Part.from_bytes(data=data, mime_type=mime_type)
+            for data, mime_type in media_files
+        ]
 
         brief = creative_data.get("creative_brief") or {}
         prompt = (
@@ -235,15 +243,39 @@ class GeminiVisualQualityAuditor:
             "somente nos overlays da pós-produção."
         )
         try:
-            response = self.client.models.generate_content(
-                model=self.model,
-                contents=[prompt, *parts],
-                config=types.GenerateContentConfig(
-                    response_mime_type="application/json",
-                    temperature=0.0,
-                ),
-            )
-            payload = _parse_json(getattr(response, "text", "") or "")
+            if self.vision_router is not None:
+                response = self.vision_router.generate_vision(prompt, media_files)
+                response_text = response.text
+                provider = response.provider
+                model = response.model
+                try:
+                    payload = _parse_json(response_text)
+                except (TypeError, ValueError, json.JSONDecodeError):
+                    if response.provider != "opencode":
+                        raise
+                    print("⚠️ DeepSeek retornou QA inválida — usando Gemini 3.6.")
+                    response = self.vision_router.generate_vision(
+                        prompt,
+                        media_files,
+                        force_gemini=True,
+                    )
+                    response_text = response.text
+                    provider = response.provider
+                    model = response.model
+                    payload = _parse_json(response_text)
+            else:
+                response = self.client.models.generate_content(
+                    model=self.model,
+                    contents=[prompt, *parts],
+                    config=types.GenerateContentConfig(
+                        response_mime_type="application/json",
+                        temperature=0.0,
+                    ),
+                )
+                response_text = getattr(response, "text", "") or ""
+                provider = "gemini"
+                model = self.model
+                payload = _parse_json(response_text)
             overall = max(0.0, min(10.0, float(payload.get("overall_score", 0))))
             findings: list[QualityFinding] = []
             checks = payload.get("checks") or {}
@@ -268,13 +300,13 @@ class GeminiVisualQualityAuditor:
             return VisualQualityResult(
                 enabled=True,
                 skipped=False,
-                provider="gemini",
-                model=self.model,
+                provider=provider,
+                model=model,
                 overall_score=round(overall, 2),
                 passed=passed,
                 findings=findings,
             )
         except (OSError, TypeError, ValueError, json.JSONDecodeError) as exc:
-            return self._skipped(f"Resposta Gemini inválida: {exc}")
+            return self._skipped(f"Resposta multimodal inválida: {exc}")
         except Exception as exc:
-            return self._skipped(f"Falha na QA Gemini: {exc}")
+            return self._skipped(f"Falha na QA multimodal: {exc}")

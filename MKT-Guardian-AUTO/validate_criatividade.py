@@ -23,8 +23,10 @@ from meta_publisher import MetaPublisher
 from manual_export import export_tiktok_package
 from supabase_campaign_bridge import SupabaseCampaignBridge
 from campaign_command_worker import CampaignCommandWorker
+from campaign_revision_service import CampaignRevisionService
 from desktop_campaign_client import DesktopCampaignClient
 from hybrid_tts import HybridTTSRouter
+from opencode_client import HybridAIClient, OpenCodeClient
 
 
 def check(name: str, ok: bool, detail: str = "") -> bool:
@@ -145,11 +147,19 @@ def main() -> int:
         and hasattr(HybridTTSRouter, "synthesize"),
         "Chirp para Meta + ElevenLabs para Shorts + fallback",
     )
+    ok_all &= check(
+        "Roteamento OpenCode/DeepSeek",
+        hasattr(OpenCodeClient, "complete")
+        and hasattr(HybridAIClient, "generate_text")
+        and hasattr(HybridAIClient, "generate_vision"),
+        "DeepSeek primário + Gemini 3.6 fallback",
+    )
     required_statuses = {
         "GERANDO",
         "AGUARDANDO_APROVACAO_HISTORIA",
         "PRODUZIDA",
         "AGUARDANDO_APROVACAO_FINAL",
+        "AJUSTE_SOLICITADO",
         "APROVADA",
         "PRONTA_PARA_PUBLICAR",
         "PUBLICANDO",
@@ -185,20 +195,33 @@ def main() -> int:
         os.path.isfile(migration)
         and hasattr(SupabaseCampaignBridge, "sync_campaign")
         and hasattr(SupabaseCampaignBridge, "claim_pending_commands"),
-        "Storage privado + metadata + fila de comandos",
+        "Storage privado + metadata + fila de comandos editoriais",
     )
     ok_all &= check(
         "Worker Linux da fila",
         hasattr(CampaignCommandWorker, "run_once")
-        and hasattr(CampaignCommandWorker, "process_command"),
-        "dry-run padrão + execução Meta controlada",
+        and hasattr(CampaignCommandWorker, "process_command")
+        and hasattr(CampaignCommandWorker, "run_forever")
+        and hasattr(SupabaseCampaignBridge, "recover_stale_commands"),
+        "dry-run + polling contínuo + recuperação segura",
+    )
+    ok_all &= check(
+        "Serviço systemd do worker",
+        os.path.isfile(os.path.join(BASE, "deploy", "guardian-campaign-worker.service")),
+        "reinício automático e lock contra duplicidade",
+    )
+    ok_all &= check(
+        "Regeneração editorial",
+        hasattr(CampaignRevisionService, "apply"),
+        "feedback Desktop + regeneração visual + QA de retorno",
     )
     ok_all &= check(
         "Cliente Desktop Supabase",
         hasattr(DesktopCampaignClient, "list_campaigns")
+        and hasattr(DesktopCampaignClient, "request_editorial_decision")
         and hasattr(DesktopCampaignClient, "request_publication")
         and hasattr(DesktopCampaignClient, "create_asset_url"),
-        "leitura + confirmação + URL temporária",
+        "leitura + aprovação editorial + confirmação + URL temporária",
     )
     desktop_files = (
         "desktop/index.html",
@@ -216,8 +239,9 @@ def main() -> int:
         "Interface Desktop",
         all(os.path.isfile(os.path.join(BASE, item)) for item in desktop_files)
         and "SUPABASE_SERVICE_ROLE_KEY" not in desktop_js
-        and "localStorage" not in desktop_js,
-        "login + preview + confirmação sem service_role",
+        and "localStorage" not in desktop_js
+        and all(action in desktop_js for action in ("APPROVE", "REJECT", "REQUEST_REVISION")),
+        "login + preview + aprovação editorial sem service_role",
     )
 
     v = lib.pick_variant("falso_emprego", "massa")

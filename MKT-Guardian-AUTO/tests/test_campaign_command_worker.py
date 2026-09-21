@@ -19,6 +19,7 @@ class FakeBridge:
         self.completed = []
         self.updates = []
         self.claimed = 0
+        self.recovered = []
 
     def list_pending_commands(self, _limit):
         return self.commands
@@ -26,6 +27,10 @@ class FakeBridge:
     def claim_pending_commands(self, _limit):
         self.claimed += 1
         return [{**command, "status": "CLAIMED"} for command in self.commands]
+
+    def recover_stale_commands(self, **kwargs):
+        self.recovered.append(kwargs)
+        return []
 
     def get_campaign(self, _campaign_id):
         return self.campaign
@@ -38,6 +43,10 @@ class FakeBridge:
     def update_campaign_publication(self, campaign_id, status, **kwargs):
         self.updates.append((campaign_id, status, kwargs))
 
+    def update_campaign_editorial(self, campaign_id, status, **kwargs):
+        self.updates.append((campaign_id, status, kwargs))
+        self.campaign = {**self.campaign, "status": status}
+
     def complete_command(self, command_id, **kwargs):
         self.completed.append((command_id, kwargs))
 
@@ -46,6 +55,35 @@ class FakePublisher:
     def postar_asset(self, _asset_path, _caption, *, qa_evidence=None):
         assert qa_evidence and qa_evidence.get("multimodal_passed") is True
         return {"ok": True, "post_id": "media-123"}
+
+
+class FakeRevisionService:
+    def __init__(self, _base_dir, *, catalog, bridge):
+        self.catalog = catalog
+        self.bridge = bridge
+
+    def apply(self, campaign, current, feedback):
+        assert campaign["campaign_id"] == "camp_worker"
+        assert current["campaign_id"] == "camp_worker"
+        assert feedback == "Corrigir o enquadramento."
+        return {
+            "status": "AGUARDANDO_APROVACAO_FINAL",
+            "campaign_id": "camp_worker",
+            "version": 2,
+            "provider": "gemini",
+            "qa_score": 9,
+        }
+
+
+class OneCycleEvent:
+    def __init__(self):
+        self.wait_calls = 0
+
+    def is_set(self):
+        return self.wait_calls > 0
+
+    def wait(self, _timeout):
+        self.wait_calls += 1
 
 
 class TestCampaignCommandWorker(unittest.TestCase):
@@ -113,6 +151,7 @@ class TestCampaignCommandWorker(unittest.TestCase):
             self.tmp,
             bridge=self.bridge,
             catalog=self.catalog,
+            revision_service_factory=FakeRevisionService,
             publisher_factory=FakePublisher,
         )
 
@@ -129,6 +168,7 @@ class TestCampaignCommandWorker(unittest.TestCase):
             self.tmp,
             bridge=self.bridge,
             catalog=self.catalog,
+            revision_service_factory=FakeRevisionService,
             publisher_factory=FakePublisher,
         )
 
@@ -183,6 +223,83 @@ class TestCampaignCommandWorker(unittest.TestCase):
 
         self.assertFalse(result[0]["ok"])
         self.assertIn("QA multimodal", result[0]["error"])
+        self.assertEqual(self.bridge.claimed, 1)
+
+    def test_processa_aprovacao_editorial(self):
+        self.bridge.campaign = {
+            **self.remote,
+            "status": "AGUARDANDO_APROVACAO_FINAL",
+        }
+        self.bridge.commands = [
+            {
+                "id": "cmd-approval",
+                "campaign_id": "camp_worker",
+                "action": "APPROVE",
+                "requested_by": "11111111-1111-1111-1111-111111111111",
+                "payload": {"confirmed": True, "version": 1},
+            }
+        ]
+        worker = CampaignCommandWorker(
+            self.tmp,
+            bridge=self.bridge,
+            catalog=self.catalog,
+            publisher_factory=FakePublisher,
+        )
+
+        result = worker.run_once(dry_run=False)
+
+        self.assertTrue(result[0]["ok"])
+        self.assertEqual(self.bridge.campaign["status"], "APROVADA")
+        self.assertTrue(self.bridge.completed[0][1]["success"])
+
+    def test_solicita_ajuste_editorial_com_motivo(self):
+        self.bridge.campaign = {
+            **self.remote,
+            "status": "AGUARDANDO_APROVACAO_FINAL",
+        }
+        self.bridge.commands = [
+            {
+                "id": "cmd-revision",
+                "campaign_id": "camp_worker",
+                "action": "REQUEST_REVISION",
+                "requested_by": "11111111-1111-1111-1111-111111111111",
+                "payload": {"confirmed": True, "feedback": "Corrigir o enquadramento."},
+            }
+        ]
+        worker = CampaignCommandWorker(
+            self.tmp,
+            bridge=self.bridge,
+            catalog=self.catalog,
+            revision_service_factory=FakeRevisionService,
+            publisher_factory=FakePublisher,
+        )
+
+        result = worker.run_once(dry_run=False)
+
+        self.assertTrue(result[0]["ok"])
+        self.assertEqual(
+            self.bridge.completed[0][1]["result"]["status"],
+            "AGUARDANDO_APROVACAO_FINAL",
+        )
+
+    def test_worker_continuo_recupera_e_consulta_a_fila(self):
+        event = OneCycleEvent()
+        worker = CampaignCommandWorker(
+            self.tmp,
+            bridge=self.bridge,
+            catalog=self.catalog,
+            publisher_factory=FakePublisher,
+        )
+
+        worker.run_forever(
+            limit=3,
+            poll_seconds=0,
+            claim_timeout_seconds=60,
+            stop_event=event,
+        )
+
+        self.assertEqual(len(self.bridge.recovered), 1)
+        self.assertEqual(self.bridge.recovered[0]["stale_after_seconds"], 60)
         self.assertEqual(self.bridge.claimed, 1)
 
 

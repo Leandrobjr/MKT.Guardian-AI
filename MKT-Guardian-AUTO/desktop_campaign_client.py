@@ -15,6 +15,11 @@ from env_loader import load_project_env
 
 CAMPAIGN_ID_PATTERN = re.compile(r"^[A-Za-z0-9_-]{1,100}$")
 PUBLISHABLE_STATUSES = {"APROVADA", "PRONTA_PARA_PUBLICAR", "ERRO_PUBLICACAO"}
+EDITORIAL_ACTIONS = {
+    "approve": "APPROVE",
+    "reject": "REJECT",
+    "request_revision": "REQUEST_REVISION",
+}
 
 
 class DesktopCampaignClientError(RuntimeError):
@@ -126,6 +131,63 @@ class DesktopCampaignClient:
                 f"Não foi possível carregar comandos: {exc}"
             ) from exc
         return response.data or []
+
+    def request_editorial_decision(
+        self,
+        campaign_id: str,
+        decision: str,
+        *,
+        feedback: str = "",
+        confirmed: bool = False,
+    ) -> dict[str, Any]:
+        """Enfileira aprovação editorial sem alterar status no navegador."""
+        if not confirmed:
+            raise DesktopCampaignClientError(
+                "A decisão editorial exige confirmação explícita no Desktop."
+            )
+        action = EDITORIAL_ACTIONS.get(str(decision or "").lower())
+        if not action:
+            raise DesktopCampaignClientError("Decisão editorial inválida.")
+        if action == "REQUEST_REVISION" and not str(feedback or "").strip():
+            raise DesktopCampaignClientError(
+                "Solicitação de ajuste exige um motivo."
+            )
+        campaign_id = self._validate_campaign_id(campaign_id)
+        campaigns = self.list_campaigns(limit=100)
+        campaign = next(
+            (item for item in campaigns if item.get("campaign_id") == campaign_id),
+            None,
+        )
+        if not campaign:
+            raise DesktopCampaignClientError("Campanha não encontrada ou sem acesso.")
+        if campaign.get("status") != "AGUARDANDO_APROVACAO_FINAL":
+            raise DesktopCampaignClientError(
+                "A campanha não está aguardando aprovação editorial."
+            )
+        user_id = self.current_user_id()
+        payload = {
+            "campaign_id": campaign_id,
+            "action": action,
+            "requested_by": user_id,
+            "payload": {
+                "confirmed": True,
+                "confirmed_at": _now(),
+                "version": campaign.get("version", 0),
+                "feedback": str(feedback or "").strip()[:1000],
+            },
+        }
+        try:
+            response = (
+                self.client.table("mkt_campaign_commands")
+                .insert(payload)
+                .execute()
+            )
+        except Exception as exc:
+            raise DesktopCampaignClientError(
+                "Não foi possível registrar a decisão editorial. "
+                "Verifique se já existe um comando pendente."
+            ) from exc
+        return (response.data or [payload])[0]
 
     def request_publication(
         self, campaign_id: str, *, confirmed: bool = False

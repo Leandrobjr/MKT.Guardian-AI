@@ -874,6 +874,32 @@ class CampaignBot:
 
     def _run_pipeline(self, config: dict):
         try:
+            from supabase_campaign_bridge import SupabaseCampaignBridge
+
+            bridge = SupabaseCampaignBridge.from_env(self._base_dir())
+            if bridge is not None:
+                queued_config = dict(config)
+                queued_config.update(
+                    {
+                        "aprovacao_telegram": False,
+                        "aprovacao_terminal": False,
+                        "aprovacao_desktop": True,
+                        "postar_instagram": False,
+                    }
+                )
+                request = bridge.create_campaign_request(
+                    queued_config,
+                    source="TELEGRAM",
+                    requester_label=f"Telegram:{self.chat_id}",
+                )
+                request_id = str(request.get("id") or "pendente")
+                self._notify_text(
+                    "✅ Solicitação registrada na fila central.\n"
+                    f"ID: {request_id}\n"
+                    "O worker Linux gerará a campanha e ela aparecerá no "
+                    "Desktop para aprovação humana."
+                )
+                return
             from campaign_orchestrator import CampaignOrchestrator
             orch = CampaignOrchestrator()
             bridge = BotApprovalBridge(self)
@@ -892,6 +918,19 @@ class CampaignBot:
                     if msg_id:
                         self._clear_stale_keyboards_sync([msg_id])
                     print(f"[Approval] pipeline encerrado — limpeza job={job_id}")
+
+    def _base_dir(self) -> str:
+        return os.path.dirname(os.path.abspath(__file__))
+
+    def _notify_text(self, text: str):
+        try:
+            requests.post(
+                f"{self._base}/sendMessage",
+                json={"chat_id": self.chat_id, "text": text},
+                timeout=15,
+            )
+        except Exception as e:
+            print(f"[Bot] erro ao notificar: {e}")
 
     def _notify_error(self, msg: str):
         try:

@@ -20,6 +20,18 @@ EDITORIAL_ACTIONS = {
     "reject": "REJECT",
     "request_revision": "REQUEST_REVISION",
 }
+CAMPAIGN_PUBLICS = {"idosos", "pais", "empresarios", "escolas"}
+CAMPAIGN_SCAMS = {
+    "falso_parente",
+    "pix_fantasma",
+    "falsa_central",
+    "grooming",
+    "phishing",
+    "clonagem_whatsapp",
+    "link_malicioso",
+    "falso_emprego",
+    "falso_investimento",
+}
 
 
 class DesktopCampaignClientError(RuntimeError):
@@ -132,6 +144,71 @@ class DesktopCampaignClient:
                 f"Não foi possível carregar comandos: {exc}"
             ) from exc
         return response.data or []
+
+    def request_campaign_creation(
+        self,
+        config: dict[str, Any],
+        *,
+        confirmed: bool = False,
+    ) -> dict[str, Any]:
+        """Enfileira uma nova campanha para o worker Linux gerar."""
+        if not confirmed:
+            raise DesktopCampaignClientError(
+                "A criação exige confirmação explícita no Desktop."
+            )
+        if not isinstance(config, dict):
+            raise DesktopCampaignClientError("Configuração de campanha inválida.")
+        publico_slug = str(config.get("publico_slug") or "").strip().lower()
+        golpe_id = str(config.get("golpe_id") or "").strip().lower()
+        if publico_slug not in CAMPAIGN_PUBLICS:
+            raise DesktopCampaignClientError("Público-alvo inválido.")
+        if golpe_id not in CAMPAIGN_SCAMS:
+            raise DesktopCampaignClientError("Tipo de golpe inválido.")
+        required = ("publico_id", "midia", "canal", "objetivo")
+        if any(not str(config.get(key) or "").strip() for key in required):
+            raise DesktopCampaignClientError(
+                "Preencha público, mídia, canal e objetivo."
+            )
+        user_id = self.current_user_id()
+        payload = {
+            "source": "DESKTOP",
+            "requested_by": user_id,
+            "requester_label": "Desktop",
+            "config": {
+                key: value
+                for key, value in config.items()
+                if key in {
+                    "publico",
+                    "publico_id",
+                    "publico_slug",
+                    "golpe",
+                    "golpe_id",
+                    "midia",
+                    "canal",
+                    "preset_midia",
+                    "preset_metadata",
+                    "objetivo",
+                    "aprovacao_desktop",
+                    "postar_instagram",
+                }
+            },
+        }
+        payload["config"]["publico_slug"] = publico_slug
+        payload["config"]["golpe_id"] = golpe_id
+        payload["config"]["aprovacao_desktop"] = True
+        payload["config"]["aprovacao_telegram"] = False
+        payload["config"]["aprovacao_terminal"] = False
+        try:
+            response = (
+                self.client.table("mkt_campaign_creation_requests")
+                .insert(payload)
+                .execute()
+            )
+        except Exception as exc:
+            raise DesktopCampaignClientError(
+                "Não foi possível enfileirar a nova campanha."
+            ) from exc
+        return (response.data or [payload])[0]
 
     def request_editorial_decision(
         self,

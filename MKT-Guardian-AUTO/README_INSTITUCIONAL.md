@@ -1,6 +1,6 @@
 # MKT Guardian AI — Fábrica Automatizada de Campanhas Digitais
 
-**Versão do sistema:** Orquestrador v5.69 · Fábrica de Mídia v18.12
+**Versão do sistema:** Orquestrador v5.70 · Fábrica de Mídia v18.12
 **Produto promovido:** [Guardian AI](https://guardian-ai.app) — proteção inteligente contra golpes no WhatsApp  
 **Repositório:** MKT-Guardian-AUTO (dentro do projeto MKT.Guardian-AI)
 

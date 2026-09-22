@@ -39,6 +39,17 @@ O fluxo editorial é:
    achados) e devolve a campanha para `AGUARDANDO_APROVACAO_FINAL`.
 5. Somente depois de aprovada a campanha pode receber um comando `PUBLISH`.
 
+Para criar uma campanha no Desktop, faça login e use o painel **Criar
+campanha**. Escolha público, golpe, mídia, canal e objetivo; a sexta etapa é
+fixada em revisão pelo Desktop. A solicitação é colocada na fila segura do
+Supabase. O worker Linux gera o criativo, executa a QA e o resultado aparece
+como `AGUARDANDO_APROVACAO_FINAL`.
+
+No Telegram, envie `/nova` e siga o wizard de seis etapas. Com a ponte
+Supabase ativa, o bot coloca a mesma configuração na fila central e informa
+que a aprovação final será feita no Desktop. Sem a ponte, o comportamento
+legado do wizard permanece disponível localmente.
+
 Para testar decisões editoriais sem alterar o Supabase:
 
 ```bash

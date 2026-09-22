@@ -18,6 +18,7 @@ const sessionLabel = document.querySelector("#session-label");
 const logoutButton = document.querySelector("#logout-button");
 const resetConfigButton = document.querySelector("#reset-config-button");
 const statusFilter = document.querySelector("#status-filter");
+const creationForm = document.querySelector("#new-campaign-form");
 
 const PUBLISHABLE_STATUSES = new Set([
   "APROVADA",
@@ -51,6 +52,32 @@ function formatDate(value) {
 function displayValue(value) {
   return value === null || value === undefined || value === "" ? "—" : String(value);
 }
+
+const PUBLIC_LABELS = {
+  idosos: "Idosos e aposentados vulneráveis a fraudes financeiras e familiares.",
+  pais: "Pais preocupados com a segurança e integridade dos filhos na internet.",
+  empresarios: "Empresários e donos de comércios expostos a golpes e clonagem de contas.",
+  escolas: "Dirigentes e professores focados na segurança de dados escolares.",
+};
+
+const PUBLIC_IDS = {
+  idosos: "idosos",
+  pais: "pais",
+  empresarios: "profissionais",
+  escolas: "escolas",
+};
+
+const SCAM_LABELS = {
+  falso_parente: "Golpe do Falso Parente / Novo Número no WhatsApp pedindo dinheiro urgente.",
+  pix_fantasma: "Golpe do PIX e transferências bancárias sob indução mecânica ou pânico.",
+  falsa_central: "Golpe da Falsa Central Bancária simulando atendimento institucional de segurança.",
+  grooming: "Grooming / Aliciamento digital de menores e exposição de crianças online.",
+  phishing: "Links maliciosos de Phishing e páginas clonadas para roubo de senhas.",
+  clonagem_whatsapp: "Clonagem de WhatsApp via engenharia social e roubo do código SMS.",
+  link_malicioso: "Links maliciosos: promoções falsas, encomenda retida, APK falso ou atualização fraudulenta.",
+  falso_emprego: "Golpe do falso emprego: vagas home office, taxa de admissão e captura de documentos.",
+  falso_investimento: "Golpe do falso investimento: lucro garantido, cripto e grupos VIP no WhatsApp.",
+};
 
 function validateSupabaseUrl(value) {
   try {
@@ -197,6 +224,94 @@ async function loadCommands() {
     .limit(20);
   if (error) throw error;
   return data || [];
+}
+
+async function requestCampaignCreation(event) {
+  event.preventDefault();
+  if (!state.supabase || !state.session) return;
+  const submitButton = creationForm.querySelector("button[type=submit]");
+  const publicoSlug = document.querySelector("#new-publico").value;
+  const golpeId = document.querySelector("#new-golpe").value;
+  const mediaKey = document.querySelector("#new-midia").value;
+  const channelKey = document.querySelector("#new-canal").value;
+  const objectiveKey = document.querySelector("#new-objetivo").value;
+  if (!publicoSlug || !golpeId || !mediaKey || !channelKey || !objectiveKey) {
+    showPanelMessage("creation-message", "Preencha as seis etapas da campanha.", "error");
+    return;
+  }
+  if (mediaKey === "imagem" && channelKey !== "meta") {
+    showPanelMessage(
+      "creation-message",
+      "Imagem estática só pode ser criada para Meta Ads.",
+      "error",
+    );
+    return;
+  }
+  const confirmed = window.confirm(
+    "Confirma a criação desta campanha? Ela será gerada localmente e aguardará aprovação humana.",
+  );
+  if (!confirmed) return;
+  const mediaLabels = {
+    imagem: "Imagem Estática Square (1080x1080)",
+    video: "Vídeo Vertical Animado",
+  };
+  const channelLabels = {
+    meta: "Meta Ads (Instagram/Facebook)",
+    tiktok: "TikTok / YouTube Shorts",
+  };
+  const objectiveLabels = {
+    install: "Instalação do Aplicativo (Downloads)",
+    leads: "Geração de Leads Qualificados",
+  };
+  const config = {
+    publico: PUBLIC_LABELS[publicoSlug],
+    publico_id: PUBLIC_IDS[publicoSlug],
+    publico_slug: publicoSlug,
+    golpe: SCAM_LABELS[golpeId],
+    golpe_id: golpeId,
+    midia: mediaLabels[mediaKey],
+    canal: channelLabels[channelKey],
+    objetivo: objectiveLabels[objectiveKey],
+    aprovacao_desktop: true,
+    aprovacao_telegram: false,
+    aprovacao_terminal: false,
+    postar_instagram: false,
+  };
+  submitButton.disabled = true;
+  submitButton.textContent = "Enfileirando...";
+  try {
+    const { data: userData, error: userError } = await state.supabase.auth.getUser();
+    if (userError || !userData?.user?.id) {
+      throw userError || new Error("Sessão autenticada não encontrada.");
+    }
+    const { data, error } = await state.supabase
+      .from("mkt_campaign_creation_requests")
+      .insert({
+        source: "DESKTOP",
+        requested_by: userData.user.id,
+        requester_label: "Desktop",
+        config,
+      })
+      .select("id,status,created_at")
+      .single();
+    if (error) throw new Error("Não foi possível enfileirar a campanha.");
+    showPanelMessage(
+      "creation-message",
+      `Campanha enfileirada com sucesso. Solicitação ${data.id} — o worker Linux iniciará a geração.`,
+      "success",
+    );
+    creationForm.reset();
+    await refreshData();
+  } catch (error) {
+    showPanelMessage(
+      "creation-message",
+      errorText(error, "Não foi possível criar a campanha."),
+      "error",
+    );
+  } finally {
+    submitButton.disabled = false;
+    submitButton.textContent = "Enfileirar geração";
+  }
 }
 
 async function createPreview(assetFrame, campaign) {
@@ -450,5 +565,6 @@ logoutButton.addEventListener("click", () => void signOut());
 resetConfigButton.addEventListener("click", resetConfiguration);
 document.querySelector("#refresh-button").addEventListener("click", () => void refreshData());
 statusFilter.addEventListener("change", () => void refreshData());
+creationForm.addEventListener("submit", (event) => void requestCampaignCreation(event));
 
 setAuthenticatedView(null);

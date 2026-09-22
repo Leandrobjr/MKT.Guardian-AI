@@ -24,6 +24,19 @@ ALLOWED_ASSETS = {
     ".mp4": "video/mp4",
 }
 CAMPAIGN_ID_PATTERN = re.compile(r"^[A-Za-z0-9_-]{1,100}$")
+CREATION_SOURCES = {"DESKTOP", "TELEGRAM"}
+CREATION_PUBLICS = {"idosos", "pais", "empresarios", "escolas"}
+CREATION_SCAMS = {
+    "falso_parente",
+    "pix_fantasma",
+    "falsa_central",
+    "grooming",
+    "phishing",
+    "clonagem_whatsapp",
+    "link_malicioso",
+    "falso_emprego",
+    "falso_investimento",
+}
 
 
 class SupabaseBridgeError(RuntimeError):
@@ -386,6 +399,225 @@ class SupabaseCampaignBridge:
         except Exception as exc:
             raise SupabaseBridgeError(
                 f"Falha ao registrar decisão editorial {campaign_id}: {exc}"
+            ) from exc
+
+    @staticmethod
+    def _validate_creation_config(config: dict[str, Any]) -> dict[str, Any]:
+        """Valida e limita a configuração antes de colocá-la na fila."""
+        if not isinstance(config, dict):
+            raise SupabaseBridgeError("Configuração de campanha inválida.")
+        required = {
+            "publico_slug",
+            "publico_id",
+            "golpe_id",
+            "midia",
+            "canal",
+            "objetivo",
+        }
+        missing = sorted(key for key in required if not config.get(key))
+        if missing:
+            raise SupabaseBridgeError(
+                f"Configuração incompleta; campos ausentes: {', '.join(missing)}."
+            )
+        publico_slug = _clean(config["publico_slug"], 40).lower()
+        golpe_id = _clean(config["golpe_id"], 60).lower()
+        if publico_slug not in CREATION_PUBLICS:
+            raise SupabaseBridgeError("Público-alvo inválido.")
+        if golpe_id not in CREATION_SCAMS:
+            raise SupabaseBridgeError("Tipo de golpe inválido.")
+        allowed_keys = {
+            "publico",
+            "publico_id",
+            "publico_slug",
+            "golpe",
+            "golpe_id",
+            "midia",
+            "canal",
+            "preset_midia",
+            "preset_metadata",
+            "objetivo",
+            "aprovacao_telegram",
+            "aprovacao_terminal",
+            "aprovacao_desktop",
+            "postar_instagram",
+        }
+        sanitized: dict[str, Any] = {
+            key: value for key, value in config.items() if key in allowed_keys
+        }
+        for key in (
+            "publico",
+            "publico_id",
+            "golpe",
+            "midia",
+            "canal",
+            "objetivo",
+        ):
+            sanitized[key] = _clean(sanitized.get(key), 160)
+        sanitized["publico_slug"] = publico_slug
+        sanitized["golpe_id"] = golpe_id
+        for key in (
+            "aprovacao_telegram",
+            "aprovacao_terminal",
+            "aprovacao_desktop",
+            "postar_instagram",
+        ):
+            sanitized[key] = bool(config.get(key, False))
+        if not any(
+            sanitized[key]
+            for key in ("aprovacao_telegram", "aprovacao_terminal", "aprovacao_desktop")
+        ):
+            sanitized["aprovacao_desktop"] = True
+        if isinstance(config.get("preset_midia"), dict):
+            sanitized["preset_midia"] = config["preset_midia"]
+        if isinstance(config.get("preset_metadata"), dict):
+            sanitized["preset_metadata"] = config["preset_metadata"]
+        return sanitized
+
+    def create_campaign_request(
+        self,
+        config: dict[str, Any],
+        *,
+        source: str,
+        requested_by: str = "",
+        requester_label: str = "",
+    ) -> dict[str, Any]:
+        """Coloca uma nova campanha na fila para o worker Linux gerar."""
+        source = _clean(source, 20).upper()
+        if source not in CREATION_SOURCES:
+            raise SupabaseBridgeError("Origem da solicitação inválida.")
+        payload: dict[str, Any] = {
+            "source": source,
+            "requested_by": _clean(requested_by, 120) or None,
+            "requester_label": _clean(requester_label, 160),
+            "config": self._validate_creation_config(config),
+        }
+        try:
+            response = (
+                self.client.table("mkt_campaign_creation_requests")
+                .insert(payload)
+                .execute()
+            )
+        except Exception as exc:
+            raise SupabaseBridgeError(
+                f"Falha ao enfileirar criação da campanha: {exc}"
+            ) from exc
+        return (response.data or [payload])[0]
+
+    def claim_pending_creation_requests(self, limit: int = 5) -> list[dict[str, Any]]:
+        """Reivindica solicitações de criação sem permitir execução duplicada."""
+        bounded_limit = max(1, min(int(limit), 20))
+        try:
+            response = (
+                self.client.table("mkt_campaign_creation_requests")
+                .select("*")
+                .eq("status", "PENDING")
+                .order("created_at")
+                .limit(bounded_limit)
+                .execute()
+            )
+        except Exception as exc:
+            raise SupabaseBridgeError(
+                f"Falha ao consultar solicitações de criação: {exc}"
+            ) from exc
+        claimed: list[dict[str, Any]] = []
+        for request in response.data or []:
+            request_id = request.get("id")
+            if not request_id:
+                continue
+            try:
+                result = (
+                    self.client.table("mkt_campaign_creation_requests")
+                    .update({"status": "CLAIMED", "claimed_at": _now()})
+                    .eq("id", request_id)
+                    .eq("status", "PENDING")
+                    .execute()
+                )
+            except Exception as exc:
+                raise SupabaseBridgeError(
+                    f"Falha ao reivindicar criação {request_id}: {exc}"
+                ) from exc
+            if result.data:
+                claimed.append({**request, "status": "CLAIMED"})
+        return claimed
+
+    def recover_stale_creation_requests(
+        self,
+        *,
+        stale_after_seconds: int = 1800,
+        limit: int = 20,
+    ) -> list[str]:
+        """Recoloca na fila criações abandonadas por um worker interrompido."""
+        bounded_limit = max(1, min(int(limit), 50))
+        cutoff = (
+            datetime.now(timezone.utc)
+            - timedelta(seconds=max(60, int(stale_after_seconds)))
+        ).isoformat()
+        try:
+            response = (
+                self.client.table("mkt_campaign_creation_requests")
+                .select("id")
+                .eq("status", "CLAIMED")
+                .lt("claimed_at", cutoff)
+                .order("claimed_at")
+                .limit(bounded_limit)
+                .execute()
+            )
+        except Exception as exc:
+            raise SupabaseBridgeError(
+                f"Falha ao localizar criações abandonadas: {exc}"
+            ) from exc
+        recovered: list[str] = []
+        for request in response.data or []:
+            request_id = request.get("id")
+            if not request_id:
+                continue
+            result = (
+                self.client.table("mkt_campaign_creation_requests")
+                .update(
+                    {
+                        "status": "PENDING",
+                        "claimed_at": None,
+                        "completed_at": None,
+                        "result": {},
+                        "error_message": "",
+                    }
+                )
+                .eq("id", request_id)
+                .eq("status", "CLAIMED")
+                .lt("claimed_at", cutoff)
+                .execute()
+            )
+            if result.data:
+                recovered.append(str(request_id))
+        return recovered
+
+    def complete_campaign_request(
+        self,
+        request_id: str,
+        *,
+        success: bool,
+        result: dict[str, Any] | None = None,
+        error: str = "",
+    ) -> None:
+        """Finaliza uma solicitação sem persistir respostas brutas ou segredos."""
+        safe_result = {
+            key: value
+            for key, value in (result or {}).items()
+            if key in {"campaign_id", "status", "version", "provider", "qa_score"}
+        }
+        payload = {
+            "status": "SUCCEEDED" if success else "FAILED",
+            "result": safe_result,
+            "error_message": _clean(error, 1000),
+            "completed_at": _now(),
+        }
+        try:
+            self.client.table("mkt_campaign_creation_requests").update(payload).eq(
+                "id", _clean(request_id, 100)
+            ).eq("status", "CLAIMED").execute()
+        except Exception as exc:
+            raise SupabaseBridgeError(
+                f"Falha ao finalizar criação {request_id}: {exc}"
             ) from exc
 
     def complete_command(

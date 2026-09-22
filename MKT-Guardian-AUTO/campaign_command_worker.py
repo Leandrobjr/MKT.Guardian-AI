@@ -76,12 +76,19 @@ class CampaignCommandWorker:
         return MetaPublisher()
 
     def run_once(self, *, limit: int = 10, dry_run: bool = True) -> list[dict[str, Any]]:
+        creation_requests = self._claim_creation_requests(limit) if not dry_run else []
+        creation_results = [
+            self.process_campaign_request(request, dry_run=dry_run)
+            for request in creation_requests
+        ]
         commands = (
             self.bridge.list_pending_commands(limit)
             if dry_run
             else self.bridge.claim_pending_commands(limit)
         )
-        return [self.process_command(command, dry_run=dry_run) for command in commands]
+        return creation_results + [
+            self.process_command(command, dry_run=dry_run) for command in commands
+        ]
 
     def run_forever(
         self,
@@ -96,6 +103,18 @@ class CampaignCommandWorker:
         interval = max(5, int(poll_seconds))
         while not stop_event.is_set():
             try:
+                recover_requests = getattr(
+                    self.bridge, "recover_stale_creation_requests", None
+                )
+                if recover_requests:
+                    recovered_requests = recover_requests(
+                        stale_after_seconds=claim_timeout_seconds,
+                        limit=limit,
+                    )
+                    if recovered_requests:
+                        print(
+                            f"♻️ Criações recuperadas: {len(recovered_requests)}"
+                        )
                 recovered = self.bridge.recover_stale_commands(
                     stale_after_seconds=claim_timeout_seconds,
                     limit=limit,
@@ -108,6 +127,82 @@ class CampaignCommandWorker:
             except Exception as exc:
                 print(f"⚠️ Worker aguardará próxima tentativa: {exc}")
             stop_event.wait(interval)
+
+    def _claim_creation_requests(self, limit: int) -> list[dict[str, Any]]:
+        claim = getattr(self.bridge, "claim_pending_creation_requests", None)
+        if not claim:
+            return []
+        return claim(limit)
+
+    def process_campaign_request(
+        self, request: dict[str, Any], *, dry_run: bool = True
+    ) -> dict[str, Any]:
+        """Executa uma criação solicitada pelo Desktop ou Telegram."""
+        request_id = str(request.get("id") or "")
+        config = request.get("config") or {}
+        source = str(request.get("source") or "").upper()
+        if not isinstance(config, dict) or not config:
+            return self._finish_creation(
+                request_id,
+                False,
+                dry_run,
+                error="Solicitação sem configuração válida.",
+            )
+        if dry_run:
+            return {
+                "ok": True,
+                "dry_run": True,
+                "request_id": request_id,
+                "source": source,
+                "action": "CREATE_CAMPAIGN",
+            }
+        try:
+            from campaign_orchestrator import CampaignOrchestrator
+
+            CampaignOrchestrator().execute_automated_pipeline(config=config)
+            return self._finish_creation(
+                request_id,
+                True,
+                False,
+                result={"status": "GERADO", "executor": "linux_worker"},
+            )
+        except Exception as exc:
+            return self._finish_creation(
+                request_id,
+                False,
+                False,
+                error=f"Falha ao gerar campanha: {exc}",
+            )
+
+    def _finish_creation(
+        self,
+        request_id: str,
+        success: bool,
+        dry_run: bool,
+        *,
+        result: dict[str, Any] | None = None,
+        error: str = "",
+    ) -> dict[str, Any]:
+        if not dry_run and request_id:
+            complete = getattr(self.bridge, "complete_campaign_request", None)
+            if complete:
+                complete(
+                    request_id,
+                    success=success,
+                    result=result,
+                    error=error,
+                )
+        response: dict[str, Any] = {
+            "ok": success,
+            "dry_run": dry_run,
+            "request_id": request_id,
+            "action": "CREATE_CAMPAIGN",
+        }
+        if result:
+            response["result"] = result
+        if error:
+            response["error"] = error
+        return response
 
     def process_command(
         self, command: dict[str, Any], *, dry_run: bool = True

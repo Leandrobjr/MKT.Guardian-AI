@@ -4,6 +4,7 @@ import os
 import sys
 import tempfile
 import unittest
+from unittest.mock import patch
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -20,6 +21,8 @@ class FakeBridge:
         self.updates = []
         self.claimed = 0
         self.recovered = []
+        self.creation_requests = []
+        self.creation_completed = []
 
     def list_pending_commands(self, _limit):
         return self.commands
@@ -31,6 +34,15 @@ class FakeBridge:
     def recover_stale_commands(self, **kwargs):
         self.recovered.append(kwargs)
         return []
+
+    def claim_pending_creation_requests(self, _limit):
+        return self.creation_requests
+
+    def recover_stale_creation_requests(self, **kwargs):
+        return []
+
+    def complete_campaign_request(self, request_id, **kwargs):
+        self.creation_completed.append((request_id, kwargs))
 
     def get_campaign(self, _campaign_id):
         return self.campaign
@@ -164,6 +176,33 @@ class TestCampaignCommandWorker(unittest.TestCase):
         self.assertEqual(self.bridge.claimed, 0)
         self.assertEqual(self.bridge.completed, [])
         self.assertEqual(self.bridge.updates, [])
+
+    def test_processa_solicitacao_de_criacao_e_finaliza_fila(self):
+        worker = CampaignCommandWorker(
+            self.tmp,
+            bridge=self.bridge,
+            catalog=self.catalog,
+            revision_service_factory=FakeRevisionService,
+            publisher_factory=FakePublisher,
+        )
+        request = {
+            "id": "request-1",
+            "source": "DESKTOP",
+            "config": {
+                "publico_slug": "idosos",
+                "golpe_id": "falso_parente",
+                "aprovacao_desktop": True,
+            },
+        }
+        with patch("campaign_orchestrator.CampaignOrchestrator") as orchestrator:
+            result = worker.process_campaign_request(request, dry_run=False)
+
+        self.assertTrue(result["ok"])
+        orchestrator.return_value.execute_automated_pipeline.assert_called_once_with(
+            config=request["config"]
+        )
+        self.assertEqual(self.bridge.creation_completed[0][0], "request-1")
+        self.assertTrue(self.bridge.creation_completed[0][1]["success"])
 
     def test_execucao_registra_publicacao_e_resultado(self):
         worker = CampaignCommandWorker(

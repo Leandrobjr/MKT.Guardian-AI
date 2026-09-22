@@ -82,6 +82,80 @@
       </section>
 
       <section id="dashboard" class="hidden">
+        <section id="new-campaign-panel" class="panel">
+          <div class="panel-heading">
+            <div>
+              <p class="eyebrow">NOVA PRODUÇÃO</p>
+              <h2>Criar campanha</h2>
+            </div>
+            <span class="security-badge">Aprovação humana obrigatória</span>
+          </div>
+          <p class="muted">
+            Escolha os seis parâmetros. O worker Linux fará a geração e a
+            campanha ficará aguardando sua aprovação antes de qualquer publicação.
+          </p>
+          <div id="creation-message" class="message hidden" role="status" aria-live="polite"></div>
+          <form id="new-campaign-form" class="campaign-form">
+            <label>
+              Público-alvo
+              <select id="new-publico" required>
+                <option value="">Selecione</option>
+                <option value="idosos">Idosos / Aposentados</option>
+                <option value="pais">Pais / Filhos</option>
+                <option value="empresarios">Empresários / Comerciantes</option>
+                <option value="escolas">Escolas / Professores</option>
+              </select>
+            </label>
+            <label>
+              Tipo de golpe
+              <select id="new-golpe" required>
+                <option value="">Selecione</option>
+                <option value="falso_parente">Falso Parente</option>
+                <option value="pix_fantasma">Golpe do PIX</option>
+                <option value="falsa_central">Falsa Central Bancária</option>
+                <option value="grooming">Grooming</option>
+                <option value="phishing">Phishing</option>
+                <option value="clonagem_whatsapp">Clonagem de WhatsApp</option>
+                <option value="link_malicioso">Link Malicioso</option>
+                <option value="falso_emprego">Falso Emprego</option>
+                <option value="falso_investimento">Falso Investimento</option>
+              </select>
+            </label>
+            <label>
+              Tipo de mídia
+              <select id="new-midia" required>
+                <option value="">Selecione</option>
+                <option value="imagem">Imagem estática</option>
+                <option value="video">Vídeo comercial</option>
+              </select>
+            </label>
+            <label>
+              Canal
+              <select id="new-canal" required>
+                <option value="">Selecione</option>
+                <option value="meta">Meta Ads (Instagram/Facebook)</option>
+                <option value="tiktok">TikTok / YouTube Shorts</option>
+              </select>
+            </label>
+            <label>
+              Objetivo
+              <select id="new-objetivo" required>
+                <option value="">Selecione</option>
+                <option value="install">Instalação do aplicativo</option>
+                <option value="leads">Geração de leads</option>
+              </select>
+            </label>
+            <div class="creation-flow">
+              <span class="form-label">Fluxo pós-geração</span>
+              <strong>Salvar localmente + revisão no Desktop</strong>
+              <small>Telegram continuará recebendo notificações quando configurado.</small>
+            </div>
+            <button class="button button-primary form-submit" type="submit">
+              Enfileirar geração
+            </button>
+          </form>
+        </section>
+
         <div class="dashboard-toolbar">
           <div>
             <p class="eyebrow">VISÃO OPERACIONAL</p>

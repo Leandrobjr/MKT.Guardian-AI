@@ -679,6 +679,13 @@ timeout e polling automático da fila Desktop.
 `PRONTA_PARA_PUBLICAR` e `ERRO_PUBLICACAO` não liberam mais publicação; as
 campanhas legadas sem aprovação foram devolvidas para revisão no Desktop.
 
+**Orquestrador v5.70:** Desktop e Telegram passaram a usar uma fila única de
+solicitações de criação no Supabase. O Desktop ganhou o formulário de seis
+etapas; o Telegram mantém o comando `/nova` como entrada móvel. O worker Linux
+gera a campanha e devolve o resultado para aprovação humana no Desktop. A fila
+possui RLS, validação de configuração, lock e recuperação de solicitações
+interrompidas.
+
 ## 6. Segurança obrigatória
 
 - remover a exibição de tokens completos no Desktop;
@@ -737,7 +744,9 @@ Metas iniciais:
 10. Avaliar fornecedores alternativos somente após medir o baseline.
 11. Tornar o worker Linux um serviço contínuo, com retry seguro e
   processamento automático da fila Desktop.
-12. Como último item da implementação, criar anúncios Meta com CTA clicável e
+12. Implementar a interface única de criação de campanhas no Desktop e no
+   Telegram, com fila compartilhada e aprovação humana no Desktop.
+13. Como último item da implementação, criar anúncios Meta com CTA clicável e
   destino `https://guardian-ai.app` via Meta Ads API; o texto no card
     continuará sendo apenas reforço visual.
 

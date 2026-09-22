@@ -1,53 +1,262 @@
-# Descritivo Técnico do Sistema - Fábrica de Mídia Guardian-AI (v15.0)
+# MKT Guardian AI — Fábrica Automatizada de Campanhas
 
-Este documento descreve de forma analítica e profissional a arquitetura, o stack tecnológico e o pipeline automatizado de geração de ativos de marketing (imagens e vídeos de alta conversão) para o aplicativo de segurança cibernética **Guardian-AI**.
+**Versão atual:** Orquestrador v5.70 · Fábrica de Mídia v18.12
+**Produto:** [Guardian AI](https://guardian-ai.app)
+**Diretório principal:** `MKT-Guardian-AUTO`
 
----
+Este README é a documentação técnica operacional do sistema. O mesmo conteúdo
+também é mantido no `README.md` da raiz do projeto.
 
-## 1. Stack Tecnológico Atual
+## 1. Objetivo
 
-A aplicação opera sobre uma infraestrutura modular em Python 3.12, utilizando APIs de última geração para orquestração de inteligência artificial generativa e manipulação de mídia em baixo nível.
+O sistema produz campanhas para o aplicativo Guardian AI, combinando estratégia,
+copy, geração de imagem e vídeo, narração, composição gráfica, QA e aprovação
+humana antes de qualquer publicação.
 
-* **Linguagem Base:** Python 3.12+ (executado em ambiente virtual isolado `venv`).
-* **Orquestração Visual & Prompts:** `google-genai` (utilizando o modelo `gemini-3.1-flash-lite`).
-* **Geração de Imagem Base:** `google-genai` (utilizando o modelo `gemini-3.1-flash-image`).
-* **Geração de Vídeo Nativo:** API Kling AI (Gateway Internacional de Singapura, modelo **Kling 3.0 Turbo**).
-* **Locução Profissional (TTS):** API ElevenLabs (Modelo `eleven_multilingual_v2`).
-* **Renderização Gráfica Headless:** `playwright` (Chromium Headless) para injeção de layouts HTML5/CSS3 (TailwindCSS).
-* **Processamento e Multiplexação de Mídia:** `FFmpeg` (via subprocessos nativos do Linux).
-* **Gerenciamento de Ambiente:** `python-dotenv` para isolamento seguro de credenciais.
+## 2. Arquitetura atual
 
----
+```text
+Desktop ───────┐
+               ├─► Supabase: fila de criação ─► Worker Linux
+Telegram ──────┘                                      │
+                                                      ▼
+                                      Orquestrador + IA + Fábrica de mídia
+                                                      │
+                                                      ▼
+                                  Campanha aguardando aprovação humana
+                                                      │
+                                                      ▼
+                              Desktop: aprovar, rejeitar ou solicitar ajuste
+                                                      │
+                                                      ▼
+                              Worker: publicação autorizada ou bloqueada
+```
 
-## 2. Pipeline de Execução Detalhado (Etapa por Etapa)
+### Componentes principais
 
-O fluxo de trabalho foi refatorado para garantir o isolamento completo entre as mídias estáticas e dinâmicas, eliminando duplicidades no orquestrador e blindando o sistema contra textos distorcidos em línguas estrangeiras.
+| Componente | Responsabilidade |
+|---|---|
+| `campaign_orchestrator.py` | Coordena contexto, copy, produção, QA e estados |
+| `campaign_context_engine.py` | Resolve a matriz público × golpe |
+| `campaign_contract.py` e catálogo | Valida combinações, gênero, nexo e consequências |
+| `mkt_agent_01.py` | Gera e compõe imagem, vídeo, áudio, cards, CTA e logo |
+| `visual_quality_audit.py` | Executa QA visual determinística e multimodal |
+| `opencode_client.py` | Usa DeepSeek via OpenCode para estratégia, copy e visão |
+| `hybrid_tts.py` | Alterna Google Chirp 3 HD e ElevenLabs |
+| `supabase_campaign_bridge.py` | Integração backend com Supabase |
+| `campaign_command_worker.py` | Processa criações, decisões editoriais e publicações |
+| `desktop/` | Interface autenticada de criação e aprovação |
+| `telegram_bot.py` | Wizard móvel `/nova` e notificações |
+| `meta_publisher.py` | Publicação opcional no Instagram/Meta |
+| `kling_client.py` | Cliente de geração de vídeo Kling |
 
-### Etapa 1: Ingestão de Dados e Geração de Áudio
-1. O orquestrador envia os dados criativos coletados (gancho inicial, copy e público-alvo).
-2. O sistema expande o texto em uma narrativa de alta conversão adaptada para os limites do Instagram Reels/Meta Ads.
-3. O texto é enviado à API da ElevenLabs para gerar a voz institucional limpa.
-4. O FFmpeg captura a voz gerada, varre a pasta `trilhas_sonoras/musicas_suspense` de forma dinâmica, sorteia uma faixa e faz a mixagem de fundo (aplicando atenuação de `-24dB` na trilha para dar o peso psicológico necessário, sem gerar ruídos ou distorções).
+## 3. Stack tecnológico
 
-### Etapa 2: Isolamento de Fluxo e Direção de Arte
-O sistema divide o caminho de execução dependendo da escolha do usuário no menu principal:
+- Python 3.12+ em ambiente virtual `venv`;
+- Google GenAI SDK;
+- DeepSeek V4 Flash Vision Exp via OpenCode como agente primário;
+- Gemini 3.6 Flash como fallback para texto e QA;
+- Gemini 2.5 Flash Image para geração de imagem;
+- Kling AI para vídeo, com fallback para composição estática;
+- Google Chirp 3 HD e ElevenLabs para narração híbrida;
+- Pillow e FFmpeg para composição, normalização e multiplexação;
+- Supabase Auth, PostgreSQL, Storage e RLS;
+- JavaScript modular no Desktop, usando somente chave publicável.
 
-#### Fluxo A: Imagem Estática Premium
-1. O Gemini gera um prompt publicitário estrito focado na mãe determinado/protetora e na filha (Mariana) visível ao fundo, com iluminação de estúdio high-end.
-2. A imagem pura e limpa (totalmente livre de textos distorcidos) é gerada pelo Gemini Image.
-3. O Playwright abre uma instância invisível do navegador, monta um layout HTML com TailwindCSS, renderiza a imagem de fundo, desenha a Headline de impacto no topo, injeta o card de notificação real do **Guardian-AI** em português perfeito no centro e insere o botão vermelho de conversão na base.
-4. Um screenshot em alta definição (`.jpg` com 98% de qualidade) é salvo.
+O Gemini 3.6 é modelo de texto/visão neste projeto. A geração de imagem usa
+`GEMINI_MODEL_IMAGEM=gemini-2.5-flash-image`; não existe
+`gemini-3.6-flash-image` configurado.
 
-#### Fluxo B: Vídeo em Movimento Cinematográfico (Kling 3.0 Turbo)
-1. O sistema envia uma requisição HTTP direta usando a API Key como Bearer Token estático para o endpoint oficial de Singapura.
-2. O payload é estruturado com o prompt de estúdio publicitário focado em proteção infantil contra grooming, configurado nativamente na proporção vertical `9:16`.
-3. O sistema entra em um ciclo de monitoramento (*polling*) a cada 10 segundos na rota de tarefas até que o servidor retorne o status de sucesso e o link do MP4 bruto.
-4. O vídeo em movimento limpo é baixado para a pasta local.
+## 4. Como criar uma campanha
 
-### Etapa 3: Composição Sequencial por Frames (Solução Definitiva)
-Para garantir que as mensagens em português do Brasil fiquem nítidas e não sofram distorções no vídeo, o motor aplica a engenharia de renderização frame a frame:
-1. O FFmpeg explode o vídeo bruto baixado da Kling AI em frames sequenciais de imagem de alta qualidade.
-2. O Playwright entra em ação: para cada frame extraído, o navegador headless projeta o frame como background e renderiza por cima dele a interface real, com as fontes corporativas da marca e o link oficial.
-3. O navegador salva o frame processado. Esse ciclo se repete para toda a sequência do vídeo.
-4. O FFmpeg é acionado uma última vez para juntar todos os frames processados de volta em um fluxo de vídeo a 25 quadros por segundo, embutindo simultaneamente o arquivo de áudio final (Voz + Trilha Sonora).
-5. O cache de frames é limpo por segurança, entregando o arquivo `anuncio_video_final.mp4` pronto para veiculação no Meta Ads.
+### 4.1 Desktop — fluxo principal
+
+1. Inicie a interface Desktop.
+2. Informe URL do Supabase e chave publicável.
+3. Faça login com perfil `ACTIVE` e papel `ADMIN`.
+4. No painel **Criar campanha**, selecione público, golpe, mídia, canal e
+   objetivo.
+5. Confirme o envio.
+6. A solicitação entra em `mkt_campaign_creation_requests`.
+7. O worker Linux gera o criativo e executa a QA.
+8. A campanha aparece como `AGUARDANDO_APROVACAO_FINAL`.
+
+O navegador apenas cria uma solicitação ou comando autorizado pela sessão. Ele
+não altera diretamente o status da campanha.
+
+### 4.2 Telegram
+
+1. Envie `/nova` ao bot.
+2. Siga as seis etapas do wizard.
+3. Confirme o resumo.
+4. Com `SUPABASE_CAMPAIGN_SYNC=true`, a configuração entra na mesma fila do
+   Desktop.
+5. O resultado é revisado e aprovado no Desktop.
+
+Sem a ponte Supabase, o modo legado do bot pode executar o pipeline localmente,
+conforme o fluxo configurado. Para produção, recomenda-se usar a fila central.
+
+## 5. Seis parâmetros de campanha
+
+| Etapa | Opções principais |
+|---|---|
+| Público | Idosos, pais, empresários ou escolas |
+| Golpe | Falso parente, PIX, falsa central, grooming, phishing, clonagem, link malicioso, falso emprego ou falso investimento |
+| Mídia | Imagem estática ou vídeo comercial |
+| Canal | Meta Ads ou TikTok/YouTube Shorts |
+| Objetivo | Instalação do aplicativo ou geração de leads |
+| Pós-geração | Revisão humana pelo Desktop |
+
+Imagem estática quadrada é validada para Meta Ads. Vídeos verticais podem usar
+Meta Reels ou TikTok/YouTube Shorts. O upload para TikTok continua manual.
+
+## 6. Pipeline de produção
+
+1. **Contexto:** a matriz canônica define persona, cena, gancho, frase do
+   golpista e CTA.
+2. **Estratégia e copy:** DeepSeek via OpenCode gera ou revisa a estrutura;
+   Gemini 3.6 assume quando necessário.
+3. **Guardrails:** o sistema corrige gênero, nexo, mecanismo financeiro,
+   consequência, vocativo e promessas incompatíveis com o produto.
+4. **Imagem:** Gemini Image produz uma base sem texto essencial incorporado.
+5. **Vídeo:** Kling produz o movimento quando solicitado.
+6. **Narração:** Chirp 3 HD e ElevenLabs são roteados por canal, com fallback.
+7. **Composição:** Pillow/FFmpeg aplicam headline, cards, logo, CTA e URL.
+8. **Áudio:** FFmpeg executa normalização EBU R128 e mixagem com trilha.
+9. **QA:** a campanha é bloqueada para publicação se houver texto inventado,
+   telefone duplicado, mockup ampliado, tela cortada, artefato ou incoerência.
+10. **Aprovação:** somente um humano pode liberar a campanha.
+
+## 7. Estados e publicação
+
+Estados relevantes:
+
+`GERANDO` · `PRODUZIDA` · `AGUARDANDO_APROVACAO_FINAL` ·
+`AJUSTE_SOLICITADO` · `APROVADA` · `REJEITADA` · `PUBLICANDO` ·
+`PUBLICADA` · `ERRO_PUBLICACAO`.
+
+Uma publicação só é aceita quando há:
+
+- status remoto `APROVADA`;
+- `aprovado_por` preenchido;
+- QA multimodal aprovada;
+- asset local válido;
+- comando `PUBLISH` confirmado pelo usuário.
+
+Campanhas TikTok não recebem publicação automática; são exportadas para upload
+manual.
+
+## 8. Supabase e segurança
+
+A integração utiliza:
+
+- `mkt_campaign_creation_requests` para novas campanhas;
+- `mkt_campaigns` para campanhas e assets;
+- `mkt_campaign_commands` para decisões e publicação;
+- bucket privado `mkt-campaign-assets`;
+- RLS para usuários autenticados com perfil administrativo.
+
+Regras obrigatórias:
+
+- o navegador usa somente `SUPABASE_PUBLISHABLE_KEY`;
+- `SUPABASE_SERVICE_ROLE_KEY` fica exclusivamente no Linux/worker;
+- tokens não são salvos em tabelas, logs ou código;
+- o `.env` oficial fica na raiz do projeto;
+- não publique `.env` nem arquivos gerados no Git;
+- em produção, hospede o Desktop com HTTPS;
+- valide tipo, tamanho e caminho dos assets.
+
+## 9. Execução local
+
+```bash
+cd ~/Documentos/Guardian-AI/MKT_Guardian-AI/MKT-Guardian-AUTO
+source venv/bin/activate
+```
+
+Para abrir o Desktop:
+
+```bash
+python3 -m http.server 8081 --bind 127.0.0.1 --directory desktop
+```
+
+Abra `http://127.0.0.1:8081`. Se a porta estiver ocupada, escolha outra livre.
+
+Para iniciar o bot:
+
+```bash
+python3 telegram_bot.py
+```
+
+Para executar o orquestrador pelo terminal:
+
+```bash
+python3 campaign_orchestrator.py
+```
+
+## 10. Worker Linux contínuo
+
+```bash
+mkdir -p ~/.config/systemd/user
+cp deploy/guardian-campaign-worker.service ~/.config/systemd/user/
+systemctl --user daemon-reload
+systemctl --user enable --now guardian-campaign-worker.service
+```
+
+Verificação:
+
+```bash
+systemctl --user status guardian-campaign-worker.service
+journalctl --user -u guardian-campaign-worker.service -f
+```
+
+O worker usa lock contra concorrência, recupera solicitações abandonadas após
+30 minutos e consulta a fila a cada 15 segundos.
+
+Para simular comandos sem executar:
+
+```bash
+python3 campaign_command_worker.py
+```
+
+O modo contínuo exige `--execute`. Isso processa a fila, mas não publica
+automaticamente: a publicação depende de aprovação humana e de um comando
+`PUBLISH`.
+
+## 11. Testes e diagnóstico
+
+```bash
+python3 -m unittest discover -s tests -v
+python3 -m py_compile campaign_orchestrator.py campaign_command_worker.py
+python3 validate_criatividade.py
+```
+
+Diagnósticos auxiliares:
+
+```bash
+python3 elevenlabs_check.py
+python3 kling_diagnostico.py
+python3 descobrir_chat_id.py
+```
+
+## 12. Estrutura resumida
+
+```text
+MKT-Guardian-AUTO/
+├── campaign_orchestrator.py
+├── campaign_command_worker.py
+├── campaign_catalog.py
+├── campaign_revision_service.py
+├── desktop/
+├── deploy/
+├── supabase/migrations/
+├── tests/
+├── contexto_negocio/
+├── trilhas_sonoras/
+└── .env.example
+```
+
+## 13. Próxima etapa planejada
+
+O próximo item funcional é criar anúncios Meta com CTA realmente clicável e
+destino `https://guardian-ai.app` pela Meta Ads API. O texto do card continuará
+sendo apenas reforço visual; o destino clicável será configurado no anúncio.

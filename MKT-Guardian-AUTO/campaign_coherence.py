@@ -259,6 +259,30 @@ def infer_protagonist_gender(creative_data: dict) -> str:
     return gc if gc in ("feminino", "masculino") else ""
 
 
+def align_headline_gender_with_roteiro(headline: str, roteiro: str) -> str:
+    """Corrige pronome de sujeito da manchete conforme o protagonista do roteiro."""
+    text = (headline or "").strip()
+    target_gender = _gender_from_roteiro(roteiro or "")
+    if not text or not target_gender:
+        return text
+
+    expected = "ela" if target_gender == "feminino" else "ele"
+    replacement = "ELA" if expected.isupper() else expected
+    pattern = re.compile(r"^(\s*[\"'“”‘’(\[—–-]*\s*)(ele|ela)\b", re.IGNORECASE)
+    match = pattern.match(text)
+    if not match or match.group(2).casefold() == expected:
+        return text
+
+    original = match.group(2)
+    if original.isupper():
+        replacement = expected.upper()
+    elif original[:1].isupper():
+        replacement = expected.capitalize()
+    else:
+        replacement = expected
+    return f"{text[:match.start(2)]}{replacement}{text[match.end(2):]}"
+
+
 def is_gender_coherent(creative_data: dict) -> bool:
     """True se genero_campanha/cena batem com o protagonista nomeado no roteiro."""
     roteiro_gender = _gender_from_roteiro(creative_data.get("desenvolvimento_copy", ""))

@@ -7,6 +7,7 @@ import unittest
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from campaign_coherence import (
+    align_headline_gender_with_roteiro,
     infer_recipient_gender,
     is_ambiguous_pix_headline,
     is_coherent,
@@ -18,6 +19,34 @@ from campaign_coherence import (
 
 
 class TestCampaignCoherence(unittest.TestCase):
+    def test_alinha_pronome_da_headline_ao_protagonista_feminino(self):
+        self.assertEqual(
+            align_headline_gender_with_roteiro(
+                "ELE CONFIOU NO ATENDENTE. PERDEU TUDO.",
+                "Dona Maria recebeu uma mensagem da falsa central bancária.",
+            ),
+            "ELA CONFIOU NO ATENDENTE. PERDEU TUDO.",
+        )
+
+    def test_alinha_pronome_da_headline_ao_protagonista_masculino(self):
+        self.assertEqual(
+            align_headline_gender_with_roteiro(
+                "ELA CONFIOU NO ATENDENTE. PERDEU TUDO.",
+                "Seu Carlos recebeu uma mensagem da falsa central bancária.",
+            ),
+            "ELE CONFIOU NO ATENDENTE. PERDEU TUDO.",
+        )
+
+    def test_nao_altera_objeto_feminino_na_headline(self):
+        headline = "O GOLPISTA ENGANOU ELA NO WHATSAPP"
+        self.assertEqual(
+            align_headline_gender_with_roteiro(
+                headline,
+                "Seu Carlos recebeu uma mensagem da falsa central bancária.",
+            ),
+            headline,
+        )
+
     def test_incoherent_cadastro_vs_brinde(self):
         roteiro = (
             "Você clica no link de atualização de cadastro do fornecedor no WhatsApp Business."

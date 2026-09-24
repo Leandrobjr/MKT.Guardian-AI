@@ -8,6 +8,7 @@ from typing import Any
 
 from campaign_catalog import CampaignCatalog
 from campaign_history import CampaignHistory
+from campaign_coherence import align_headline_gender_with_roteiro
 from channel_presets import resolve_channel_preset
 from env_loader import load_project_env
 from mkt_agent_01 import MediaFactory
@@ -24,9 +25,20 @@ class CampaignRevisionError(RuntimeError):
 class CampaignRevisionService:
     """Regera visual, audita e devolve a campanha para aprovação."""
 
+    _CTA_BY_PUBLICO = {
+        "idosos": "TESTE GRÁTIS — PROTEJA SEU WHATSAPP AGORA!",
+        "pais": "TESTE GRÁTIS — PROTEJA O WHATSAPP DOS SEUS FILHOS!",
+        "empresarios": "TESTE GRÁTIS — PROTEJA SEU WHATSAPP BUSINESS!",
+        "escolas": "TESTE GRÁTIS — PROTEJA O WHATSAPP DA SUA ESCOLA!",
+    }
     _LAYOUT_FEEDBACK_MARKERS = (
         "card",
         "mensagem final",
+        "headline",
+        "manchete",
+        "pronome",
+        "gênero",
+        "genero",
         "endereço",
         "endereco",
         "site",
@@ -35,6 +47,12 @@ class CampaignRevisionService:
         "tamanho",
         "visualização",
         "visualizacao",
+    )
+
+    _SERIOUS_EXPRESSION_RULE = (
+        "The protagonist must have a worried, serious and tense expression compatible "
+        "with receiving a bank fraud alert: furrowed eyebrows, pressed lips and focused "
+        "eyes on the phone. Absolutely no smile, happiness, contentment or relaxed pose."
     )
 
     _PHONE_SCREEN_RULE = (
@@ -109,13 +127,23 @@ class CampaignRevisionService:
             if item
         )
         regras = {
-            "regras_obrigatorias": [self._PHONE_SCREEN_RULE],
+            "regras_obrigatorias": [
+                self._PHONE_SCREEN_RULE,
+                self._SERIOUS_EXPRESSION_RULE,
+            ],
             "proibicoes": [
                 *(reference.get("rejeitado") or []),
                 "readable text, chat bubbles, message text or logos inside the phone screen",
+                "smiling, happy, content or relaxed facial expression",
             ],
             "estilo_fotografico": reference.get("estilo_fotografico", ""),
         }
+        cena = f"{cena}. {self._SERIOUS_EXPRESSION_RULE}"
+        headline = self._resolve_headline(campaign, current, snapshot)
+        cta = self._CTA_BY_PUBLICO.get(
+            publico,
+            "TESTE GRÁTIS — PROTEJA SEU WHATSAPP AGORA!",
+        )
         creative = {
             "campaign_id": campaign.get("campaign_id"),
             "publico_slug": publico,
@@ -123,12 +151,7 @@ class CampaignRevisionService:
             "canal_veiculacao_selecionado": canal,
             "tipo_midia_selecionada": midia,
             "preset_midia": preset,
-            "gancho_atencao_inicial": (
-                campaign.get("metadata", {}).get("headline")
-                or current.get("headline")
-                or snapshot.get("headline")
-                or ""
-            ),
+            "gancho_atencao_inicial": headline,
             "desenvolvimento_copy": campaign.get("roteiro") or current.get("roteiro") or "",
             "texto_card_notificacao": frase,
             "frase_destaque_golpista": frase,
@@ -139,8 +162,8 @@ class CampaignRevisionService:
             "visual_reference_id": snapshot.get("visual_reference_id", ""),
             "ambiente_cena": snapshot.get("ambiente", ""),
             "link_conversao": "https://guardian-ai.app",
-            "texto_botao_conversao": "TESTE GRÁTIS — PROTEJA O WhatsApp do SEU FILHO, AGORA!",
-            "chamada_para_acao_cta": "TESTE GRÁTIS — PROTEJA O WhatsApp do SEU FILHO, AGORA!",
+            "texto_botao_conversao": cta,
+            "chamada_para_acao_cta": cta,
             "creative_brief": {
                 "publico": publico,
                 "golpe": golpe,
@@ -151,6 +174,46 @@ class CampaignRevisionService:
         creative["chamada_para_acao_cta"] = resolve_overlay_cta(creative)
         creative["texto_botao_conversao"] = creative["chamada_para_acao_cta"]
         return creative
+
+    @staticmethod
+    def _resolve_headline(
+        campaign: dict[str, Any],
+        current: dict[str, Any],
+        snapshot: dict[str, Any],
+    ) -> str:
+        """Preserva a headline editorial escolhida antes de uma revisão."""
+        metadata = campaign.get("metadata") or {}
+        for value in (
+            snapshot.get("headline_escolhida"),
+            metadata.get("headline"),
+            current.get("headline"),
+            snapshot.get("headline"),
+        ):
+            text = str(value or "").strip()
+            if text:
+                roteiro = str(
+                    campaign.get("roteiro")
+                    or current.get("roteiro")
+                    or snapshot.get("copy_hook")
+                    or ""
+                )
+                return align_headline_gender_with_roteiro(text, roteiro)
+        return ""
+
+    @classmethod
+    def _caption_with_headline(
+        cls,
+        campaign: dict[str, Any],
+        headline: str,
+        cta: str,
+        url: str,
+    ) -> str:
+        caption = cls._caption_with_cta(campaign, cta, url)
+        lines = caption.splitlines()
+        if lines:
+            lines[0] = headline
+            return "\n".join(lines)
+        return f"{headline}\n\n{cta} — {url}"
 
     @classmethod
     def _is_layout_only_feedback(cls, feedback: str) -> bool:
@@ -177,6 +240,22 @@ class CampaignRevisionService:
                     "trocar o fundo",
                     "alterar personagem",
                     "trocar personagem",
+                    "regenerar personagem",
+                    "personagem",
+                    "expressão",
+                    "expressao",
+                    "sorriso",
+                    "sorrindo",
+                    "feliz",
+                    "contente",
+                    "preocupada",
+                    "preocupado",
+                    "seriedade",
+                    "séria",
+                    "seria",
+                    "tensa",
+                    "tenso",
+                    "rosto",
                     "melhorar o rosto",
                     "trocar o telefone",
                     "gerar outra imagem",
@@ -280,22 +359,38 @@ class CampaignRevisionService:
             raise CampaignRevisionError("GEMINI_API_KEY não configurada para QA.")
 
         factory = MediaFactory()
+        cta = creative["chamada_para_acao_cta"]
+        creative["caption"] = self._caption_with_headline(
+            campaign,
+            creative["gancho_atencao_inicial"],
+            cta,
+            creative["link_conversao"],
+        )
+        creative.update(
+            {
+                "overlay_cta_font_size": 20,
+                "overlay_url_font_size": 26,
+                "overlay_url_bottom_padding": 26,
+            }
+        )
         audit_config = {
             "canal": campaign.get("canal", ""),
             "midia": campaign.get("midia", ""),
         }
         if self._is_layout_only_feedback(feedback):
-            cta = "TESTE GRÁTIS! PROTEJA O WHATSAPP DO SEU FILHO AGORA!"
             creative.update(
                 {
                     "texto_botao_conversao": cta,
                     "chamada_para_acao_cta": cta,
                     "link_conversao": "https://guardian-ai.app",
-                    "overlay_cta_font_size": 18,
-                    "overlay_url_font_size": 18,
-                    "overlay_url_bottom_padding": 20,
-                    "caption": self._caption_with_cta(
-                        campaign, cta, "https://guardian-ai.app"
+                    "overlay_cta_font_size": 20,
+                    "overlay_url_font_size": 26,
+                    "overlay_url_bottom_padding": 26,
+                    "caption": self._caption_with_headline(
+                        campaign,
+                        creative["gancho_atencao_inicial"],
+                        cta,
+                        "https://guardian-ai.app",
                     ),
                 }
             )

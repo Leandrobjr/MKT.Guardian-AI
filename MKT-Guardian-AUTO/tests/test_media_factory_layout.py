@@ -2,6 +2,7 @@
 
 import os
 import sys
+import tempfile
 import unittest
 
 from PIL import Image, ImageDraw
@@ -56,6 +57,25 @@ class TestMediaFactoryLayout(unittest.TestCase):
         )
 
         self.assertFalse(high_risk)
+
+    def test_falha_visual_preserva_base_anterior(self):
+        factory = MediaFactory.__new__(MediaFactory)
+        factory.work_dir = tempfile.mkdtemp()
+        base = os.path.join(factory.work_dir, "base.jpg")
+        with open(base, "wb") as file:
+            file.write(b"base-anterior")
+
+        factory._generate_gemini_image = lambda *args, **kwargs: False
+        result = factory._generate_visual_candidates(
+            "prompt",
+            base,
+            {"direcao_arte_emocional": "pessoa em casa"},
+            "campanha",
+        )
+
+        with open(base, "rb") as file:
+            self.assertEqual(file.read(), b"base-anterior")
+        self.assertFalse(result["visual_generated"])
 
     def test_extrai_metricas_loudnorm_para_segunda_passagem(self):
         stats = MediaFactory._parse_loudnorm_stats(

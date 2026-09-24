@@ -37,6 +37,7 @@ from campaign_coherence import (
     describe_protagonist,
     format_nexo_prompt_block,
     infer_protagonist_gender,
+    align_headline_gender_with_roteiro,
     is_coherent_for_campaign,
     is_coherent,
     is_gender_coherent,
@@ -455,6 +456,17 @@ class CampaignOrchestrator:
         headline = (creative_data.get("gancho_atencao_inicial") or "").strip()
         contract = (config or {}).get("_campaign_contract") or {}
         phrase = (campaign_ctx.get("frase_golpista") or "").casefold()
+        corrected_gender_headline = align_headline_gender_with_roteiro(
+            headline,
+            creative_data.get("desenvolvimento_copy", ""),
+        )
+        if corrected_gender_headline != headline:
+            creative_data["gancho_atencao_inicial"] = corrected_gender_headline
+            creative_data["headline_escolhida"] = corrected_gender_headline
+            headline = corrected_gender_headline
+            print(
+                "📌 Headline alinhada ao gênero do protagonista identificado no roteiro."
+            )
 
         if contract.get("mecanismo") == "transferencia_pix_autorizada":
             canonical_type_id = contract.get("canonical_type_id")
@@ -2689,6 +2701,11 @@ class CampaignOrchestrator:
                         )
                     creative_data = self._regenerate_headline_only(
                         creative_data, config, golpe_obj, feedback
+                    )
+                    creative_data = self._sanitize_headline_semantics(
+                        creative_data,
+                        config.get("_campaign_context", {}),
+                        config,
                     )
                     recompose_next = True
                     instrucoes_melhoria = ""

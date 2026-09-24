@@ -1073,7 +1073,7 @@ class MediaFactory:
         audit_config: dict | None = None,
     ) -> dict:
         flags, high_risk = self._visual_risk_profile(creative_data, prompt)
-        self._generate_gemini_image(
+        primary_generated = self._generate_gemini_image(
             prompt,
             base_image_path,
             creative_data=creative_data,
@@ -1083,8 +1083,9 @@ class MediaFactory:
             "visual_candidate_count": 1,
             "visual_candidate_selected": "primary",
             "visual_risk_flags": flags,
+            "visual_generated": bool(primary_generated),
         }
-        if not high_risk or not os.path.isfile(base_image_path):
+        if not primary_generated or not high_risk or not os.path.isfile(base_image_path):
             return selection
 
         candidate_path = os.path.join(
@@ -1097,16 +1098,17 @@ class MediaFactory:
             "the exact protagonist gender, public, scam context, one physical smartphone, "
             "safe margins and all post-production text restrictions."
         )
-        self._generate_gemini_image(
+        candidate_generated = self._generate_gemini_image(
             candidate_prompt,
             candidate_path,
             creative_data=creative_data,
             basename=f"{basename}_candidate2",
         )
-        if not os.path.isfile(candidate_path):
+        if not candidate_generated or not os.path.isfile(candidate_path):
             return selection
 
         selection["visual_candidate_count"] = 2
+        selection["visual_generated"] = True
         scored: list[tuple[float, str]] = []
         if visual_auditor is not None:
             for label, path in (("primary", base_image_path), ("candidate2", candidate_path)):
@@ -1157,6 +1159,11 @@ class MediaFactory:
         )
         self.canvas_width = int(self.preset_midia.get("width", 1080))
         self.canvas_height = int(self.preset_midia.get("height", 1080))
+        self.cta_font_size_override = creative_data.get("overlay_cta_font_size")
+        self.url_font_size_override = creative_data.get("overlay_url_font_size")
+        self.url_bottom_padding_override = creative_data.get(
+            "overlay_url_bottom_padding"
+        )
 
         basename = prior_assets.get("basename", "campanha")
         base_image_path = prior_assets.get("base_image_file") or os.path.join(
@@ -1186,23 +1193,28 @@ class MediaFactory:
         if creative_data.get("frase_destaque_golpista"):
             frases_destaque.append(creative_data["frase_destaque_golpista"])
 
-        for path in (base_image_path, final_design_path):
-            if path and os.path.isfile(path):
-                try:
-                    os.remove(path)
-                except OSError:
-                    pass
-
         publicidade_prompt = self._build_visual_prompt(creative_data)
+        base_candidate_path = os.path.join(
+            self.work_dir, f"{basename}_base_candidate.jpg"
+        )
+        final_candidate_path = os.path.join(
+            self.work_dir, f"{basename}_final_candidate.jpg"
+        )
+        video_candidate_path = os.path.join(
+            self.work_dir, f"{basename}_video_candidate.mp4"
+        )
         visual_selection = self._generate_visual_candidates(
             publicidade_prompt,
-            base_image_path,
+            base_candidate_path,
             creative_data,
             basename,
             visual_auditor=visual_auditor,
             audit_config=audit_config,
         )
-        if not os.path.isfile(base_image_path):
+        if (
+            not visual_selection.get("visual_generated")
+            or not os.path.isfile(base_candidate_path)
+        ):
             print("❌ Falha ao regerar imagem Gemini.")
             return prior_assets
 
@@ -1210,23 +1222,31 @@ class MediaFactory:
             overlay_png, headline, alerta_texto, solucao_texto, cta_texto, url_conversao, frases_destaque,
         )
         self._apply_pillow_layout(
-            base_image_path, final_design_path,
+            base_candidate_path, final_candidate_path,
             headline, alerta_texto, solucao_texto, cta_texto, url_conversao, frases_destaque,
         )
+        if not os.path.isfile(final_candidate_path):
+            print("❌ Falha ao compor o novo layout visual.")
+            return prior_assets
 
         video_ok = False
-        if self._audio_ok(audio_final_path) and os.path.isfile(base_image_path):
+        if self._audio_ok(audio_final_path) and os.path.isfile(base_candidate_path):
             duration = self._get_audio_duration(audio_final_path)
             zoom = still_video_zoom_filter(
                 self.canvas_width, self.canvas_height, int(duration * 25), 25
             )
             video_ok = compose_still_with_overlay(
-                base_image_path, overlay_png, audio_final_path,
-                video_output_path, duration,
+                base_candidate_path, overlay_png, audio_final_path,
+                video_candidate_path, duration,
                 self.canvas_width, self.canvas_height, zoom,
             )
             if video_ok:
                 print("✅ MP4 estático regerado (nova imagem + áudio original).")
+
+        os.replace(base_candidate_path, base_image_path)
+        os.replace(final_candidate_path, final_design_path)
+        if video_ok and os.path.isfile(video_candidate_path):
+            os.replace(video_candidate_path, video_output_path)
 
         return {
             **prior_assets,
@@ -1304,6 +1324,11 @@ class MediaFactory:
         audit_config: dict | None = None,
     ) -> dict:
         self.card_body_font_size = int(creative_data.get("overlay_card_font_size", 22))
+        self.cta_font_size_override = creative_data.get("overlay_cta_font_size")
+        self.url_font_size_override = creative_data.get("overlay_url_font_size")
+        self.url_bottom_padding_override = creative_data.get(
+            "overlay_url_bottom_padding"
+        )
         self.preset_midia = creative_data.get("preset_midia") or resolve_channel_preset(
             creative_data.get("canal_veiculacao_selecionado", ""),
             creative_data.get("tipo_midia_selecionada", ""),
@@ -1944,9 +1969,7 @@ class MediaFactory:
         output_path: str,
         creative_data: dict | None = None,
         basename: str = "",
-    ):
-        if os.path.isfile(output_path):
-            os.remove(output_path)
+    ) -> bool:
 
         full_prompt = f"{self.APPEARANCE_MANDATE} {prompt}"
         retry_suffixes = [
@@ -1984,12 +2007,13 @@ class MediaFactory:
                             print("[!] Hash de prompt duplicado — nova tentativa...")
                             continue
                         print(f"✅ Imagem: {output_path}")
-                        return
+                        return True
                 raise ValueError("Gemini retornou candidato sem dados de imagem")
             except Exception as e:
                 print(f"❌ Imagem falhou (tentativa {attempt + 1}): {e}")
 
         print("❌ Não foi possível gerar imagem após tentativas.")
+        return False
 
     def _compile_still_video(self, image_path: str, audio_path: str, output_video_path: str):
         duration = self._get_audio_duration(audio_path)

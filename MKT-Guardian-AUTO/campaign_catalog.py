@@ -139,6 +139,10 @@ class CampaignCatalog:
             "canal": _safe_text(config.get("canal")),
             "midia": _safe_text(config.get("midia") or creative_data.get("tipo_midia_selecionada")),
             "asset_path": self._asset_path(assets, config),
+            "base_asset_path": _safe_text(
+                assets.get("base_image_file") or previous.get("base_asset_path"),
+                1000,
+            ),
             "legenda": _safe_text(caption, 2000),
             "roteiro": _safe_text(creative_data.get("desenvolvimento_copy"), 4000),
             "preset": {

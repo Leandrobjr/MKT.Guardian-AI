@@ -131,6 +131,39 @@ class TestSupabaseCampaignBridge(unittest.TestCase):
         self.assertNotIn("access_token", str(payload))
         self.assertEqual(self.client.tables["mkt_campaigns"].on_conflict, "campaign_id")
 
+    def test_sync_envia_asset_base_com_a_mesma_versao(self):
+        asset = os.path.join(self.tmp, "criativo.mp4")
+        base = os.path.join(self.tmp, "criativo_base.jpg")
+        with open(asset, "wb") as file:
+            file.write(b"video")
+        with open(base, "wb") as file:
+            file.write(b"base")
+
+        self.bridge.sync_campaign(
+            {
+                "campaign_id": "camp_abc123",
+                "version": 3,
+                "status": "AGUARDANDO_APROVACAO_FINAL",
+                "asset_path": asset,
+                "base_asset_path": base,
+            }
+        )
+
+        paths = [upload[0] for upload in self.client.storage.bucket.uploads]
+        self.assertEqual(
+            paths,
+            [
+                "camp_abc123/v3/criativo.mp4",
+                "camp_abc123/v3/criativo_base.jpg",
+            ],
+        )
+        payload = self.client.tables["mkt_campaigns"].payload
+        self.assertTrue(payload["metadata"]["base_asset_available"])
+        self.assertEqual(
+            payload["metadata"]["base_storage_path"],
+            "camp_abc123/v3/criativo_base.jpg",
+        )
+
     def test_resultado_de_comando_descarta_campos_sensiveis(self):
         self.bridge.complete_command(
             "cmd-1",

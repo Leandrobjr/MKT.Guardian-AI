@@ -157,15 +157,27 @@ class SupabaseCampaignBridge:
         """Publica metadata segura e, quando existente, o asset no Supabase."""
         campaign_id = self._validate_campaign_id(record.get("campaign_id", ""))
         asset_path = record.get("asset_path") or ""
+        base_asset_path = record.get("base_asset_path") or ""
         storage = {
             "bucket": self.bucket,
             "storage_path": "",
             "basename": _clean(os.path.basename(asset_path), 255),
         }
+        base_storage = {
+            "bucket": self.bucket,
+            "storage_path": "",
+            "basename": _clean(os.path.basename(base_asset_path), 255),
+        }
         if asset_path:
             storage = self.upload_asset(
                 campaign_id,
                 asset_path,
+                version=int(record.get("version", 0)),
+            )
+        if base_asset_path and os.path.isfile(os.path.realpath(base_asset_path)):
+            base_storage = self.upload_asset(
+                campaign_id,
+                base_asset_path,
                 version=int(record.get("version", 0)),
             )
 
@@ -188,6 +200,8 @@ class SupabaseCampaignBridge:
                 "revisao": int(record.get("revisao", 0)),
                 "ator": _clean(record.get("ator"), 120),
                 "asset_available": bool(asset_path),
+                "base_asset_available": bool(base_storage["storage_path"]),
+                "base_storage_path": base_storage["storage_path"],
                 "qa": record.get("qa") or {},
             },
             "plataforma": _clean(record.get("plataforma"), 80),

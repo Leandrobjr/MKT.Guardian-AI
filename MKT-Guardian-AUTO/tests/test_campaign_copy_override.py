@@ -67,6 +67,42 @@ class TestCampaignCopyOverride(unittest.TestCase):
             "PIX PEDIDO POR AMIGO NO WHATSAPP PODE SER GOLPE",
         )
 
+    def test_headline_respeita_genero_do_protagonista_no_roteiro(self):
+        result = self.orchestrator._sanitize_headline_semantics(
+            {"gancho_atencao_inicial": "ELE CONFIOU NO ATENDENTE. PERDEU TUDO."},
+            {
+                "frase_golpista": (
+                    "Central de segurança: detectamos invasão na sua conta. "
+                    "Envie o código SMS."
+                )
+            },
+            {},
+        )
+        self.assertEqual(
+            result["gancho_atencao_inicial"],
+            "ELE CONFIOU NO ATENDENTE. PERDEU TUDO.",
+        )
+
+        result = self.orchestrator._sanitize_headline_semantics(
+            {
+                "gancho_atencao_inicial": "ELE CONFIOU NO ATENDENTE. PERDEU TUDO.",
+                "desenvolvimento_copy": (
+                    "Dona Maria recebeu uma mensagem da central de segurança."
+                ),
+            },
+            {
+                "frase_golpista": (
+                    "Central de segurança: detectamos invasão na sua conta. "
+                    "Envie o código SMS."
+                )
+            },
+            {},
+        )
+        self.assertEqual(
+            result["gancho_atencao_inicial"],
+            "ELA CONFIOU NO ATENDENTE. PERDEU TUDO.",
+        )
+
     def test_headline_de_voz_clonada_preserva_o_pretexto(self):
         result = self.orchestrator._sanitize_headline_semantics(
             {

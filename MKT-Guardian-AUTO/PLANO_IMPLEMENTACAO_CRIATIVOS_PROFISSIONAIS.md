@@ -686,6 +686,11 @@ gera a campanha e devolve o resultado para aprovação humana no Desktop. A fila
 possui RLS, validação de configuração, lock e recuperação de solicitações
 interrompidas.
 
+**Orquestrador v5.71:** campanhas iniciadas pelo Desktop ou Telegram não
+entram mais em aprovação interativa por `input()` no worker Linux. Os
+guardrails, a QA e a aprovação humana final permanecem ativos; a revisão de
+história pelo terminal continua disponível somente para execuções interativas.
+
 ## 6. Segurança obrigatória
 
 - remover a exibição de tokens completos no Desktop;

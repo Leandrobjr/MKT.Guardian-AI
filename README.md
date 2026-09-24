@@ -1,6 +1,6 @@
 # MKT Guardian AI — Fábrica Automatizada de Campanhas
 
-**Versão atual:** Orquestrador v5.70 · Fábrica de Mídia v18.12
+**Versão atual:** Orquestrador v5.71 · Fábrica de Mídia v18.12
 **Produto:** [Guardian AI](https://guardian-ai.app)
 **Diretório principal:** `MKT-Guardian-AUTO`
 

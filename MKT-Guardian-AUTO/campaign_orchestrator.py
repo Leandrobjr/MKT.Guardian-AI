@@ -1847,7 +1847,14 @@ class CampaignOrchestrator:
         print(f"🔘 CTA: {creative_data['texto_botao_conversao']}")
         print(f"🎬 Cena: {creative_data['direcao_arte_emocional'][:120]}...\n")
 
-    def _story_approval_enabled(self) -> bool:
+    def _story_approval_enabled(self, config: dict | None = None) -> bool:
+        """Mantém revisão terminal só fora das filas sem interação humana.
+
+        Desktop e Telegram já possuem aprovação editorial posterior. O worker
+        Linux não pode parar em input(); os guardrails e a QA continuam ativos.
+        """
+        if config and config.get("aprovacao_desktop"):
+            return False
         return os.getenv("STORY_APPROVAL", "true").lower() in ("1", "true", "yes")
 
     def _story_job_id(self, config: dict, revisao: int, story_attempt: int) -> str:
@@ -1969,7 +1976,7 @@ class CampaignOrchestrator:
                 return False, None
             self._print_creative_summary(creative_data)
 
-            if not self._story_approval_enabled():
+            if not self._story_approval_enabled(config):
                 self._lock_creative_identity(config, creative_data)
                 return True, creative_data
 
@@ -2293,7 +2300,7 @@ class CampaignOrchestrator:
             )
         config["_campaign_context"] = campaign_ctx
         print(self.context_engine.summary_line(campaign_ctx))
-        if self._story_approval_enabled():
+        if self._story_approval_enabled(config):
             print("📋 Aprovação da estória ATIVA — vídeo/áudio só após você aprovar o roteiro.")
         preset = config["preset_midia"]
         print(f"📐 Preset de produção: {format_preset_summary(preset)}")
@@ -2344,7 +2351,7 @@ class CampaignOrchestrator:
         visual_feedback = ""
 
         for revisao in range(self.max_revisoes + 1):
-            if self._story_approval_enabled():
+            if self._story_approval_enabled(config):
                 self._catalog_update(
                     campaign_id,
                     "AGUARDANDO_APROVACAO_HISTORIA",
